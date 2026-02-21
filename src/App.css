@@ -1,0 +1,590 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  background: #11111b;
+  color: #cdd6f4;
+  min-height: 100vh;
+}
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  background: #1e1e2e;
+  padding: 16px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #313244;
+}
+
+.app-header h1 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #cdd6f4;
+}
+
+.app-nav {
+  display: flex;
+  gap: 8px;
+}
+
+.nav-btn {
+  background: transparent;
+  border: none;
+  color: #6c7086;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.nav-btn:hover {
+  background: #313244;
+  color: #cdd6f4;
+}
+
+.nav-btn.active {
+  background: #313244;
+  color: #cdd6f4;
+}
+
+.app-main {
+  flex: 1;
+  padding: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.dashboard {
+  display: flex;
+  flex-direction: column;
+}
+
+.asset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 260px));
+  gap: 12px;
+}
+
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: #6c7086;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #6c7086;
+}
+
+.empty-state p {
+  margin-bottom: 16px;
+}
+
+.settings {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+/* Dashboard Toolbar — 單行整合頁面切換 + 控制按鈕 */
+.dashboard-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 12px;
+}
+
+.dashboard-filters {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  overflow: hidden;
+}
+
+/* View Tags — 膠囊樣式頁面切換 */
+.view-tag {
+  background: #313244;
+  border: none;
+  color: #6c7086;
+  padding: 5px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.view-tag:hover {
+  background: #45475a;
+  color: #cdd6f4;
+}
+
+.view-tag.active {
+  background: #cdd6f4;
+  color: #1e1e2e;
+  font-weight: 500;
+}
+
+.view-tag.default.active {
+  background: #89b4fa;
+  color: #1e1e2e;
+}
+
+/* View Manager button (⋯) */
+.view-manager-btn {
+  background: transparent;
+  border: 1px solid #45475a;
+  color: #6c7086;
+  width: 28px;
+  height: 24px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.view-manager-btn:hover {
+  background: #313244;
+  color: #cdd6f4;
+}
+
+/* Toolbar right section */
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* Add view button — 跟 view-toggle 同一排 */
+.add-view-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px dashed #45475a;
+  border-radius: 6px;
+  background: transparent;
+  color: #6c7086;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.add-view-btn:hover {
+  background: #313244;
+  color: #a6e3a1;
+  border-color: #a6e3a1;
+}
+
+.view-toggle {
+  display: flex;
+  gap: 4px;
+}
+
+.view-btn {
+  background: #313244;
+  border: none;
+  color: #6c7086;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.2s;
+}
+
+.view-btn:hover {
+  background: #45475a;
+  color: #cdd6f4;
+}
+
+.view-btn.active {
+  background: #89b4fa;
+  color: #1e1e2e;
+}
+
+/* Manage subscriptions button */
+.manage-subs-btn {
+  background: #313244;
+  border: none;
+  color: #6c7086;
+  padding: 5px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.manage-subs-btn:hover {
+  background: #45475a;
+  color: #cdd6f4;
+}
+
+.manage-subs-btn.active {
+  background: #a6e3a1;
+  color: #1e1e2e;
+  font-weight: 500;
+}
+
+/* Asset List View */
+.asset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.btn-add {
+  background: #a6e3a1;
+  border: none;
+  color: #1e1e2e;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btn-add:hover {
+  background: #94e2d5;
+}
+
+/* View Manager Modal */
+.vm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vm-modal {
+  width: 360px;
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  background: #1e1e2e;
+  border: 1px solid #313244;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  animation: modal-in 0.18s ease-out;
+}
+
+@keyframes modal-in {
+  from { opacity: 0; transform: scale(0.95) translateY(-8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.vm-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 20px 12px;
+  border-bottom: 1px solid #313244;
+}
+
+.vm-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #cdd6f4;
+}
+
+.vm-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px 12px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vm-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: 6px;
+  transition: background 0.12s;
+}
+
+.vm-item:hover {
+  background: #313244;
+}
+
+.vm-item.active {
+  background: rgba(137, 180, 250, 0.1);
+}
+
+.vm-item-name {
+  background: none;
+  border: none;
+  color: #cdd6f4;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vm-item-name:hover {
+  color: #89b4fa;
+}
+
+.vm-item-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.vm-pin-btn {
+  background: none;
+  border: none;
+  color: #6c7086;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.vm-pin-btn:hover {
+  background: #45475a;
+}
+
+.vm-pin-btn.pinned {
+  color: #f9e2af;
+}
+
+.vm-action-btn {
+  background: none;
+  border: none;
+  color: #6c7086;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.vm-action-btn:hover {
+  background: #45475a;
+  color: #cdd6f4;
+}
+
+.vm-action-btn.danger:hover {
+  color: #f38ba8;
+  background: rgba(243, 139, 168, 0.1);
+}
+
+.vm-footer {
+  padding: 10px 16px;
+  border-top: 1px solid #313244;
+}
+
+.vm-add-btn {
+  background: none;
+  border: 1px dashed #45475a;
+  color: #6c7086;
+  width: 100%;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.15s;
+}
+
+.vm-add-btn:hover {
+  background: #313244;
+  color: #a6e3a1;
+  border-color: #a6e3a1;
+}
+
+/* Bulk Delete Button */
+.bulk-delete-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background: #313244;
+  color: #6c7086;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.bulk-delete-btn:hover {
+  background: rgba(243, 139, 168, 0.15);
+  color: #f38ba8;
+}
+
+/* Bulk Delete Modal */
+.bd-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bd-modal {
+  width: 400px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: #1e1e2e;
+  border: 1px solid #313244;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  animation: modal-in 0.18s ease-out;
+}
+
+.bd-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px 0;
+}
+
+.bd-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #cdd6f4;
+}
+
+.bd-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 20px 6px;
+}
+
+.bd-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 20px;
+  overflow-y: auto;
+  flex: 1;
+  max-height: 400px;
+}
+
+.bd-item {
+  padding: 6px 0;
+  border-bottom: 1px solid #313244;
+}
+
+.bd-item:last-child {
+  border-bottom: none;
+}
+
+.bd-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  color: #cdd6f4;
+  font-size: 13px;
+}
+
+.bd-label input[type="checkbox"] {
+  accent-color: #f38ba8;
+  width: 16px;
+  height: 16px;
+}
+
+.bd-symbol {
+  font-weight: 500;
+  font-family: monospace;
+}
+
+.bd-display-name {
+  color: #6c7086;
+  font-size: 12px;
+}
+
+.bd-type {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-left: auto;
+}
+
+.bd-type.crypto {
+  background: rgba(250, 179, 135, 0.2);
+  color: #fab387;
+}
+
+.bd-type.stock {
+  background: rgba(137, 180, 250, 0.2);
+  color: #89b4fa;
+}
+
+.bd-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  border-top: 1px solid #313244;
+}
+
+.bd-count {
+  font-size: 12px;
+  color: #6c7086;
+}
+
+.bd-confirm {
+  background: #f38ba8;
+  border: none;
+  color: #1e1e2e;
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.bd-confirm:hover {
+  background: #eba0ac;
+}
+
+.bd-confirm:disabled {
+  background: #45475a;
+  color: #6c7086;
+  cursor: not-allowed;
+}
