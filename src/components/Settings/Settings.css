@@ -18,30 +18,6 @@
   margin: 0 0 16px 0;
 }
 
-/* Batch textarea */
-.batch-textarea {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #45475a;
-  border-radius: 6px;
-  background: #313244;
-  color: #cdd6f4;
-  font-size: 13px;
-  font-family: monospace;
-  resize: vertical;
-  outline: none;
-  box-sizing: border-box;
-  transition: border-color 0.15s;
-}
-
-.batch-textarea::placeholder {
-  color: #6c7086;
-}
-
-.batch-textarea:focus {
-  border-color: #89b4fa;
-}
-
 /* Batch status */
 .batch-status {
   display: flex;
@@ -57,12 +33,6 @@
 .batch-status.has-errors {
   background: rgba(249, 226, 175, 0.1);
   color: #f9e2af;
-}
-
-.batch-errors {
-  color: #f38ba8;
-  font-size: 11px;
-  word-break: break-word;
 }
 
 /* Filter Bar */
@@ -109,10 +79,6 @@
   padding: 12px;
   border: 1px solid transparent;
   transition: border-color 0.2s;
-}
-
-.provider-item.enabled {
-  border-color: #a6e3a1;
 }
 
 .provider-header {
@@ -197,53 +163,6 @@
 
 .symbol-format {
   color: #6c7086;
-}
-
-/* Toggle */
-.toggle {
-  position: relative;
-  display: inline-block;
-  width: 40px;
-  height: 22px;
-  flex-shrink: 0;
-}
-
-.toggle input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.toggle-slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: #45475a;
-  transition: 0.3s;
-  border-radius: 22px;
-}
-
-.toggle-slider:before {
-  position: absolute;
-  content: "";
-  height: 16px;
-  width: 16px;
-  left: 3px;
-  bottom: 3px;
-  background-color: #cdd6f4;
-  transition: 0.3s;
-  border-radius: 50%;
-}
-
-.toggle input:checked + .toggle-slider {
-  background-color: #a6e3a1;
-}
-
-.toggle input:checked + .toggle-slider:before {
-  transform: translateX(18px);
 }
 
 /* Provider Details */
@@ -377,21 +296,6 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-
-.form-error {
-  color: #f38ba8;
-  font-size: 12px;
-  padding: 8px 12px;
-  background: rgba(243, 139, 168, 0.1);
-  border-radius: 6px;
-}
-
-.form-examples {
-  display: block;
-  color: #89b4fa;
-  font-size: 11px;
-  margin-top: 4px;
 }
 
 /* Asset Type Toggle */

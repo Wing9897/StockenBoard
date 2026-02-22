@@ -37,6 +37,18 @@
   object-fit: cover;
 }
 
+.asset-icon.clickable,
+.asset-list-icon.clickable {
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.asset-icon.clickable:hover,
+.asset-list-icon.clickable:hover {
+  opacity: 0.7;
+  box-shadow: 0 0 0 2px #89b4fa;
+}
+
 .asset-icon-fallback {
   font-weight: bold;
   font-size: 10px;
@@ -461,4 +473,85 @@
 .edit-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Compact View — 小方塊 */
+.asset-card-compact {
+  background: #1e1e2e;
+  border-radius: 8px;
+  padding: 8px 10px;
+  border: 1px solid #313244;
+  transition: all 0.2s ease;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.asset-card-compact:hover {
+  border-color: #45475a;
+}
+
+.asset-card-compact:hover .asset-card-edit-btn {
+  opacity: 1;
+}
+
+.compact-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.compact-icon {
+  width: 22px;
+  height: 22px;
+  font-size: 8px;
+}
+
+.compact-symbol {
+  font-size: 12px;
+  font-weight: 600;
+  color: #cdd6f4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.compact-top .asset-card-edit-btn {
+  margin-left: auto;
+  font-size: 11px;
+  padding: 2px 4px;
+}
+
+.compact-bottom {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.compact-price {
+  font-size: 13px;
+  font-weight: 700;
+  color: #cdd6f4;
+}
+
+.compact-change {
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.compact-change.positive {
+  color: #a6e3a1;
+}
+
+.compact-change.negative {
+  color: #f38ba8;
+}
+
+.asset-card-compact .asset-edit-panel {
+  border-radius: 8px;
+}
+
+.asset-card-compact .countdown-circle {
+  margin-left: auto;
 }

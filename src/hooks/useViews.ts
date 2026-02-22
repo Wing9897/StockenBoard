@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Database from '@tauri-apps/plugin-sql';
 import { View } from '../types';
 
@@ -6,6 +6,7 @@ interface UseViewsReturn {
   views: View[];
   activeViewId: number;
   activeViewSubscriptionIds: number[] | null;
+  viewSubCounts: Record<number, number>;
   loading: boolean;
   setActiveView: (viewId: number) => void;
   createView: (name: string) => Promise<void>;
@@ -20,8 +21,6 @@ interface RawView {
   id: number;
   name: string;
   is_default: number;
-  sort_order: number;
-  created_at?: string;
 }
 
 function toView(raw: RawView): View {
@@ -29,8 +28,6 @@ function toView(raw: RawView): View {
     id: raw.id,
     name: raw.name,
     is_default: raw.is_default === 1,
-    sort_order: raw.sort_order,
-    created_at: raw.created_at,
   };
 }
 
@@ -41,22 +38,43 @@ export function useViews(): UseViewsReturn {
     return saved ? parseInt(saved, 10) : -1;
   });
   const [activeViewSubscriptionIds, setActiveViewSubscriptionIds] = useState<number[] | null>(null);
+  const [viewSubCounts, setViewSubCounts] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(true);
+
+  const loadViewSubCounts = useCallback(async (viewsList: View[]) => {
+    try {
+      const db = await Database.load('sqlite:stockenboard.db');
+      const rows = await db.select<{ view_id: number; cnt: number }[]>(
+        'SELECT view_id, COUNT(*) as cnt FROM view_subscriptions GROUP BY view_id'
+      );
+      const counts: Record<number, number> = {};
+      for (const v of viewsList) {
+        if (!v.is_default) counts[v.id] = 0;
+      }
+      for (const r of rows) {
+        counts[r.view_id] = r.cnt;
+      }
+      setViewSubCounts(counts);
+    } catch (err) {
+      console.error('Failed to load view sub counts:', err);
+    }
+  }, []);
 
   const loadViews = useCallback(async () => {
     try {
       const db = await Database.load('sqlite:stockenboard.db');
       const rows = await db.select<RawView[]>(
-        'SELECT id, name, is_default, sort_order, created_at FROM views ORDER BY sort_order'
+        'SELECT id, name, is_default FROM views ORDER BY id'
       );
       const loaded = rows.map(toView);
       setViews(loaded);
+      await loadViewSubCounts(loaded);
       return loaded;
     } catch (err) {
       console.error('Failed to load views:', err);
       return [];
     }
-  }, []);
+  }, [loadViewSubCounts]);
 
   const loadActiveViewSubscriptions = useCallback(async (viewId: number, viewsList: View[]) => {
     const view = viewsList.find((v) => v.id === viewId);
@@ -67,7 +85,7 @@ export function useViews(): UseViewsReturn {
     try {
       const db = await Database.load('sqlite:stockenboard.db');
       const rows = await db.select<{ subscription_id: number }[]>(
-        'SELECT subscription_id FROM view_subscriptions WHERE view_id = $1 ORDER BY sort_order',
+        'SELECT subscription_id FROM view_subscriptions WHERE view_id = $1',
         [viewId]
       );
       setActiveViewSubscriptionIds(rows.map((r) => r.subscription_id));
@@ -77,13 +95,16 @@ export function useViews(): UseViewsReturn {
     }
   }, []);
 
+  const viewsRef = useRef<View[]>([]);
+  viewsRef.current = views;
+
   const setActiveView = useCallback(
     (viewId: number) => {
       setActiveViewId(viewId);
       localStorage.setItem('sb_active_view_id', String(viewId));
-      loadActiveViewSubscriptions(viewId, views);
+      loadActiveViewSubscriptions(viewId, viewsRef.current);
     },
-    [views, loadActiveViewSubscriptions]
+    [loadActiveViewSubscriptions]
   );
 
   const createView = useCallback(async (name: string) => {
@@ -92,7 +113,8 @@ export function useViews(): UseViewsReturn {
       throw new Error('View name cannot be empty');
     }
 
-    const duplicate = views.some(
+    const currentViews = viewsRef.current;
+    const duplicate = currentViews.some(
       (v) => v.name.trim().toLowerCase() === trimmed.toLowerCase()
     );
     if (duplicate) {
@@ -101,22 +123,20 @@ export function useViews(): UseViewsReturn {
 
     try {
       const db = await Database.load('sqlite:stockenboard.db');
-      const maxOrder = views.length > 0
-        ? Math.max(...views.map((v) => v.sort_order))
-        : 0;
       await db.execute(
-        'INSERT INTO views (name, is_default, sort_order) VALUES ($1, 0, $2)',
-        [trimmed, maxOrder + 1]
+        'INSERT INTO views (name, is_default) VALUES ($1, 0)',
+        [trimmed]
       );
       await loadViews();
     } catch (err) {
       console.error('Failed to create view:', err);
       throw err;
     }
-  }, [views, loadViews]);
+  }, [loadViews]);
 
   const renameView = useCallback(async (viewId: number, newName: string) => {
-    const view = views.find((v) => v.id === viewId);
+    const currentViews = viewsRef.current;
+    const view = currentViews.find((v) => v.id === viewId);
     if (!view) {
       throw new Error('View not found');
     }
@@ -129,7 +149,7 @@ export function useViews(): UseViewsReturn {
       throw new Error('View name cannot be empty');
     }
 
-    const duplicate = views.some(
+    const duplicate = currentViews.some(
       (v) => v.id !== viewId && v.name.trim().toLowerCase() === trimmed.toLowerCase()
     );
     if (duplicate) {
@@ -144,10 +164,14 @@ export function useViews(): UseViewsReturn {
       console.error('Failed to rename view:', err);
       throw err;
     }
-  }, [views, loadViews]);
+  }, [loadViews]);
+
+  const activeViewIdRef = useRef(activeViewId);
+  activeViewIdRef.current = activeViewId;
 
   const deleteView = useCallback(async (viewId: number) => {
-    const view = views.find((v) => v.id === viewId);
+    const currentViews = viewsRef.current;
+    const view = currentViews.find((v) => v.id === viewId);
     if (!view) {
       throw new Error('View not found');
     }
@@ -161,7 +185,7 @@ export function useViews(): UseViewsReturn {
       const updated = await loadViews();
 
       // If the deleted view was active, switch to default view
-      if (activeViewId === viewId) {
+      if (activeViewIdRef.current === viewId) {
         const defaultView = updated.find((v) => v.is_default);
         if (defaultView) {
           setActiveViewId(defaultView.id);
@@ -173,23 +197,24 @@ export function useViews(): UseViewsReturn {
       console.error('Failed to delete view:', err);
       throw err;
     }
-  }, [views, activeViewId, loadViews]);
+  }, [loadViews]);
 
   const addSubscriptionToView = useCallback(async (viewId: number, subscriptionId: number) => {
     try {
       const db = await Database.load('sqlite:stockenboard.db');
       await db.execute(
-        'INSERT OR IGNORE INTO view_subscriptions (view_id, subscription_id, sort_order) VALUES ($1, $2, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM view_subscriptions WHERE view_id = $1))',
+        'INSERT OR IGNORE INTO view_subscriptions (view_id, subscription_id) VALUES ($1, $2)',
         [viewId, subscriptionId]
       );
-      if (viewId === activeViewId) {
-        await loadActiveViewSubscriptions(viewId, views);
+      if (viewId === activeViewIdRef.current) {
+        await loadActiveViewSubscriptions(viewId, viewsRef.current);
       }
+      await loadViewSubCounts(viewsRef.current);
     } catch (err) {
       console.error('Failed to add subscription to view:', err);
       throw err;
     }
-  }, [activeViewId, views, loadActiveViewSubscriptions]);
+  }, [loadActiveViewSubscriptions, loadViewSubCounts]);
 
   const removeSubscriptionFromView = useCallback(async (viewId: number, subscriptionId: number) => {
     try {
@@ -198,14 +223,15 @@ export function useViews(): UseViewsReturn {
         'DELETE FROM view_subscriptions WHERE view_id = $1 AND subscription_id = $2',
         [viewId, subscriptionId]
       );
-      if (viewId === activeViewId) {
-        await loadActiveViewSubscriptions(viewId, views);
+      if (viewId === activeViewIdRef.current) {
+        await loadActiveViewSubscriptions(viewId, viewsRef.current);
       }
+      await loadViewSubCounts(viewsRef.current);
     } catch (err) {
       console.error('Failed to remove subscription from view:', err);
       throw err;
     }
-  }, [activeViewId, views, loadActiveViewSubscriptions]);
+  }, [loadActiveViewSubscriptions, loadViewSubCounts]);
 
   // Initialize: load views and restore active view
   useEffect(() => {
@@ -231,6 +257,7 @@ export function useViews(): UseViewsReturn {
     views,
     activeViewId,
     activeViewSubscriptionIds,
+    viewSubCounts,
     loading,
     setActiveView,
     createView,

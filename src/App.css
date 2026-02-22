@@ -77,6 +77,11 @@ body {
   gap: 12px;
 }
 
+.asset-grid.compact {
+  grid-template-columns: repeat(auto-fill, minmax(130px, 160px));
+  gap: 8px;
+}
+
 .loading {
   text-align: center;
   padding: 40px;
@@ -174,7 +179,7 @@ body {
   flex-shrink: 0;
 }
 
-/* Add view button — 跟 view-toggle 同一排 */
+/* Add view button */
 .add-view-btn {
   width: 28px;
   height: 28px;
@@ -194,6 +199,27 @@ body {
   background: #313244;
   color: #a6e3a1;
   border-color: #a6e3a1;
+}
+
+/* Copy symbols button — 與 view-btn 同風格 */
+.copy-symbols-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background: #313244;
+  color: #6c7086;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.copy-symbols-btn:hover {
+  background: #45475a;
+  color: #cdd6f4;
 }
 
 .view-toggle {
@@ -587,4 +613,77 @@ body {
   background: #45475a;
   color: #6c7086;
   cursor: not-allowed;
+}
+
+/* Add Subscription Button */
+.add-sub-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background: #313244;
+  color: #6c7086;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.add-sub-btn:hover {
+  background: #45475a;
+  color: #a6e3a1;
+}
+
+/* Add Subscription Modal */
+.sub-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sub-modal {
+  width: 420px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  background: #1e1e2e;
+  border: 1px solid #313244;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  animation: modal-in 0.18s ease-out;
+}
+
+.sub-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 20px 0;
+}
+
+.sub-modal-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #cdd6f4;
+}
+
+.sub-modal-body {
+  padding: 0 4px 16px;
+  overflow-y: auto;
+}
+
+.sub-modal-body .settings-section {
+  background: transparent;
+  padding: 12px 16px;
+  margin-bottom: 0;
+}
+
+.sub-modal-body .settings-section h3 {
+  display: none;
 }

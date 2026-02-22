@@ -1,25 +1,29 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import Database from '@tauri-apps/plugin-sql';
-import { Provider, ProviderInfo } from '../types';
+import { ProviderSettings, ProviderInfo } from '../types';
 
 export function useProviders() {
-  const [providers, setProviders] = useState<Provider[]>([]);
+  const [settings, setSettings] = useState<Map<string, ProviderSettings>>(new Map());
   const [providerInfos, setProviderInfos] = useState<ProviderInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadProviders();
+    loadSettings();
     loadProviderInfos();
   }, []);
 
-  async function loadProviders() {
+  async function loadSettings() {
     try {
       const db = await Database.load('sqlite:stockenboard.db');
-      const result = await db.select<Provider[]>('SELECT * FROM providers ORDER BY name');
-      setProviders(result);
+      const rows = await db.select<ProviderSettings[]>(
+        'SELECT provider_id, api_key, api_secret, refresh_interval, connection_type FROM provider_settings'
+      );
+      const map = new Map<string, ProviderSettings>();
+      for (const row of rows) map.set(row.provider_id, row);
+      setSettings(map);
     } catch (error) {
-      console.error('Failed to load providers:', error);
+      console.error('Failed to load provider settings:', error);
     } finally {
       setLoading(false);
     }
@@ -34,51 +38,65 @@ export function useProviders() {
     }
   }
 
-  async function updateProvider(provider: Partial<Provider> & { id: string }) {
+  async function updateProvider(providerId: string, updates: {
+    api_key?: string | null;
+    api_secret?: string | null;
+    refresh_interval?: number;
+    connection_type?: string;
+  }) {
     try {
       const db = await Database.load('sqlite:stockenboard.db');
-
-      // Only update the fields that were provided
       await db.execute(
-        `UPDATE providers SET
-          api_key = $1,
-          api_secret = $2,
-          refresh_interval = $3,
-          connection_type = $4
-        WHERE id = $5`,
+        `INSERT INTO provider_settings (provider_id, api_key, api_secret, refresh_interval, connection_type)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT(provider_id) DO UPDATE SET
+           api_key = $2, api_secret = $3, refresh_interval = $4, connection_type = $5`,
         [
-          provider.api_key || null,
-          provider.api_secret || null,
-          provider.refresh_interval || 30000,
-          provider.connection_type || 'rest',
-          provider.id,
+          providerId,
+          updates.api_key || null,
+          updates.api_secret || null,
+          updates.refresh_interval || null,
+          updates.connection_type || 'rest',
         ]
       );
 
-      // Always sync the provider to Rust side with latest API key
-      // This ensures the in-memory provider instance has the correct credentials
+      // 同步 Rust 端的 provider 實例
       await invoke('enable_provider', {
-        providerId: provider.id,
-        apiKey: provider.api_key || null,
-        apiSecret: provider.api_secret || null,
+        providerId,
+        apiKey: updates.api_key || null,
+        apiSecret: updates.api_secret || null,
       });
 
-      await loadProviders();
+      await loadSettings();
     } catch (error) {
       console.error('Failed to update provider:', error);
     }
   }
 
   function getProviderInfo(providerId: string): ProviderInfo | undefined {
-    return providerInfos.find((p) => p.id === providerId);
+    return providerInfos.find(p => p.id === providerId);
   }
+
+  // 合併靜態 ProviderInfo + 用戶設定，供 UI 使用 — memoized
+  const providers = useMemo(() => providerInfos.map(info => {
+    const s = settings.get(info.id);
+    return {
+      id: info.id,
+      name: info.name,
+      provider_type: info.provider_type,
+      api_key: s?.api_key || undefined,
+      api_secret: s?.api_secret || undefined,
+      refresh_interval: s?.refresh_interval ?? (s?.api_key ? info.key_interval : info.free_interval),
+      connection_type: s?.connection_type || 'rest',
+      supports_websocket: info.supports_websocket ? 1 : 0,
+    };
+  }), [providerInfos, settings]);
 
   return {
     providers,
-    providerInfos,
     loading,
     updateProvider,
     getProviderInfo,
-    refresh: loadProviders,
+    refresh: loadSettings,
   };
 }

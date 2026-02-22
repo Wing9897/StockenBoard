@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { ProviderInfo, Subscription } from '../../types';
 import './Settings.css';
 
@@ -10,8 +9,9 @@ interface BatchResult {
 }
 
 interface SubscriptionManagerProps {
-  onBatchAdd: (symbol: string, defaultProviderId?: string, assetType?: 'crypto' | 'stock') => Promise<void>;
+  onBatchAdd: (symbol: string, providerId?: string, assetType?: 'crypto' | 'stock') => Promise<void>;
   subscriptions: Subscription[];
+  providers: ProviderInfo[];
   onToast?: (title: string, message?: string) => void;
 }
 
@@ -36,18 +36,13 @@ const PROVIDER_EXAMPLES: Record<string, string[]> = {
   bitquery: ['ethereum', 'bitcoin'],
 };
 
-export function SubscriptionManager({ onBatchAdd, subscriptions, onToast }: SubscriptionManagerProps) {
-  const [providerInfoList, setProviderInfoList] = useState<ProviderInfo[]>([]);
+export function SubscriptionManager({ onBatchAdd, subscriptions, providers: providerInfoList, onToast }: SubscriptionManagerProps) {
   const [symbolInput, setSymbolInput] = useState('');
   const [assetType, setAssetType] = useState<'crypto' | 'stock'>('crypto');
   const [provider, setProvider] = useState('binance');
   const [importing, setImporting] = useState(false);
   const [importStatus, setImportStatus] = useState<{ done: number; total: number } | null>(null);
   const [batchResult, setBatchResult] = useState<BatchResult | null>(null);
-
-  useEffect(() => {
-    invoke<ProviderInfo[]>('get_all_providers').then(setProviderInfoList);
-  }, []);
 
   const filteredProviders = providerInfoList.filter(p =>
     assetType === 'crypto'

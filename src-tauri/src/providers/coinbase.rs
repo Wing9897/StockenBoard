@@ -34,4 +34,45 @@ impl DataProvider for CoinbaseProvider {
             .currency(currency)
             .build())
     }
+
+    /// 限流並行查詢 — Coinbase 沒有批量 API，限制同時 3 個 request
+    async fn fetch_prices(&self, symbols: &[String]) -> Result<Vec<AssetData>, String> {
+        if symbols.is_empty() { return Ok(vec![]); }
+        if symbols.len() == 1 { return self.fetch_price(&symbols[0]).await.map(|d| vec![d]); }
+
+        use futures::stream::{self, StreamExt};
+        let results: Vec<_> = stream::iter(symbols.to_vec())
+            .map(|sym| {
+                let client = self.client.clone();
+                async move {
+                    let pair = to_coinbase_symbol(&sym);
+                    let url = format!("https://api.coinbase.com/v2/prices/{}/spot", pair);
+                    match client.get(&url).send().await {
+                        Ok(resp) => match resp.json::<serde_json::Value>().await {
+                            Ok(data) => {
+                                let price = data["data"]["amount"].as_str()
+                                    .and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
+                                let currency = data["data"]["currency"].as_str().unwrap_or("USD");
+                                Ok(AssetDataBuilder::new(&sym, "coinbase")
+                                    .price(price).currency(currency).build())
+                            }
+                            Err(e) => Err(format!("Coinbase 解析失敗: {}", e)),
+                        }
+                        Err(e) => Err(format!("Coinbase 連接失敗: {}", e)),
+                    }
+                }
+            })
+            .buffer_unordered(3)
+            .collect()
+            .await;
+
+        let mut out = Vec::new();
+        for r in results {
+            match r {
+                Ok(data) => out.push(data),
+                Err(e) => eprintln!("Coinbase 跳過: {}", e),
+            }
+        }
+        Ok(out)
+    }
 }

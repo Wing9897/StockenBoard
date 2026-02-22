@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { useState, useRef, useEffect, memo } from 'react';
+import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { AssetData, Subscription, ProviderInfo } from '../../types';
 import { CountdownCircle } from './CountdownCircle';
 import './AssetCard.css';
@@ -14,7 +14,7 @@ interface AssetCardProps {
   refreshTiming?: { interval: number; lastFetch: number };
   onRemove: (id: number) => void;
   onEdit: (id: number, updates: { symbol?: string; displayName?: string; providerId?: string; assetType?: 'crypto' | 'stock' }) => Promise<void>;
-  viewMode?: 'grid' | 'list';
+  viewMode?: 'grid' | 'list' | 'compact';
 }
 
 function formatNumber(num: number | undefined, decimals = 2): string {
@@ -50,10 +50,34 @@ function formatExtraValue(value: unknown): string {
   return JSON.stringify(value);
 }
 
-export function AssetCard({ asset, error, subscription, providers, currentProviderId, assetType, refreshTiming, onRemove, onEdit, viewMode = 'grid' }: AssetCardProps) {
+// Cache icons dir path — resolved once, reused by all cards
+let _iconsDirCache: string | null = null;
+let _iconsDirPromise: Promise<string> | null = null;
+function getIconsDir(): Promise<string> {
+  if (_iconsDirCache) return Promise.resolve(_iconsDirCache);
+  if (!_iconsDirPromise) {
+    _iconsDirPromise = invoke<string>('get_icons_dir').then(dir => {
+      _iconsDirCache = dir;
+      return dir;
+    });
+  }
+  return _iconsDirPromise;
+}
+
+// 記住哪些 icon 確認不存在，避免重複嘗試載入 404
+const _missingIcons = new Set<string>();
+
+function getIconName(symbol: string): string {
+  return symbol.toLowerCase().replace(/usdt$/, '').replace(/-usd$/, '');
+}
+
+export const AssetCard = memo(function AssetCard({ asset, error, subscription, providers, currentProviderId, assetType, refreshTiming, onRemove, onEdit, viewMode = 'grid' }: AssetCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [iconError, setIconError] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [customIconSrc, setCustomIconSrc] = useState<string | null>(null);
+  const [iconVersion, setIconVersion] = useState(0);
+  const iconName = getIconName(subscription.symbol);
 
   // Edit form state
   const [editSymbol, setEditSymbol] = useState('');
@@ -63,6 +87,34 @@ export function AssetCard({ asset, error, subscription, providers, currentProvid
   const [editError, setEditError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const editRef = useRef<HTMLDivElement>(null);
+
+  // Load custom icon from app data dir
+  useEffect(() => {
+    // 已知不存在的 icon 直接跳過
+    if (_missingIcons.has(iconName)) return;
+
+    let cancelled = false;
+    getIconsDir().then(dir => {
+      if (cancelled) return;
+      const sep = dir.endsWith('\\') || dir.endsWith('/') ? '' : '/';
+      setCustomIconSrc(convertFileSrc(`${dir}${sep}${iconName}.png`));
+    }).catch(() => {
+      if (!cancelled) setCustomIconSrc(null);
+    });
+    return () => { cancelled = true; };
+  }, [iconName, iconVersion]);
+
+  const handleIconClick = async () => {
+    try {
+      await invoke('set_icon', { symbol: subscription.symbol });
+      _missingIcons.delete(iconName);
+      setIconError(false);
+      setCustomIconSrc(null);
+      setIconVersion(v => v + 1);
+    } catch {
+      // user cancelled — do nothing
+    }
+  };
 
   const changePercent = asset?.change_percent_24h ?? 0;
   const isPositive = changePercent >= 0;
@@ -129,9 +181,33 @@ export function AssetCard({ asset, error, subscription, providers, currentProvid
   }, [editing]);
 
   const getIconSrc = () => {
-    const symbolLower = subscription.symbol.toLowerCase().replace(/usdt$/, '').replace(/-usd$/, '');
-    return `/icons/${symbolLower}.png`;
+    if (customIconSrc && !iconError) return customIconSrc;
+    if (_missingIcons.has(iconName)) return null;
+    return `/icons/${iconName}.png`;
   };
+
+  const handleIconError = () => {
+    if (customIconSrc && !iconError) {
+      // Custom icon failed → 記住此 icon 不存在，嘗試 public fallback
+      _missingIcons.add(iconName);
+      setCustomIconSrc(null);
+    } else {
+      setIconError(true);
+    }
+  };
+
+  const iconSrc = getIconSrc();
+  const iconFallbackText = iconName.slice(0, 3).toUpperCase();
+
+  const renderIcon = (className: string) => (
+    <div className={`${className} clickable`} onClick={handleIconClick} title="點擊設定圖示">
+      {iconSrc && !iconError ? (
+        <img src={iconSrc} alt={subscription.symbol} onError={handleIconError} />
+      ) : (
+        <span className="asset-icon-fallback">{iconFallbackText}</span>
+      )}
+    </div>
+  );
 
   // Edit panel (shared between grid and list)
   const editPanel = (
@@ -168,17 +244,37 @@ export function AssetCard({ asset, error, subscription, providers, currentProvid
     </div>
   );
 
+  // Compact view — mini card
+  if (viewMode === 'compact') {
+    return (
+      <div className="asset-card-compact">
+        <div className="compact-top">
+          {renderIcon('asset-icon compact-icon')}
+          <span className="compact-symbol">{subscription.symbol}</span>
+          <span className={`asset-type-tag ${assetType}`}>{assetType === 'crypto' ? '幣' : '股'}</span>
+          <button className="asset-card-edit-btn" onClick={openEdit} title="編輯">✎</button>
+        </div>
+        <div className="compact-bottom">
+          <span className="compact-price">
+            {error ? <span className="asset-error">錯誤</span> : asset ? formatPrice(asset.price, asset.currency) : '-'}
+          </span>
+          {asset && !error && (
+            <span className={`compact-change ${isPositive ? 'positive' : 'negative'}`}>
+              {isPositive ? '▲' : '▼'} {Math.abs(changePercent).toFixed(2)}%
+            </span>
+          )}
+          {refreshTiming && <CountdownCircle interval={refreshTiming.interval} lastFetch={refreshTiming.lastFetch} size={16} />}
+        </div>
+        {editing && editPanel}
+      </div>
+    );
+  }
+
   // List view
   if (viewMode === 'list') {
     return (
       <div className="asset-card-list">
-        <div className="asset-list-icon">
-          {!iconError ? (
-            <img src={getIconSrc()} alt={subscription.symbol} onError={() => setIconError(true)} />
-          ) : (
-            <span className="asset-icon-fallback">{subscription.symbol.replace(/USDT$/, '').replace(/-USD$/, '').slice(0, 3)}</span>
-          )}
-        </div>
+        {renderIcon('asset-list-icon')}
         <div className="asset-list-symbol">
           <span className="symbol">{subscription.symbol} <span className={`asset-type-tag ${assetType}`}>{assetType === 'crypto' ? '幣' : '股'}</span></span>
           {subscription.display_name && <span className="name">{subscription.display_name}</span>}
@@ -201,13 +297,7 @@ export function AssetCard({ asset, error, subscription, providers, currentProvid
   return (
     <div className="asset-card">
       <div className="asset-card-header">
-        <div className="asset-icon">
-          {!iconError ? (
-            <img src={getIconSrc()} alt={subscription.symbol} onError={() => setIconError(true)} />
-          ) : (
-            <span className="asset-icon-fallback">{subscription.symbol.replace(/USDT$/, '').replace(/-USD$/, '').slice(0, 3)}</span>
-          )}
-        </div>
+        {renderIcon('asset-icon')}
         <div className="asset-info">
           <p className="asset-symbol">{subscription.symbol} <span className={`asset-type-tag ${assetType}`}>{assetType === 'crypto' ? '幣' : '股'}</span></p>
           <p className="asset-name">{subscription.display_name || ''}</p>
@@ -271,4 +361,4 @@ export function AssetCard({ asset, error, subscription, providers, currentProvid
       {editing && editPanel}
     </div>
   );
-}
+});

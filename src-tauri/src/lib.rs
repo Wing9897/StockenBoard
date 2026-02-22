@@ -5,7 +5,7 @@ mod providers;
 use commands::{
     fetch_asset_price, fetch_multiple_prices, get_all_providers,
     enable_provider, disable_provider, start_ws_stream, stop_ws_stream,
-    export_file, import_file,
+    export_file, import_file, set_icon, remove_icon, get_icons_dir,
     AppState,
 };
 use tauri::Manager;
@@ -16,8 +16,8 @@ pub fn run() {
     let migrations = vec![
         Migration {
             version: 1,
-            description: "create_all_tables",
-            sql: db::INIT_SQL,
+            description: "create_tables",
+            sql: db::MIGRATION_V1,
             kind: MigrationKind::Up,
         },
     ];
@@ -42,6 +42,9 @@ pub fn run() {
             stop_ws_stream,
             export_file,
             import_file,
+            set_icon,
+            remove_icon,
+            get_icons_dir,
         ])
         .setup(|app| {
             // 從 DB 讀取已儲存的 API key，確保重啟後 key 仍然生效

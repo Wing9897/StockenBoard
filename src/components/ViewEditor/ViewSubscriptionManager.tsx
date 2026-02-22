@@ -17,14 +17,38 @@ export function ViewSubscriptionManager({
 }: ViewSubscriptionManagerProps) {
   const [search, setSearch] = useState('');
 
+  // 支援多個代號搜尋（逗號、空格、換行分隔）
+  const searchTerms = search
+    .split(/[,\s\n]+/)
+    .map(s => s.trim().toLowerCase())
+    .filter(Boolean);
+
   const filtered = allSubscriptions.filter((sub) => {
-    if (!search.trim()) return true;
-    const q = search.trim().toLowerCase();
-    return (
+    if (searchTerms.length === 0) return true;
+    return searchTerms.some(q =>
       sub.symbol.toLowerCase().includes(q) ||
       (sub.display_name && sub.display_name.toLowerCase().includes(q))
     );
   });
+
+  const filteredAllChecked = filtered.length > 0 && filtered.every(s => viewSubscriptionIds.includes(s.id));
+  const filteredNoneChecked = filtered.every(s => !viewSubscriptionIds.includes(s.id));
+
+  const handleSelectAllFiltered = () => {
+    for (const sub of filtered) {
+      if (!viewSubscriptionIds.includes(sub.id)) {
+        onToggleSubscription(sub.id, true);
+      }
+    }
+  };
+
+  const handleClearFiltered = () => {
+    for (const sub of filtered) {
+      if (viewSubscriptionIds.includes(sub.id)) {
+        onToggleSubscription(sub.id, false);
+      }
+    }
+  };
 
   return (
     <div className="vsm-backdrop" onClick={onClose}>
@@ -36,11 +60,19 @@ export function ViewSubscriptionManager({
         <input
           className="vsm-search"
           type="text"
-          placeholder="搜尋代號或名稱..."
+          placeholder="搜尋代號（可用逗號分隔多個）..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           autoFocus
         />
+        <div className="vsm-bulk-actions">
+          <button className="vsm-bulk-btn" onClick={handleSelectAllFiltered} disabled={filteredAllChecked || filtered.length === 0}>
+            全選 ({filtered.length})
+          </button>
+          <button className="vsm-bulk-btn" onClick={handleClearFiltered} disabled={filteredNoneChecked || filtered.length === 0}>
+            清空
+          </button>
+        </div>
         {filtered.length === 0 ? (
           <p className="vsm-empty">{allSubscriptions.length === 0 ? '目前沒有任何訂閱' : '找不到符合的訂閱'}</p>
         ) : (

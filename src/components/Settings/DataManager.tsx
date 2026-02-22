@@ -49,18 +49,13 @@ export function DataManager({ subscriptions, views, onRefresh, onToast }: DataMa
     const viewsToExport = customViews.filter(v => selectedViewIds.has(v.id));
     const viewExports: ExportData['views'] = [];
 
-    // Collect all subscription IDs referenced by selected views
-    const viewSubIds = new Set<number>();
     for (const view of viewsToExport) {
       const rows = await db.select<{ subscription_id: number }[]>(
-        'SELECT subscription_id FROM view_subscriptions WHERE view_id = $1 ORDER BY sort_order',
+        'SELECT subscription_id FROM view_subscriptions WHERE view_id = $1',
         [view.id]
       );
       const syms = rows
-        .map(r => {
-          viewSubIds.add(r.subscription_id);
-          return subscriptions.find(s => s.id === r.subscription_id)?.symbol;
-        })
+        .map(r => subscriptions.find(s => s.id === r.subscription_id)?.symbol)
         .filter((s): s is string => !!s);
       viewExports.push({ name: view.name, subscriptions: syms });
     }
@@ -72,8 +67,8 @@ export function DataManager({ subscriptions, views, onRefresh, onToast }: DataMa
       subscriptions: subscriptions.map(s => ({
         symbol: s.symbol,
         display_name: s.display_name || null,
-        provider: s.selected_provider_id || s.default_provider_id || 'binance',
-        asset_type: s.asset_type || 'crypto',
+        provider: s.selected_provider_id,
+        asset_type: s.asset_type,
       })),
       views: viewExports,
     };
@@ -109,12 +104,14 @@ export function DataManager({ subscriptions, views, onRefresh, onToast }: DataMa
     let subsAdded = 0;
     let skipped = 0;
 
+    // 用事務包裹批量 INSERT，減少 I/O 次數
+    await db.execute('BEGIN TRANSACTION', []);
     for (const sub of data.subscriptions) {
       if (existing.has(sub.symbol.toUpperCase())) { skipped++; continue; }
       try {
         await db.execute(
-          'INSERT INTO subscriptions (symbol, display_name, default_provider_id, selected_provider_id, asset_type, sort_order) VALUES ($1, $2, $3, $4, $5, $6)',
-          [sub.symbol.toUpperCase(), sub.display_name || null, sub.provider, sub.provider, sub.asset_type || 'crypto', subscriptions.length + subsAdded]
+          'INSERT INTO subscriptions (symbol, display_name, selected_provider_id, asset_type) VALUES ($1, $2, $3, $4)',
+          [sub.symbol.toUpperCase(), sub.display_name || null, sub.provider, sub.asset_type || 'crypto']
         );
         existing.add(sub.symbol.toUpperCase());
         subsAdded++;
@@ -128,20 +125,19 @@ export function DataManager({ subscriptions, views, onRefresh, onToast }: DataMa
         if (existingViews.has(v.name.toLowerCase())) { continue; }
         try {
           const result = await db.execute(
-            'INSERT INTO views (name, is_default, sort_order) VALUES ($1, 0, $2)',
-            [v.name, views.length + viewsAdded]
+            'INSERT INTO views (name, is_default) VALUES ($1, 0)',
+            [v.name]
           );
           const newViewId = result.lastInsertId;
           if (v.subscriptions && newViewId) {
             const allSubs = await db.select<{ id: number; symbol: string }[]>('SELECT id, symbol FROM subscriptions');
             const symMap = new Map(allSubs.map(s => [s.symbol.toUpperCase(), s.id]));
-            let order = 0;
             for (const sym of v.subscriptions) {
               const subId = symMap.get(sym.toUpperCase());
               if (subId) {
                 await db.execute(
-                  'INSERT OR IGNORE INTO view_subscriptions (view_id, subscription_id, sort_order) VALUES ($1, $2, $3)',
-                  [newViewId, subId, order++]
+                  'INSERT OR IGNORE INTO view_subscriptions (view_id, subscription_id) VALUES ($1, $2)',
+                  [newViewId, subId]
                 );
               }
             }
@@ -150,6 +146,7 @@ export function DataManager({ subscriptions, views, onRefresh, onToast }: DataMa
         } catch { /* skip */ }
       }
     }
+    await db.execute('COMMIT', []);
 
     setImporting(false);
     setImportResult({ subs: subsAdded, views: viewsAdded, skipped });

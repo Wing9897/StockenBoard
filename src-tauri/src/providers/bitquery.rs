@@ -52,4 +52,55 @@ impl DataProvider for BitqueryProvider {
             .volume(trade["AmountInUSD"].as_f64())
             .build())
     }
+
+    /// 限流並行查詢 — Bitquery GraphQL 可以合併但太複雜，限制同時 2 個
+    async fn fetch_prices(&self, symbols: &[String]) -> Result<Vec<AssetData>, String> {
+        if symbols.is_empty() { return Ok(vec![]); }
+        if symbols.len() == 1 { return self.fetch_price(&symbols[0]).await.map(|d| vec![d]); }
+
+        let api_key = self.api_key.as_ref().ok_or("Bitquery 需要 API Key")?.clone();
+        let client = self.client.clone();
+
+        use futures::stream::{self, StreamExt};
+        let results: Vec<_> = stream::iter(symbols.to_vec())
+            .map(|sym| {
+                let c = client.clone();
+                let key = api_key.clone();
+                async move {
+                    let query = format!(r#"{{
+                        EVM(dataset: combined, network: eth) {{
+                            DEXTradeByTokens(
+                                limit: {{count: 1}}
+                                orderBy: {{descending: Block_Time}}
+                                where: {{Trade: {{Currency: {{SmartContract: {{is: "{}"}}}}}}}}
+                            ) {{ Trade {{ PriceInUSD AmountInUSD }} }}
+                        }}
+                    }}"#, sym);
+                    let data: serde_json::Value = c
+                        .post("https://streaming.bitquery.io/graphql")
+                        .header("Authorization", format!("Bearer {}", key))
+                        .header("Content-Type", "application/json")
+                        .json(&serde_json::json!({ "query": query }))
+                        .send().await.map_err(|e| format!("Bitquery: {}", e))?
+                        .json().await.map_err(|e| format!("Bitquery: {}", e))?;
+                    let trade = &data["data"]["EVM"]["DEXTradeByTokens"][0]["Trade"];
+                    Ok::<AssetData, String>(AssetDataBuilder::new(&sym, "bitquery")
+                        .price(trade["PriceInUSD"].as_f64().unwrap_or(0.0))
+                        .volume(trade["AmountInUSD"].as_f64())
+                        .build())
+                }
+            })
+            .buffer_unordered(2)
+            .collect()
+            .await;
+
+        let mut out = Vec::new();
+        for r in results {
+            match r {
+                Ok(data) => out.push(data),
+                Err(e) => eprintln!("Bitquery 跳過: {}", e),
+            }
+        }
+        Ok(out)
+    }
 }

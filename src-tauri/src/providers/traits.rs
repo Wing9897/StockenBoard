@@ -54,6 +54,7 @@ pub trait DataProvider: Send + Sync {
     fn info(&self) -> ProviderInfo;
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String>;
     async fn fetch_prices(&self, symbols: &[String]) -> Result<Vec<AssetData>, String> {
+        // Default fallback: 逐一查詢（各 provider 應覆寫此方法以使用批量/並行）
         let mut results = Vec::new();
         for symbol in symbols {
             match self.fetch_price(symbol).await {
@@ -70,7 +71,7 @@ pub fn shared_client() -> reqwest::Client {
     SHARED_CLIENT.get_or_init(|| {
         reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(15))
-            .user_agent("HQ-Tracker/1.0")
+            .user_agent("StockenBoard/1.0")
             .pool_max_idle_per_host(10)
             .build()
             .unwrap_or_default()
@@ -143,12 +144,13 @@ pub struct WsTickerUpdate {
 /// Trait for providers that support WebSocket streaming
 #[async_trait::async_trait]
 pub trait WebSocketProvider: Send + Sync {
-    /// Subscribe to real-time updates for given symbols
+    /// Subscribe to real-time updates for given symbols.
+    /// Returns a JoinHandle for the WS connection task so it can be aborted on cleanup.
     async fn subscribe(
         &self,
         symbols: Vec<String>,
         sender: Arc<tokio::sync::broadcast::Sender<WsTickerUpdate>>,
-    ) -> Result<(), String>;
+    ) -> Result<tokio::task::JoinHandle<()>, String>;
 }
 
 // All Provider static info
@@ -157,7 +159,7 @@ pub fn get_all_provider_info() -> Vec<ProviderInfo> {
     PROVIDER_INFO_CACHE.clone()
 }
 
-/// O(1) 查找單個 provider info — 避免每次 info() 都遍歷整個 Vec
+/// O(1) 查找單個 provider info
 #[allow(dead_code)]
 pub fn get_provider_info(id: &str) -> Option<ProviderInfo> {
     PROVIDER_INFO_MAP.get(id).cloned()

@@ -100,12 +100,36 @@ impl DataProvider for TiingoProvider {
 
         let mut results = Vec::new();
 
-        // 批量查 crypto — Tiingo crypto batch 回應格式複雜，逐個查更穩定
-        for (original, _) in &crypto_syms {
-            match self.fetch_price(original).await {
-                Ok(asset) => results.push(asset),
-                Err(e) => eprintln!("Tiingo crypto 跳過 {}: {}", original, e),
-            }
+        // 批量查 crypto — 限流並行查詢
+        if !crypto_syms.is_empty() {
+            use futures::stream::{self, StreamExt};
+            let api_key_owned = api_key.clone();
+            let client = self.client.clone();
+            let crypto_results: Vec<_> = stream::iter(crypto_syms)
+                .map(|(original, tiingo_sym)| {
+                    let c = client.clone();
+                    let key = api_key_owned.clone();
+                    async move {
+                        let url = format!("https://api.tiingo.com/tiingo/crypto/top?tickers={}&token={}", tiingo_sym, key);
+                        match c.get(&url).send().await {
+                            Ok(resp) => match resp.json::<serde_json::Value>().await {
+                                Ok(data) => {
+                                    let top = &data[0]["topOfBookData"][0];
+                                    if top.is_null() { return None; }
+                                    Some(AssetDataBuilder::new(&original, "tiingo")
+                                        .price(top["lastPrice"].as_f64().unwrap_or(0.0))
+                                        .build())
+                                }
+                                Err(e) => { eprintln!("Tiingo crypto 跳過 {}: {}", original, e); None }
+                            }
+                            Err(e) => { eprintln!("Tiingo crypto 跳過 {}: {}", original, e); None }
+                        }
+                    }
+                })
+                .buffer_unordered(2)
+                .collect()
+                .await;
+            results.extend(crypto_results.into_iter().flatten());
         }
 
         // 批量查 stock — Tiingo IEX 支持 tickers=aapl,msft

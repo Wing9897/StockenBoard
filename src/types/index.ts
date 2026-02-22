@@ -28,38 +28,26 @@ export interface ProviderInfo {
   key_interval: number;
 }
 
-export interface Provider {
-  id: string;
-  name: string;
-  provider_type: string;
+export interface ProviderSettings {
+  provider_id: string;
   api_key?: string;
   api_secret?: string;
-  base_url?: string;
-  refresh_interval: number;
-  enabled: boolean;
+  refresh_interval?: number;
   connection_type: string;
-  supports_websocket: boolean;
-  config?: string;
 }
 
 export interface Subscription {
   id: number;
   symbol: string;
   display_name?: string;
-  icon_path?: string;
-  default_provider_id?: string;
-  selected_provider_id?: string;
-  asset_type?: 'crypto' | 'stock';
-  sort_order: number;
-  created_at?: string;
+  selected_provider_id: string;
+  asset_type: 'crypto' | 'stock';
 }
 
 export interface View {
   id: number;
   name: string;
   is_default: boolean;
-  sort_order: number;
-  created_at?: string;
 }
 
 export interface WsTickerUpdate {

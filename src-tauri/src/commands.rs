@@ -10,7 +10,8 @@ use tokio::sync::{RwLock, broadcast};
 pub struct AppState {
     pub providers: RwLock<HashMap<String, Arc<dyn DataProvider>>>,
     pub ws_sender: broadcast::Sender<WsTickerUpdate>,
-    pub ws_tasks: RwLock<HashMap<String, tokio::task::JoinHandle<()>>>,
+    /// 追蹤每個 provider 的 WS 相關 tasks：(forwarder_task, ws_connection_task)
+    pub ws_tasks: RwLock<HashMap<String, (tokio::task::JoinHandle<()>, tokio::task::JoinHandle<()>)>>,
 }
 
 impl AppState {
@@ -33,7 +34,6 @@ impl AppState {
     }
 
     /// 從 DB 讀取已儲存的 API key，重新初始化對應的 provider
-    /// 確保 app 重啟後，之前設定的 API key 仍然生效
     pub fn init_from_db_sync(&self, app_dir: &std::path::Path) {
         let db_path = app_dir.join("stockenboard.db");
         if !db_path.exists() { return; }
@@ -47,7 +47,7 @@ impl AppState {
         };
 
         let mut stmt = match conn.prepare(
-            "SELECT id, api_key, api_secret FROM providers WHERE api_key IS NOT NULL AND api_key != ''"
+            "SELECT provider_id, api_key, api_secret FROM provider_settings WHERE api_key IS NOT NULL AND api_key != ''"
         ) {
             Ok(s) => s,
             Err(_) => return,
@@ -63,8 +63,6 @@ impl AppState {
             .map(|r| r.flatten().collect())
             .unwrap_or_default();
 
-        // 在 setup hook（sync 上下文）中，RwLock 還沒被任何 async task 持有
-        // 所以可以安全地用 try_write
         if let Ok(mut providers) = self.providers.try_write() {
             for (id, api_key, api_secret) in rows {
                 if let Some(p) = create_provider(&id, api_key, api_secret) {
@@ -154,8 +152,9 @@ pub async fn start_ws_stream(
     // Stop existing WS for this provider
     {
         let mut tasks = state.ws_tasks.write().await;
-        if let Some(handle) = tasks.remove(&provider_id) {
-            handle.abort();
+        if let Some((forwarder, ws_conn)) = tasks.remove(&provider_id) {
+            forwarder.abort();
+            ws_conn.abort();
         }
     }
 
@@ -165,19 +164,19 @@ pub async fn start_ws_stream(
     let sender = Arc::new(state.ws_sender.clone());
     let mut receiver = state.ws_sender.subscribe();
 
-    // Start WS connection
-    ws_provider.subscribe(symbols, sender).await?;
+    // Start WS connection — returns the connection task handle
+    let ws_handle = ws_provider.subscribe(symbols, sender).await?;
 
     // Forward WS updates to frontend via Tauri events
     let app_handle = app.clone();
-    let task = tokio::spawn(async move {
+    let forwarder = tokio::spawn(async move {
         while let Ok(update) = receiver.recv().await {
             let _ = app_handle.emit("ws-ticker-update", &update);
         }
     });
 
     let mut tasks = state.ws_tasks.write().await;
-    tasks.insert(provider_id, task);
+    tasks.insert(provider_id, (forwarder, ws_handle));
 
     Ok(())
 }
@@ -189,10 +188,74 @@ pub async fn stop_ws_stream(
     provider_id: String,
 ) -> Result<(), String> {
     let mut tasks = state.ws_tasks.write().await;
-    if let Some(handle) = tasks.remove(&provider_id) {
-        handle.abort();
+    if let Some((forwarder, ws_conn)) = tasks.remove(&provider_id) {
+        forwarder.abort();
+        ws_conn.abort();
     }
     Ok(())
+}
+
+/// Set custom icon for a subscription symbol
+#[tauri::command]
+pub async fn set_icon(app: tauri::AppHandle, symbol: String) -> Result<String, String> {
+    use tauri::Manager;
+
+    let file = rfd::AsyncFileDialog::new()
+        .add_filter("圖片", &["png", "jpg", "jpeg", "webp", "svg"])
+        .set_title("選擇圖示")
+        .pick_file()
+        .await
+        .ok_or_else(|| "已取消".to_string())?;
+
+    let icon_name = symbol
+        .to_lowercase()
+        .replace("usdt", "")
+        .replace("-usd", "");
+
+    let app_dir = app.path().app_data_dir()
+        .map_err(|e| format!("無法取得 app 目錄: {}", e))?;
+    let icons_dir = app_dir.join("icons");
+    tokio::fs::create_dir_all(&icons_dir).await
+        .map_err(|e| format!("建立 icons 目錄失敗: {}", e))?;
+
+    let dest = icons_dir.join(format!("{}.png", icon_name));
+    let bytes = file.read().await;
+    tokio::fs::write(&dest, &bytes).await
+        .map_err(|e| format!("寫入圖示失敗: {}", e))?;
+
+    Ok(dest.to_string_lossy().to_string())
+}
+
+/// Remove custom icon for a subscription symbol
+#[tauri::command]
+pub async fn remove_icon(app: tauri::AppHandle, symbol: String) -> Result<(), String> {
+    use tauri::Manager;
+
+    let icon_name = symbol
+        .to_lowercase()
+        .replace("usdt", "")
+        .replace("-usd", "");
+
+    let app_dir = app.path().app_data_dir()
+        .map_err(|e| format!("無法取得 app 目錄: {}", e))?;
+    let dest = app_dir.join("icons").join(format!("{}.png", icon_name));
+
+    if dest.exists() {
+        tokio::fs::remove_file(&dest).await
+            .map_err(|e| format!("刪除圖示失敗: {}", e))?;
+    }
+    Ok(())
+}
+
+/// Get the app data icons directory path
+#[tauri::command]
+pub async fn get_icons_dir(app: tauri::AppHandle) -> Result<String, String> {
+    use tauri::Manager;
+
+    let app_dir = app.path().app_data_dir()
+        .map_err(|e| format!("無法取得 app 目錄: {}", e))?;
+    let icons_dir = app_dir.join("icons");
+    Ok(icons_dir.to_string_lossy().to_string())
 }
 
 /// Export file with native save dialog

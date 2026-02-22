@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAssetData } from './hooks/useAssetData';
 import { useViews } from './hooks/useViews';
 import { useToast } from './hooks/useToast';
@@ -12,19 +12,21 @@ import { ToastContainer } from './components/Toast/Toast';
 import './App.css';
 
 type Tab = 'dashboard' | 'settings';
-type ViewMode = 'grid' | 'list';
+type ViewMode = 'grid' | 'list' | 'compact';
 type EditorState = null | { mode: 'create' } | { mode: 'rename'; viewId: number; currentName: string };
 
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem('sb_view_mode');
-    return saved === 'list' ? 'list' : 'grid';
+    if (saved === 'list' || saved === 'compact') return saved;
+    return 'grid';
   });
   const [editorState, setEditorState] = useState<EditorState>(null);
   const [showSubscriptionManager, setShowSubscriptionManager] = useState(false);
   const [showViewManager, setShowViewManager] = useState(false);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
+  const [showAddSubscription, setShowAddSubscription] = useState(false);
   const [bulkDeleteIds, setBulkDeleteIds] = useState<Set<number>>(new Set());
   const [pinnedViewIds, setPinnedViewIds] = useState<number[]>(() => {
     try { return JSON.parse(localStorage.getItem('sb_pinned_views') || '[]'); } catch { return []; }
@@ -40,6 +42,7 @@ function App() {
     views,
     activeViewId,
     activeViewSubscriptionIds,
+    viewSubCounts,
     setActiveView,
     createView,
     renameView,
@@ -54,30 +57,44 @@ function App() {
     loading,
     addSubscription,
     removeSubscription,
+    removeSubscriptions,
     updateSubscription,
     getAsset,
     getError,
     getSelectedProvider,
     getAssetType,
     getRefreshTiming,
+    setActiveSubIds,
     refresh: refreshAssets,
   } = useAssetData();
 
-  const handleAdd = async (symbol: string, defaultProviderId?: string, assetType?: 'crypto' | 'stock') => {
-    await addSubscription(symbol, undefined, defaultProviderId, assetType);
-  };
+  const handleAdd = useCallback(async (symbol: string, providerId?: string, assetType?: 'crypto' | 'stock') => {
+    await addSubscription(symbol, undefined, providerId, assetType);
+    await refreshViews();
+  }, [addSubscription, refreshViews]);
 
-  const handleRemove = async (id: number) => {
-    const sub = subscriptions.find(s => s.id === id);
+  const subscriptionsRef = useRef(subscriptions);
+  subscriptionsRef.current = subscriptions;
+
+  const handleRemove = useCallback(async (id: number) => {
+    const sub = subscriptionsRef.current.find(s => s.id === id);
     await removeSubscription(id);
     toast.info('已移除', sub ? `${sub.symbol} 已取消訂閱` : '已取消訂閱');
-  };
+  }, [removeSubscription, toast]);
+
+  // 切換 view 時，只 fetch 當前頁面的訂閱
+  useEffect(() => {
+    setActiveSubIds(activeViewSubscriptionIds);
+  }, [activeViewSubscriptionIds, setActiveSubIds]);
 
 
-  // Filter subscriptions by active view
-  const viewFilteredSubs = activeViewSubscriptionIds === null
-    ? subscriptions
-    : subscriptions.filter(sub => activeViewSubscriptionIds.includes(sub.id));
+  // Filter subscriptions by active view (memoized 避免每次 render 重新計算)
+  const viewFilteredSubs = useMemo(() =>
+    activeViewSubscriptionIds === null
+      ? subscriptions
+      : subscriptions.filter(sub => activeViewSubscriptionIds.includes(sub.id)),
+    [subscriptions, activeViewSubscriptionIds]
+  );
 
   const handleCreateView = () => setEditorState({ mode: 'create' });
 
@@ -139,27 +156,36 @@ function App() {
   const handleBulkDelete = async () => {
     if (bulkDeleteIds.size === 0) return;
     const count = bulkDeleteIds.size;
-    for (const id of bulkDeleteIds) {
-      await removeSubscription(id);
-    }
+    await removeSubscriptions([...bulkDeleteIds]);
     setShowBulkDelete(false);
     toast.info('批量移除', `已取消 ${count} 個訂閱`);
+  };
+
+  const handleCopySymbols = () => {
+    const symbols = viewFilteredSubs.map(s => s.symbol).join(', ');
+    navigator.clipboard.writeText(symbols).then(() => {
+      toast.success('已複製', `${viewFilteredSubs.length} 個代號已複製到剪貼簿`);
+    }).catch(() => {
+      toast.error('複製失敗');
+    });
   };
 
   // Views shown in toolbar: default + pinned + active (if not already shown)
   const sortedViews = [...views].sort((a, b) => {
     if (a.is_default) return -1;
     if (b.is_default) return 1;
-    return a.sort_order - b.sort_order;
+    return a.id - b.id;
   });
 
   const toolbarViews = (() => {
+    if (sortedViews.length === 0) return [];
     const pinned = sortedViews.filter(v =>
       v.is_default || pinnedViewIds.includes(v.id) || v.id === activeViewId
     );
-    // 沒有置頂時，自動顯示前 5 個頁面
+    // 沒有置頂時（只有 default + active），自動顯示前 5 個頁面
     const MAX_AUTO = 5;
-    if (pinned.length <= 1 && sortedViews.length > 1) {
+    const hasPins = pinnedViewIds.some(pid => sortedViews.some(v => v.id === pid && !v.is_default));
+    if (!hasPins && sortedViews.length > 1) {
       const auto = sortedViews.slice(0, MAX_AUTO);
       if (activeViewId && !auto.find(v => v.id === activeViewId)) {
         const activeView = sortedViews.find(v => v.id === activeViewId);
@@ -190,7 +216,7 @@ function App() {
             ) : subscriptions.length === 0 ? (
               <div className="empty-state">
                 <p>尚未訂閱任何資產</p>
-                <button className="btn-add" onClick={() => setActiveTab('settings')}>前往設定新增</button>
+                <button className="btn-add" onClick={() => setShowAddSubscription(true)}>新增訂閱</button>
               </div>
             ) : (
               <>
@@ -205,12 +231,16 @@ function App() {
                         onClick={() => setActiveView(view.id)}
                       >
                         {view.name}
-                        {view.is_default && ` (${viewFilteredSubs.length})`}
+                        {view.is_default
+                          ? ` (${subscriptions.length})`
+                          : ` (${viewSubCounts[view.id] ?? 0})`
+                        }
                       </button>
                     ))}
                     {views.filter(v => !v.is_default).length > 0 && (
                       <button className="view-manager-btn" onClick={() => setShowViewManager(true)} title="管理頁面">⋯</button>
                     )}
+                    <button className="add-view-btn" onClick={handleCreateView} title="新增頁面">+</button>
                   </div>
                   <div className="toolbar-right">
                     {activeViewSubscriptionIds !== null && (
@@ -221,15 +251,23 @@ function App() {
                         管理訂閱
                       </button>
                     )}
-                    <button className="add-view-btn" onClick={handleCreateView} title="新增頁面">+</button>
+                    <button className="add-sub-btn" onClick={() => setShowAddSubscription(true)} title="新增訂閱">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+                    </button>
+                    <button className="copy-symbols-btn" onClick={handleCopySymbols} title="複製所有代號">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    </button>
                     <div className="view-toggle">
+                      <button className={`view-btn ${viewMode === 'compact' ? 'active' : ''}`} onClick={() => handleSetViewMode('compact')} title="小方塊">▪</button>
                       <button className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`} onClick={() => handleSetViewMode('grid')} title="方塊顯示">▦</button>
                       <button className={`view-btn ${viewMode === 'list' ? 'active' : ''}`} onClick={() => handleSetViewMode('list')} title="列表顯示">☰</button>
                     </div>
-                    <button className="bulk-delete-btn" onClick={openBulkDelete} title="批量取消訂閱">🗑</button>
+                    <button className="bulk-delete-btn" onClick={openBulkDelete} title="批量取消訂閱">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    </button>
                   </div>
                 </div>
-                <div className={viewMode === 'grid' ? 'asset-grid' : 'asset-list'}>
+                <div className={viewMode === 'grid' ? 'asset-grid' : viewMode === 'compact' ? 'asset-grid compact' : 'asset-list'}>
                   {viewFilteredSubs.map((sub) => (
                     <AssetCard
                       key={sub.id}
@@ -253,11 +291,10 @@ function App() {
 
         {activeTab === 'settings' && (
           <div className="settings">
-            <SubscriptionManager onBatchAdd={handleAdd} subscriptions={subscriptions} onToast={(title, msg) => toast.success(title, msg)} />
             <DataManager
               subscriptions={subscriptions}
               views={views}
-              onRefresh={() => { refreshAssets(); refreshViews(); }}
+              onRefresh={() => { refreshAssets(activeViewSubscriptionIds); refreshViews(); }}
               onToast={(type, title, msg) => toast[type](title, msg)}
             />
             <ProviderSettings onSaved={() => toast.success('設定已儲存')} />
@@ -343,7 +380,7 @@ function App() {
                     />
                     <span className="bd-symbol">{sub.symbol}</span>
                     {sub.display_name && <span className="bd-display-name">{sub.display_name}</span>}
-                    <span className={`bd-type ${sub.asset_type || 'crypto'}`}>{sub.asset_type === 'stock' ? '股' : '幣'}</span>
+                    <span className={`bd-type ${sub.asset_type}`}>{sub.asset_type === 'stock' ? '股' : '幣'}</span>
                   </label>
                 </li>
               ))}
@@ -353,6 +390,24 @@ function App() {
               <button className="bd-confirm" onClick={handleBulkDelete} disabled={bulkDeleteIds.size === 0}>
                 移除 ({bulkDeleteIds.size})
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showAddSubscription && (
+        <div className="sub-modal-backdrop" onClick={() => setShowAddSubscription(false)}>
+          <div className="sub-modal" onClick={e => e.stopPropagation()}>
+            <div className="sub-modal-header">
+              <h4 className="sub-modal-title">新增訂閱</h4>
+              <button className="vsm-close" onClick={() => setShowAddSubscription(false)}>✕</button>
+            </div>
+            <div className="sub-modal-body">
+              <SubscriptionManager
+                onBatchAdd={handleAdd}
+                subscriptions={subscriptions}
+                providers={providerInfoList}
+                onToast={(title, msg) => toast.success(title, msg)}
+              />
             </div>
           </div>
         </div>
