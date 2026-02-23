@@ -656,3 +656,35 @@
   font-size: 12px;
   color: #6c7086;
 }
+
+/* Toggle Button */
+.btn-toggle {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.btn-toggle.enabled {
+  background: rgba(166, 227, 161, 0.15);
+  border: 1px solid #a6e3a1;
+  color: #a6e3a1;
+}
+
+.btn-toggle.enabled:hover {
+  background: rgba(166, 227, 161, 0.3);
+}
+
+.btn-toggle.disabled {
+  background: rgba(243, 139, 168, 0.1);
+  border: 1px solid #6c7086;
+  color: #6c7086;
+}
+
+.btn-toggle.disabled:hover {
+  background: rgba(243, 139, 168, 0.2);
+  border-color: #f38ba8;
+  color: #f38ba8;
+}

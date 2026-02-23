@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import Database from '@tauri-apps/plugin-sql';
 import { Subscription, View } from '../../types';
+import { getDb } from '../../lib/db';
 import './Settings.css';
 
 interface DataManagerProps {
@@ -45,7 +45,7 @@ export function DataManager({ subscriptions, views, onRefresh, onToast }: DataMa
   const selectNone = () => setSelectedViewIds(new Set());
 
   const handleExport = async () => {
-    const db = await Database.load('sqlite:stockenboard.db');
+    const db = await getDb();
     const viewsToExport = customViews.filter(v => selectedViewIds.has(v.id));
     const viewExports: ExportData['views'] = [];
 
@@ -99,7 +99,7 @@ export function DataManager({ subscriptions, views, onRefresh, onToast }: DataMa
     }
 
     setImporting(true);
-    const db = await Database.load('sqlite:stockenboard.db');
+    const db = await getDb();
     const existing = new Set(subscriptions.map(s => s.symbol.toUpperCase()));
     let subsAdded = 0;
     let skipped = 0;

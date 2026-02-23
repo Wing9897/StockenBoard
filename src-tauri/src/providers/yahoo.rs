@@ -120,74 +120,25 @@ impl DataProvider for YahooProvider {
         parse_yahoo_chart(symbol, &data)
     }
 
-    /// 批量查詢 — 使用 v7/finance/quote?symbols=AAPL,GOOGL,TSLA 一次查多個
+    /// 批量查詢 — v7/quote 端點已失效，改用 v8/chart 並行查詢
     async fn fetch_prices(&self, symbols: &[String]) -> Result<Vec<AssetData>, String> {
         if symbols.is_empty() { return Ok(vec![]); }
         if symbols.len() == 1 { return self.fetch_price(&symbols[0]).await.map(|d| vec![d]); }
 
-        let auth = self.get_auth().await?;
+        let futures: Vec<_> = symbols.iter().map(|s| self.fetch_price(s)).collect();
+        let settled = futures::future::join_all(futures).await;
 
-        let yahoo_syms: Vec<String> = symbols.iter().map(|s| s.replace('.', "-")).collect();
-        let syms_str = yahoo_syms.join(",");
-
-        let url = format!(
-            "https://query2.finance.yahoo.com/v7/finance/quote?symbols={}&crumb={}",
-            syms_str, auth.crumb
-        );
-
-        let resp = self.client.get(&url)
-            .send().await
-            .map_err(|e| format!("Yahoo 批量連接失敗: {}", e))?;
-
-        let data: serde_json::Value = if resp.status() == reqwest::StatusCode::UNAUTHORIZED || resp.status() == reqwest::StatusCode::FORBIDDEN {
-            self.invalidate_auth().await;
-            let auth2 = self.get_auth().await?;
-            let url2 = format!(
-                "https://query2.finance.yahoo.com/v7/finance/quote?symbols={}&crumb={}",
-                syms_str, auth2.crumb
-            );
-            self.client.get(&url2)
-                .send().await.map_err(|e| format!("Yahoo 批量重試失敗: {}", e))?
-                .error_for_status().map_err(|e| format!("Yahoo 批量 API 錯誤: {}", e))?
-                .json().await.map_err(|e| format!("Yahoo 批量解析失敗: {}", e))?
-        } else {
-            resp.error_for_status().map_err(|e| format!("Yahoo 批量 API 錯誤: {}", e))?
-                .json().await.map_err(|e| format!("Yahoo 批量解析失敗: {}", e))?
-        };
-
-        let quotes = data["quoteResponse"]["result"].as_array()
-            .ok_or("Yahoo 批量回應格式錯誤")?;
-
-        // 建立 yahoo_symbol -> original_symbol 映射
-        let mut sym_map: std::collections::HashMap<String, &str> = std::collections::HashMap::new();
-        for (i, ys) in yahoo_syms.iter().enumerate() {
-            sym_map.insert(ys.to_uppercase(), &symbols[i]);
+        let mut results = Vec::with_capacity(symbols.len());
+        let mut errors = Vec::new();
+        for (i, r) in settled.into_iter().enumerate() {
+            match r {
+                Ok(data) => results.push(data),
+                Err(e) => errors.push(format!("{}: {}", symbols[i], e)),
+            }
         }
-
-        let mut results = Vec::new();
-        for q in quotes {
-            let qs = q["symbol"].as_str().unwrap_or("");
-            let original = sym_map.get(&qs.to_uppercase()).copied().unwrap_or(qs);
-
-            let price = q["regularMarketPrice"].as_f64().unwrap_or(0.0);
-            let prev_close = q["regularMarketPreviousClose"].as_f64().unwrap_or(price);
-            let change = price - prev_close;
-            let pct = if prev_close > 0.0 { (change / prev_close) * 100.0 } else { 0.0 };
-            let currency = q["currency"].as_str().unwrap_or("USD");
-
-            results.push(AssetDataBuilder::new(original, "yahoo")
-                .price(price)
-                .currency(currency)
-                .change_24h(Some(change))
-                .change_percent_24h(Some(pct))
-                .high_24h(q["regularMarketDayHigh"].as_f64())
-                .low_24h(q["regularMarketDayLow"].as_f64())
-                .volume(q["regularMarketVolume"].as_f64())
-                .extra_f64("前收盤價", q["regularMarketPreviousClose"].as_f64())
-                .extra_f64("52週高", q["fiftyTwoWeekHigh"].as_f64())
-                .extra_f64("52週低", q["fiftyTwoWeekLow"].as_f64())
-                .extra_str("交易所", q["fullExchangeName"].as_str())
-                .build());
+        // 只要有部分成功就回傳，全部失敗才報錯
+        if results.is_empty() && !errors.is_empty() {
+            return Err(format!("Yahoo 批量查詢全部失敗: {}", errors.join("; ")));
         }
         Ok(results)
     }

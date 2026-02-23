@@ -1,20 +1,21 @@
-import { useState, useRef, useEffect, memo } from 'react';
-import { invoke, convertFileSrc } from '@tauri-apps/api/core';
-import { AssetData, Subscription, ProviderInfo } from '../../types';
+import { useState, useRef, useEffect, useMemo, memo, useCallback } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { Subscription, ProviderInfo } from '../../types';
+import { useAssetPrice } from '../../hooks/useAssetData';
 import { CountdownCircle } from './CountdownCircle';
+import { AssetIcon, getIconName, invalidateIcon } from './AssetIcon';
 import './AssetCard.css';
 
 interface AssetCardProps {
-  asset: AssetData | undefined;
-  error?: string;
   subscription: Subscription;
   providers: ProviderInfo[];
   currentProviderId: string;
   assetType: 'crypto' | 'stock';
-  refreshTiming?: { interval: number; lastFetch: number };
+  refreshInterval: number;
   onRemove: (id: number) => void;
   onEdit: (id: number, updates: { symbol?: string; displayName?: string; providerId?: string; assetType?: 'crypto' | 'stock' }) => Promise<void>;
   viewMode?: 'grid' | 'list' | 'compact';
+  isCustomView?: boolean;
 }
 
 function formatNumber(num: number | undefined, decimals = 2): string {
@@ -50,33 +51,12 @@ function formatExtraValue(value: unknown): string {
   return JSON.stringify(value);
 }
 
-// Cache icons dir path — resolved once, reused by all cards
-let _iconsDirCache: string | null = null;
-let _iconsDirPromise: Promise<string> | null = null;
-function getIconsDir(): Promise<string> {
-  if (_iconsDirCache) return Promise.resolve(_iconsDirCache);
-  if (!_iconsDirPromise) {
-    _iconsDirPromise = invoke<string>('get_icons_dir').then(dir => {
-      _iconsDirCache = dir;
-      return dir;
-    });
-  }
-  return _iconsDirPromise;
-}
-
-// 記住哪些 icon 確認不存在，避免重複嘗試載入 404
-const _missingIcons = new Set<string>();
-
-function getIconName(symbol: string): string {
-  return symbol.toLowerCase().replace(/usdt$/, '').replace(/-usd$/, '');
-}
-
-export const AssetCard = memo(function AssetCard({ asset, error, subscription, providers, currentProviderId, assetType, refreshTiming, onRemove, onEdit, viewMode = 'grid' }: AssetCardProps) {
+export const AssetCard = memo(function AssetCard({ subscription, providers, currentProviderId, assetType, refreshInterval, onRemove, onEdit, viewMode = 'grid', isCustomView = false }: AssetCardProps) {
+  // 細粒度訂閱 — 只在自己的價格變化時 re-render
+  const { asset, error } = useAssetPrice(subscription.symbol, currentProviderId);
   const [expanded, setExpanded] = useState(false);
-  const [iconError, setIconError] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [customIconSrc, setCustomIconSrc] = useState<string | null>(null);
-  const [iconVersion, setIconVersion] = useState(0);
+  const [iconKey, setIconKey] = useState(0); // 用於 set_icon 後強制 AssetIcon 重載
   const iconName = getIconName(subscription.symbol);
 
   // Edit form state
@@ -88,43 +68,25 @@ export const AssetCard = memo(function AssetCard({ asset, error, subscription, p
   const [saving, setSaving] = useState(false);
   const editRef = useRef<HTMLDivElement>(null);
 
-  // Load custom icon from app data dir
-  useEffect(() => {
-    // 已知不存在的 icon 直接跳過
-    if (_missingIcons.has(iconName)) return;
-
-    let cancelled = false;
-    getIconsDir().then(dir => {
-      if (cancelled) return;
-      const sep = dir.endsWith('\\') || dir.endsWith('/') ? '' : '/';
-      setCustomIconSrc(convertFileSrc(`${dir}${sep}${iconName}.png`));
-    }).catch(() => {
-      if (!cancelled) setCustomIconSrc(null);
-    });
-    return () => { cancelled = true; };
-  }, [iconName, iconVersion]);
-
-  const handleIconClick = async () => {
+  const handleIconClick = useCallback(async () => {
     try {
       await invoke('set_icon', { symbol: subscription.symbol });
-      _missingIcons.delete(iconName);
-      setIconError(false);
-      setCustomIconSrc(null);
-      setIconVersion(v => v + 1);
+      invalidateIcon(iconName);
+      setIconKey(v => v + 1); // 強制 AssetIcon 重新載入
     } catch {
-      // user cancelled — do nothing
+      // user cancelled
     }
-  };
+  }, [subscription.symbol, iconName]);
 
   const changePercent = asset?.change_percent_24h ?? 0;
   const isPositive = changePercent >= 0;
   const currentProvider = providers.find(p => p.id === currentProviderId);
 
-  const filteredProviders = providers.filter(p =>
+  const filteredProviders = useMemo(() => providers.filter(p =>
     editing
       ? (editAssetType === 'crypto' ? (p.provider_type === 'crypto' || p.provider_type === 'both') : (p.provider_type === 'stock' || p.provider_type === 'both'))
       : (assetType === 'crypto' ? (p.provider_type === 'crypto' || p.provider_type === 'both') : (p.provider_type === 'stock' || p.provider_type === 'both'))
-  );
+  ), [providers, editing, editAssetType, assetType]);
 
   const openEdit = () => {
     setEditSymbol(subscription.symbol);
@@ -180,33 +142,8 @@ export const AssetCard = memo(function AssetCard({ asset, error, subscription, p
     return () => document.removeEventListener('mousedown', handler);
   }, [editing]);
 
-  const getIconSrc = () => {
-    if (customIconSrc && !iconError) return customIconSrc;
-    if (_missingIcons.has(iconName)) return null;
-    return `/icons/${iconName}.png`;
-  };
-
-  const handleIconError = () => {
-    if (customIconSrc && !iconError) {
-      // Custom icon failed → 記住此 icon 不存在，嘗試 public fallback
-      _missingIcons.add(iconName);
-      setCustomIconSrc(null);
-    } else {
-      setIconError(true);
-    }
-  };
-
-  const iconSrc = getIconSrc();
-  const iconFallbackText = iconName.slice(0, 3).toUpperCase();
-
   const renderIcon = (className: string) => (
-    <div className={`${className} clickable`} onClick={handleIconClick} title="點擊設定圖示">
-      {iconSrc && !iconError ? (
-        <img src={iconSrc} alt={subscription.symbol} onError={handleIconError} />
-      ) : (
-        <span className="asset-icon-fallback">{iconFallbackText}</span>
-      )}
-    </div>
+    <AssetIcon key={iconKey} symbol={subscription.symbol} className={className} onClick={handleIconClick} />
   );
 
   // Edit panel (shared between grid and list)
@@ -235,7 +172,7 @@ export const AssetCard = memo(function AssetCard({ asset, error, subscription, p
       </div>
       {editError && <div className="edit-error">{editError}</div>}
       <div className="edit-actions">
-        <button className="edit-btn delete" onClick={() => { onRemove(subscription.id); setEditing(false); }}>刪除</button>
+        <button className="edit-btn delete" onClick={() => { onRemove(subscription.id); setEditing(false); }}>{isCustomView ? '移除顯示' : '刪除'}</button>
         <div className="edit-actions-right">
           <button className="edit-btn cancel" onClick={cancelEdit} disabled={saving}>取消</button>
           <button className="edit-btn save" onClick={saveEdit} disabled={saving}>{saving ? '儲存中...' : '儲存'}</button>
@@ -263,7 +200,7 @@ export const AssetCard = memo(function AssetCard({ asset, error, subscription, p
               {isPositive ? '▲' : '▼'} {Math.abs(changePercent).toFixed(2)}%
             </span>
           )}
-          {refreshTiming && <CountdownCircle interval={refreshTiming.interval} lastFetch={refreshTiming.lastFetch} size={16} />}
+          {refreshInterval > 0 && <CountdownCircle providerId={currentProviderId} fallbackInterval={refreshInterval} size={16} />}
         </div>
         {editing && editPanel}
       </div>
@@ -287,7 +224,7 @@ export const AssetCard = memo(function AssetCard({ asset, error, subscription, p
         </div>
         <span className="asset-list-provider-label">數據源: {currentProvider?.name || currentProviderId}</span>
         <button className="asset-card-edit-btn" onClick={openEdit} title="編輯">✎</button>
-        {refreshTiming && <CountdownCircle interval={refreshTiming.interval} lastFetch={refreshTiming.lastFetch} size={22} />}
+        {refreshInterval > 0 && <CountdownCircle providerId={currentProviderId} fallbackInterval={refreshInterval} size={22} />}
         {editing && editPanel}
       </div>
     );
@@ -303,7 +240,7 @@ export const AssetCard = memo(function AssetCard({ asset, error, subscription, p
           <p className="asset-name">{subscription.display_name || ''}</p>
         </div>
         <button className="asset-card-edit-btn" onClick={openEdit} title="編輯">✎</button>
-        {refreshTiming && <CountdownCircle interval={refreshTiming.interval} lastFetch={refreshTiming.lastFetch} size={20} />}
+        {refreshInterval > 0 && <CountdownCircle providerId={currentProviderId} fallbackInterval={refreshInterval} size={20} />}
       </div>
 
       <div className="asset-card-body">

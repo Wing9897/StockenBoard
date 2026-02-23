@@ -9,8 +9,7 @@ static SHARED_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 static PROVIDER_INFO_CACHE: LazyLock<Vec<ProviderInfo>> = LazyLock::new(build_all_provider_info);
 
 /// Cached provider info map — O(1) 查找
-#[allow(dead_code)]
-static PROVIDER_INFO_MAP: LazyLock<HashMap<String, ProviderInfo>> = LazyLock::new(|| {
+pub static PROVIDER_INFO_MAP: LazyLock<HashMap<String, ProviderInfo>> = LazyLock::new(|| {
     PROVIDER_INFO_CACHE.iter().map(|p| (p.id.clone(), p.clone())).collect()
 });
 
@@ -225,6 +224,42 @@ fn build_all_provider_info() -> Vec<ProviderInfo> {
         pi("bitquery", "Bitquery", "prediction", true, false, false,
            "有免費tier (OAuth token)", "合約地址",
            &["price","volume"],                                                                      30000,   15000),
+        // New Crypto Exchanges
+        pi("kraken", "Kraken", "crypto", false, false, false,
+           "免費無限制 (公開API)", "XBTUSD, ETHUSD",
+           &["price","change_24h","high_24h","low_24h","volume"],                                    5000,    5000),
+        pi("bybit", "Bybit", "crypto", false, false, false,
+           "免費 120 req/s (公開API)", "BTCUSDT, ETHUSDT",
+           &["price","change_24h","high_24h","low_24h","volume"],                                    5000,    5000),
+        pi("kucoin", "KuCoin", "crypto", false, false, false,
+           "免費無限制 (公開API)", "BTC-USDT, ETH-USDT",
+           &["price","change_24h","high_24h","low_24h","volume"],                                    5000,    5000),
+        pi("okx", "OKX", "crypto", false, false, false,
+           "免費 20 req/2s (公開API)", "BTC-USDT, ETH-USDT",
+           &["price","change_24h","high_24h","low_24h","volume"],                                    5000,    5000),
+        pi("gateio", "Gate.io", "crypto", false, false, false,
+           "免費 900 req/s (公開API)", "BTC_USDT, ETH_USDT",
+           &["price","change_24h","high_24h","low_24h","volume"],                                    5000,    5000),
+        pi("bitfinex", "Bitfinex", "crypto", false, false, false,
+           "免費 90 req/min (公開API)", "tBTCUSD, tETHUSD",
+           &["price","change_24h","high_24h","low_24h","volume"],                                    10000,   10000),
+        pi("htx", "HTX (Huobi)", "crypto", false, false, false,
+           "免費 100 req/s (公開API)", "btcusdt, ethusdt",
+           &["price","change_24h","high_24h","low_24h","volume"],                                    5000,    5000),
+        pi("mexc", "MEXC", "crypto", false, false, false,
+           "免費 20 req/s (公開API)", "BTCUSDT, ETHUSDT",
+           &["price","change_24h","high_24h","low_24h","volume"],                                    5000,    5000),
+        // Aggregators
+        pi("coinpaprika", "CoinPaprika", "crypto", false, false, false,
+           "免費無限制 (公開API)", "btc-bitcoin, eth-ethereum",
+           &["price","change_24h","volume","market_cap"],                                            30000,   30000),
+        pi("coinapi", "CoinAPI", "both", true, false, false,
+           "免費 $25 credits; 100 data points/credit", "BTC, ETH, AAPL",
+           &["price"],                                                                               60000,   30000),
+        // Stock/Global
+        pi("fcsapi", "FCS API", "both", true, false, false,
+           "免費 500 req/月; 付費 10k+/月, 30+國股票", "AAPL, MSFT, 2330.TW",
+           &["price","change_24h","high_24h","low_24h","volume"],                                    120000,  30000),
     ]
 }
 

@@ -15,27 +15,6 @@ interface SubscriptionManagerProps {
   onToast?: (title: string, message?: string) => void;
 }
 
-const PROVIDER_EXAMPLES: Record<string, string[]> = {
-  binance: ['BTCUSDT', 'ETHUSDT', 'BNBUSDT'],
-  coinbase: ['BTC-USD', 'ETH-USD', 'SOL-USD'],
-  coingecko: ['bitcoin', 'ethereum', 'solana'],
-  coinmarketcap: ['BTC', 'ETH', 'SOL'],
-  cryptocompare: ['BTC', 'ETH', 'SOL'],
-  yahoo: ['AAPL', 'MSFT', 'GOOGL', 'TSLA'],
-  finnhub: ['AAPL', 'MSFT', 'BINANCE:BTCUSDT'],
-  alphavantage: ['AAPL', 'MSFT', 'IBM'],
-  polygon: ['AAPL', 'MSFT', 'X:BTCUSD'],
-  twelvedata: ['AAPL', 'BTC/USD', 'EUR/USD'],
-  alpaca: ['AAPL', 'MSFT', 'BTC/USD'],
-  tiingo: ['AAPL', 'btcusd'],
-  fmp: ['AAPL', 'BTCUSD'],
-  marketstack: ['AAPL', 'MSFT'],
-  eodhd: ['AAPL.US', 'MSFT.US'],
-  polymarket: ['event-slug'],
-  mboum: ['AAPL', 'MSFT'],
-  bitquery: ['ethereum', 'bitcoin'],
-};
-
 export function SubscriptionManager({ onBatchAdd, subscriptions, providers: providerInfoList, onToast }: SubscriptionManagerProps) {
   const [symbolInput, setSymbolInput] = useState('');
   const [assetType, setAssetType] = useState<'crypto' | 'stock'>('crypto');
@@ -55,7 +34,9 @@ export function SubscriptionManager({ onBatchAdd, subscriptions, providers: prov
   }, [assetType]);
 
   const selectedProviderInfo = providerInfoList.find(p => p.id === provider);
-  const examples = PROVIDER_EXAMPLES[provider] || [];
+  const examples = selectedProviderInfo
+    ? selectedProviderInfo.symbol_format.split(/[,，]\s*/).map(s => s.trim()).filter(Boolean)
+    : [];
 
   const handleImport = async (e: React.FormEvent) => {
     e.preventDefault();

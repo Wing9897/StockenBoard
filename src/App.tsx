@@ -1,10 +1,13 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { useAssetData } from './hooks/useAssetData';
 import { useViews } from './hooks/useViews';
 import { useToast } from './hooks/useToast';
 import { AssetCard } from './components/AssetCard/AssetCard';
 import { ViewEditor } from './components/ViewEditor/ViewEditor';
 import { ViewSubscriptionManager } from './components/ViewEditor/ViewSubscriptionManager';
+import { ViewManager } from './components/ViewManager/ViewManager';
+import { BulkDelete } from './components/BulkDelete/BulkDelete';
 import { ProviderSettings } from './components/Settings/ProviderSettings';
 import { SubscriptionManager } from './components/Settings/SubscriptionManager';
 import { DataManager } from './components/Settings/DataManager';
@@ -27,7 +30,6 @@ function App() {
   const [showViewManager, setShowViewManager] = useState(false);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
   const [showAddSubscription, setShowAddSubscription] = useState(false);
-  const [bulkDeleteIds, setBulkDeleteIds] = useState<Set<number>>(new Set());
   const [pinnedViewIds, setPinnedViewIds] = useState<number[]>(() => {
     try { return JSON.parse(localStorage.getItem('sb_pinned_views') || '[]'); } catch { return []; }
   });
@@ -59,12 +61,9 @@ function App() {
     removeSubscription,
     removeSubscriptions,
     updateSubscription,
-    getAsset,
-    getError,
     getSelectedProvider,
     getAssetType,
-    getRefreshTiming,
-    setActiveSubIds,
+    getRefreshInterval,
     refresh: refreshAssets,
   } = useAssetData();
 
@@ -76,25 +75,40 @@ function App() {
   const subscriptionsRef = useRef(subscriptions);
   subscriptionsRef.current = subscriptions;
 
+  // 判斷是否在自訂頁面（非「全部」）
+  const isCustomView = activeViewSubscriptionIds !== null;
+
   const handleRemove = useCallback(async (id: number) => {
     const sub = subscriptionsRef.current.find(s => s.id === id);
-    await removeSubscription(id);
-    toast.info('已移除', sub ? `${sub.symbol} 已取消訂閱` : '已取消訂閱');
-  }, [removeSubscription, toast]);
-
-  // 切換 view 時，只 fetch 當前頁面的訂閱
-  useEffect(() => {
-    setActiveSubIds(activeViewSubscriptionIds);
-  }, [activeViewSubscriptionIds, setActiveSubIds]);
-
+    if (isCustomView) {
+      // 自訂頁面：只從頁面移除，不刪除訂閱
+      await removeSubscriptionFromView(activeViewId, id);
+      toast.info('已移除顯示', sub ? `${sub.symbol} 已從此頁面移除` : '已從此頁面移除');
+    } else {
+      // 「全部」頁面：真正取消訂閱
+      await removeSubscription(id);
+      toast.info('已取消訂閱', sub ? `${sub.symbol} 已取消訂閱` : '已取消訂閱');
+    }
+  }, [removeSubscription, removeSubscriptionFromView, activeViewId, isCustomView, toast]);
 
   // Filter subscriptions by active view (memoized 避免每次 render 重新計算)
-  const viewFilteredSubs = useMemo(() =>
-    activeViewSubscriptionIds === null
-      ? subscriptions
-      : subscriptions.filter(sub => activeViewSubscriptionIds.includes(sub.id)),
-    [subscriptions, activeViewSubscriptionIds]
-  );
+  const viewFilteredSubs = useMemo(() => {
+    if (activeViewSubscriptionIds === null) return subscriptions;
+    const idSet = new Set(activeViewSubscriptionIds);
+    return subscriptions.filter(sub => idSet.has(sub.id));
+  }, [subscriptions, activeViewSubscriptionIds]);
+
+  // 通知後端目前可見的 subscription IDs，只 fetch 需要的
+  const prevVisibleRef = useRef<string>('');
+  useEffect(() => {
+    const ids = viewFilteredSubs.map(s => s.id);
+    const key = ids.join(',');
+    if (key === prevVisibleRef.current) return;
+    prevVisibleRef.current = key;
+    invoke('set_visible_subscriptions', { ids }).catch(err =>
+      console.error('Failed to set visible subscriptions:', err)
+    );
+  }, [viewFilteredSubs]);
 
   const handleCreateView = () => setEditorState({ mode: 'create' });
 
@@ -137,28 +151,6 @@ function App() {
       localStorage.setItem('sb_pinned_views', JSON.stringify(next));
       return next;
     });
-  };
-
-  const openBulkDelete = () => {
-    setBulkDeleteIds(new Set());
-    setShowBulkDelete(true);
-  };
-
-  const toggleBulkDeleteId = (id: number) => {
-    setBulkDeleteIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const handleBulkDelete = async () => {
-    if (bulkDeleteIds.size === 0) return;
-    const count = bulkDeleteIds.size;
-    await removeSubscriptions([...bulkDeleteIds]);
-    setShowBulkDelete(false);
-    toast.info('批量移除', `已取消 ${count} 個訂閱`);
   };
 
   const handleCopySymbols = () => {
@@ -262,7 +254,7 @@ function App() {
                       <button className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`} onClick={() => handleSetViewMode('grid')} title="方塊顯示">▦</button>
                       <button className={`view-btn ${viewMode === 'list' ? 'active' : ''}`} onClick={() => handleSetViewMode('list')} title="列表顯示">☰</button>
                     </div>
-                    <button className="bulk-delete-btn" onClick={openBulkDelete} title="批量取消訂閱">
+                    <button className="bulk-delete-btn" onClick={() => setShowBulkDelete(true)} title={isCustomView ? '批量移除顯示' : '批量取消訂閱'}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                     </button>
                   </div>
@@ -271,16 +263,15 @@ function App() {
                   {viewFilteredSubs.map((sub) => (
                     <AssetCard
                       key={sub.id}
-                      asset={getAsset(sub.id, sub.symbol)}
-                      error={getError(sub.id, sub.symbol)}
                       subscription={sub}
                       providers={providerInfoList}
                       currentProviderId={getSelectedProvider(sub.id)}
                       assetType={getAssetType(sub.id)}
-                      refreshTiming={getRefreshTiming(sub.id)}
+                      refreshInterval={getRefreshInterval(sub.selected_provider_id)}
                       onRemove={handleRemove}
                       onEdit={updateSubscription}
                       viewMode={viewMode}
+                      isCustomView={isCustomView}
                     />
                   ))}
                 </div>
@@ -294,7 +285,7 @@ function App() {
             <DataManager
               subscriptions={subscriptions}
               views={views}
-              onRefresh={() => { refreshAssets(activeViewSubscriptionIds); refreshViews(); }}
+              onRefresh={() => { refreshAssets(); refreshViews(); }}
               onToast={(type, title, msg) => toast[type](title, msg)}
             />
             <ProviderSettings onSaved={() => toast.success('設定已儲存')} />
@@ -325,74 +316,40 @@ function App() {
       )}
 
       {showViewManager && (
-        <div className="vm-backdrop" onClick={() => setShowViewManager(false)}>
-          <div className="vm-modal" onClick={e => e.stopPropagation()}>
-            <div className="vm-header">
-              <h4 className="vm-title">管理頁面</h4>
-              <button className="vsm-close" onClick={() => setShowViewManager(false)}>✕</button>
-            </div>
-            <ul className="vm-list">
-              {sortedViews.filter(v => !v.is_default).map(view => (
-                <li key={view.id} className={`vm-item ${view.id === activeViewId ? 'active' : ''}`}>
-                  <button className="vm-item-name" onClick={() => { setActiveView(view.id); setShowViewManager(false); }}>
-                    {view.name}
-                  </button>
-                  <div className="vm-item-actions">
-                    <button
-                      className={`vm-pin-btn ${pinnedViewIds.includes(view.id) ? 'pinned' : ''}`}
-                      onClick={() => togglePinView(view.id)}
-                      title={pinnedViewIds.includes(view.id) ? '取消置頂' : '置頂'}
-                    >
-                      {pinnedViewIds.includes(view.id) ? '★' : '☆'}
-                    </button>
-                    <button className="vm-action-btn" onClick={() => { handleRequestRename(view.id); setShowViewManager(false); }} title="重新命名">✎</button>
-                    <button className="vm-action-btn danger" onClick={() => { handleDeleteView(view.id); }} title="刪除">✕</button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-            <div className="vm-footer">
-              <button className="vm-add-btn" onClick={() => { handleCreateView(); setShowViewManager(false); }}>+ 新增頁面</button>
-            </div>
-          </div>
-        </div>
+        <ViewManager
+          views={views}
+          activeViewId={activeViewId}
+          pinnedViewIds={pinnedViewIds}
+          onSelectView={setActiveView}
+          onTogglePin={togglePinView}
+          onRename={handleRequestRename}
+          onDelete={handleDeleteView}
+          onCreate={handleCreateView}
+          onClose={() => setShowViewManager(false)}
+        />
       )}
 
       {showBulkDelete && (
-        <div className="bd-backdrop" onClick={() => setShowBulkDelete(false)}>
-          <div className="bd-modal" onClick={e => e.stopPropagation()}>
-            <div className="bd-header">
-              <h4 className="bd-title">批量取消訂閱</h4>
-              <button className="vsm-close" onClick={() => setShowBulkDelete(false)}>✕</button>
-            </div>
-            <div className="bd-actions">
-              <button className="dm-pick-btn" onClick={() => setBulkDeleteIds(new Set(viewFilteredSubs.map(s => s.id)))}>全選</button>
-              <button className="dm-pick-btn" onClick={() => setBulkDeleteIds(new Set())}>取消全選</button>
-            </div>
-            <ul className="bd-list">
-              {viewFilteredSubs.map(sub => (
-                <li key={sub.id} className="bd-item">
-                  <label className="bd-label">
-                    <input
-                      type="checkbox"
-                      checked={bulkDeleteIds.has(sub.id)}
-                      onChange={() => toggleBulkDeleteId(sub.id)}
-                    />
-                    <span className="bd-symbol">{sub.symbol}</span>
-                    {sub.display_name && <span className="bd-display-name">{sub.display_name}</span>}
-                    <span className={`bd-type ${sub.asset_type}`}>{sub.asset_type === 'stock' ? '股' : '幣'}</span>
-                  </label>
-                </li>
-              ))}
-            </ul>
-            <div className="bd-footer">
-              <span className="bd-count">{bulkDeleteIds.size} / {viewFilteredSubs.length} 已選</span>
-              <button className="bd-confirm" onClick={handleBulkDelete} disabled={bulkDeleteIds.size === 0}>
-                移除 ({bulkDeleteIds.size})
-              </button>
-            </div>
-          </div>
-        </div>
+        <BulkDelete
+          subscriptions={viewFilteredSubs}
+          isCustomView={isCustomView}
+          onConfirm={async (ids) => {
+            if (ids.size === 0) return;
+            const count = ids.size;
+            if (isCustomView) {
+              for (const id of ids) {
+                await removeSubscriptionFromView(activeViewId, id);
+              }
+              setShowBulkDelete(false);
+              toast.info('批量移除顯示', `已從此頁面移除 ${count} 個項目`);
+            } else {
+              await removeSubscriptions([...ids]);
+              setShowBulkDelete(false);
+              toast.info('批量取消訂閱', `已取消 ${count} 個訂閱`);
+            }
+          }}
+          onClose={() => setShowBulkDelete(false)}
+        />
       )}
       {showAddSubscription && (
         <div className="sub-modal-backdrop" onClick={() => setShowAddSubscription(false)}>

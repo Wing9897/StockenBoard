@@ -10,7 +10,7 @@ const PROVIDER_TYPE_LABELS: Record<string, string> = {
 };
 
 export function ProviderSettings({ onSaved }: { onSaved?: () => void }) {
-  const { providers, loading, getProviderInfo, updateProvider } = useProviders();
+  const { providers, loading, getProviderInfo, updateProvider, toggleProvider } = useProviders();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<{
     api_key: string; api_secret: string; refresh_interval: number; connection_type: string;
@@ -45,11 +45,13 @@ export function ProviderSettings({ onSaved }: { onSaved?: () => void }) {
 
   const handleSave = async () => {
     if (!editingId) return;
+    const current = providers.find(p => p.id === editingId);
     await updateProvider(editingId, {
       api_key: formData.api_key || null,
       api_secret: formData.api_secret || null,
       refresh_interval: formData.refresh_interval,
       connection_type: formData.connection_type,
+      enabled: current?.enabled ?? 1,
     });
     setEditingId(null);
     onSaved?.();
@@ -173,6 +175,13 @@ export function ProviderSettings({ onSaved }: { onSaved?: () => void }) {
                   <span>連接: {p.connection_type === 'websocket' ? 'WebSocket' : 'REST'}</span>
                   {p.api_key && <span className="api-status">🔑 已設定</span>}
                   <button className="btn-edit" onClick={() => handleEdit(p)}>編輯</button>
+                  <button
+                    className={`btn-toggle ${p.enabled === 1 ? 'enabled' : 'disabled'}`}
+                    onClick={() => toggleProvider(p.id, p.enabled !== 1)}
+                    title={p.enabled === 1 ? '停用此數據源' : '啟用此數據源'}
+                  >
+                    {p.enabled === 1 ? '啟用' : '停用'}
+                  </button>
                 </div>
               )}
             </div>

@@ -34,6 +34,7 @@ export interface ProviderSettings {
   api_secret?: string;
   refresh_interval?: number;
   connection_type: string;
+  enabled: number;
 }
 
 export interface Subscription {
@@ -42,6 +43,7 @@ export interface Subscription {
   display_name?: string;
   selected_provider_id: string;
   asset_type: 'crypto' | 'stock';
+  sort_order: number;
 }
 
 export interface View {

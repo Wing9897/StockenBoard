@@ -1,12 +1,15 @@
 import { memo, useState, useEffect, useCallback } from 'react';
+import { usePollTick } from '../../hooks/useAssetData';
 
 interface CountdownCircleProps {
-  interval: number; // ms, 0 = websocket (live)
-  lastFetch: number; // timestamp ms
+  providerId: string;
+  /** fallback interval (ms) — 在收到第一個 poll-tick 前使用 */
+  fallbackInterval: number;
   size?: number;
+  isWebSocket?: boolean;
 }
 
-// 全域 1 秒 timer，所有 CountdownCircle 共享，避免 N 個 setInterval
+// 全域 1 秒 timer，所有 CountdownCircle 共享
 type Listener = () => void;
 const _listeners = new Set<Listener>();
 let _globalTimer: ReturnType<typeof setInterval> | null = null;
@@ -27,23 +30,26 @@ function subscribe(fn: Listener) {
   };
 }
 
-export const CountdownCircle = memo(function CountdownCircle({ interval, lastFetch, size = 24 }: CountdownCircleProps) {
+export const CountdownCircle = memo(function CountdownCircle({ providerId, fallbackInterval, size = 24, isWebSocket = false }: CountdownCircleProps) {
+  const tick = usePollTick(providerId);
   const [now, setNow] = useState(Date.now);
+  const refresh = useCallback(() => setNow(Date.now()), []);
 
-  const tick = useCallback(() => setNow(Date.now()), []);
+  const interval = tick?.intervalMs ?? fallbackInterval;
+  const lastFetch = tick?.fetchedAt ?? 0;
 
   useEffect(() => {
-    if (interval <= 0) return;
-    tick(); // 立即同步一次
-    return subscribe(tick);
-  }, [interval, lastFetch, tick]);
+    if (isWebSocket || interval <= 0) return;
+    refresh();
+    return subscribe(refresh);
+  }, [interval, lastFetch, isWebSocket, refresh]);
 
   const r = (size - 4) / 2;
   const c = 2 * Math.PI * r;
   const center = size / 2;
 
-  // WebSocket = always live（靜態，不需要 timer）
-  if (interval <= 0) {
+  // WebSocket = always live
+  if (isWebSocket) {
     return (
       <div className="countdown-circle" title="WebSocket 即時">
         <svg width={size} height={size}>
@@ -53,6 +59,19 @@ export const CountdownCircle = memo(function CountdownCircle({ interval, lastFet
             strokeLinecap="round" transform={`rotate(-90 ${center} ${center})`} />
           <text x={center} y={center + 1} textAnchor="middle" dominantBaseline="middle"
             fill="#a6e3a1" fontSize="7" fontWeight="600">WS</text>
+        </svg>
+      </div>
+    );
+  }
+
+  // 尚未收到後端 tick — 顯示等待狀態
+  if (!tick) {
+    return (
+      <div className="countdown-circle" title="等待後端...">
+        <svg width={size} height={size}>
+          <circle cx={center} cy={center} r={r} fill="none" stroke="#313244" strokeWidth="2" />
+          <text x={center} y={center + 1} textAnchor="middle" dominantBaseline="middle"
+            fill="#6c7086" fontSize="7" fontWeight="500">...</text>
         </svg>
       </div>
     );
