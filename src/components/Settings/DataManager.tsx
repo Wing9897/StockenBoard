@@ -100,20 +100,27 @@ export function DataManager({ subscriptions, views, onRefresh, onToast }: DataMa
 
     setImporting(true);
     const db = await getDb();
-    const existing = new Set(subscriptions.map(s => s.symbol.toUpperCase()));
+    const existing = new Set(subscriptions.map(s => s.symbol));
     let subsAdded = 0;
     let skipped = 0;
 
     // 用事務包裹批量 INSERT，減少 I/O 次數
+    // 建立兩組 existing set：原始（DEX 用）+ 大寫（一般用）
+    const existingUpper = new Set([...existing].map(s => s.toUpperCase()));
     await db.execute('BEGIN TRANSACTION', []);
     for (const sub of data.subscriptions) {
-      if (existing.has(sub.symbol.toUpperCase())) { skipped++; continue; }
+      // DEX 合約地址需保留原始大小寫
+      const isDex = sub.provider === 'jupiter' || sub.provider === 'okx_dex';
+      const compareKey = isDex ? sub.symbol : sub.symbol.toUpperCase();
+      if ((isDex ? existing : existingUpper).has(compareKey)) { skipped++; continue; }
       try {
+        const storedSymbol = isDex ? sub.symbol : sub.symbol.toUpperCase();
         await db.execute(
           'INSERT INTO subscriptions (symbol, display_name, selected_provider_id, asset_type) VALUES ($1, $2, $3, $4)',
-          [sub.symbol.toUpperCase(), sub.display_name || null, sub.provider, sub.asset_type || 'crypto']
+          [storedSymbol, sub.display_name || null, sub.provider, sub.asset_type || 'crypto']
         );
-        existing.add(sub.symbol.toUpperCase());
+        existing.add(storedSymbol);
+        existingUpper.add(storedSymbol.toUpperCase());
         subsAdded++;
       } catch { skipped++; }
     }
@@ -131,9 +138,11 @@ export function DataManager({ subscriptions, views, onRefresh, onToast }: DataMa
           const newViewId = result.lastInsertId;
           if (v.subscriptions && newViewId) {
             const allSubs = await db.select<{ id: number; symbol: string }[]>('SELECT id, symbol FROM subscriptions');
-            const symMap = new Map(allSubs.map(s => [s.symbol.toUpperCase(), s.id]));
+            // 同時建原始 + 大寫兩組 map，DEX 地址用原始匹配，一般 symbol 用大寫匹配
+            const symMapExact = new Map(allSubs.map(s => [s.symbol, s.id]));
+            const symMapUpper = new Map(allSubs.map(s => [s.symbol.toUpperCase(), s.id]));
             for (const sym of v.subscriptions) {
-              const subId = symMap.get(sym.toUpperCase());
+              const subId = symMapExact.get(sym) ?? symMapUpper.get(sym.toUpperCase());
               if (subId) {
                 await db.execute(
                   'INSERT OR IGNORE INTO view_subscriptions (view_id, subscription_id) VALUES ($1, $2)',

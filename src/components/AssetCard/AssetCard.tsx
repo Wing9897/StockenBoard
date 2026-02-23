@@ -84,9 +84,12 @@ export const AssetCard = memo(function AssetCard({ subscription, providers, curr
 
   const filteredProviders = useMemo(() => providers.filter(p =>
     editing
-      ? (editAssetType === 'crypto' ? (p.provider_type === 'crypto' || p.provider_type === 'both') : (p.provider_type === 'stock' || p.provider_type === 'both'))
-      : (assetType === 'crypto' ? (p.provider_type === 'crypto' || p.provider_type === 'both') : (p.provider_type === 'stock' || p.provider_type === 'both'))
+      ? (editAssetType === 'crypto' ? (p.provider_type === 'crypto' || p.provider_type === 'both' || p.provider_type === 'dex') : (p.provider_type === 'stock' || p.provider_type === 'both'))
+      : (assetType === 'crypto' ? (p.provider_type === 'crypto' || p.provider_type === 'both' || p.provider_type === 'dex') : (p.provider_type === 'stock' || p.provider_type === 'both'))
   ), [providers, editing, editAssetType, assetType]);
+
+  const editProviderInfo = providers.find(p => p.id === editProvider);
+  const isEditDex = editProviderInfo?.provider_type === 'dex';
 
   const openEdit = () => {
     setEditSymbol(subscription.symbol);
@@ -150,8 +153,13 @@ export const AssetCard = memo(function AssetCard({ subscription, providers, curr
   const editPanel = (
     <div className="asset-edit-panel" ref={editRef}>
       <div className="edit-row">
-        <label>代號</label>
-        <input value={editSymbol} onChange={e => { setEditSymbol(e.target.value); setEditError(null); }} disabled={saving} />
+        <label>{isEditDex ? '代號 / 地址' : '代號'}</label>
+        <input value={editSymbol} onChange={e => { setEditSymbol(e.target.value); setEditError(null); }} disabled={saving}
+          placeholder={isEditDex ? (editProvider === 'jupiter' ? 'SOL, mint address' : 'ETH, eth:0x...') : ''}
+          className={isEditDex ? 'dex-address-input' : undefined}
+        />
+        {isEditDex && editProvider === 'jupiter' && <span className="edit-hint">支援代號或 Solana mint address</span>}
+        {isEditDex && editProvider === 'okx_dex' && <span className="edit-hint">支援代號或「鏈:合約地址」</span>}
       </div>
       <div className="edit-row">
         <label>暱稱</label>
@@ -169,6 +177,7 @@ export const AssetCard = memo(function AssetCard({ subscription, providers, curr
         <select value={editProvider} onChange={e => setEditProvider(e.target.value)} disabled={saving}>
           {filteredProviders.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
+        {editProviderInfo?.requires_api_key && <span className="edit-hint" style={{ color: '#f9e2af' }}>此數據源需要 API Key，請在設定頁面配置</span>}
       </div>
       {editError && <div className="edit-error">{editError}</div>}
       <div className="edit-actions">
@@ -187,7 +196,7 @@ export const AssetCard = memo(function AssetCard({ subscription, providers, curr
       <div className="asset-card-compact">
         <div className="compact-top">
           {renderIcon('asset-icon compact-icon')}
-          <span className="compact-symbol">{subscription.symbol}</span>
+          <span className="compact-symbol" title={subscription.symbol}>{subscription.symbol}</span>
           <span className={`asset-type-tag ${assetType}`}>{assetType === 'crypto' ? '幣' : '股'}</span>
           <button className="asset-card-edit-btn" onClick={openEdit} title="編輯">✎</button>
         </div>
@@ -213,8 +222,8 @@ export const AssetCard = memo(function AssetCard({ subscription, providers, curr
       <div className="asset-card-list">
         {renderIcon('asset-list-icon')}
         <div className="asset-list-symbol">
-          <span className="symbol">{subscription.symbol} <span className={`asset-type-tag ${assetType}`}>{assetType === 'crypto' ? '幣' : '股'}</span></span>
-          {subscription.display_name && <span className="name">{subscription.display_name}</span>}
+          <span className="symbol" title={subscription.symbol}>{subscription.symbol} <span className={`asset-type-tag ${assetType}`}>{assetType === 'crypto' ? '幣' : '股'}</span></span>
+          {subscription.display_name && <span className="name" title={subscription.display_name}>{subscription.display_name}</span>}
         </div>
         <div className="asset-list-price">
           {error ? <span className="asset-error">錯誤</span> : asset ? formatPrice(asset.price, asset.currency) : '載入中...'}
@@ -236,8 +245,8 @@ export const AssetCard = memo(function AssetCard({ subscription, providers, curr
       <div className="asset-card-header">
         {renderIcon('asset-icon')}
         <div className="asset-info">
-          <p className="asset-symbol">{subscription.symbol} <span className={`asset-type-tag ${assetType}`}>{assetType === 'crypto' ? '幣' : '股'}</span></p>
-          <p className="asset-name">{subscription.display_name || ''}</p>
+          <p className="asset-symbol"><span className="asset-symbol-text" title={subscription.symbol}>{subscription.symbol}</span> <span className={`asset-type-tag ${assetType}`}>{assetType === 'crypto' ? '幣' : '股'}</span></p>
+          <p className="asset-name" title={subscription.display_name || ''}>{subscription.display_name || ''}</p>
         </div>
         <button className="asset-card-edit-btn" onClick={openEdit} title="編輯">✎</button>
         {refreshInterval > 0 && <CountdownCircle providerId={currentProviderId} fallbackInterval={refreshInterval} size={20} />}

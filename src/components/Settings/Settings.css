@@ -126,6 +126,11 @@
   color: #94e2d5;
 }
 
+.provider-type.dex {
+  background: rgba(249, 226, 175, 0.2);
+  color: #f9e2af;
+}
+
 /* Badges */
 .badge {
   font-size: 9px;
@@ -201,7 +206,8 @@
 }
 
 .form-group input,
-.form-group select {
+.form-group select,
+.form-group textarea {
   background: #313244;
   border: 1px solid #45475a;
   border-radius: 6px;
@@ -210,8 +216,18 @@
   font-size: 14px;
 }
 
+.form-group textarea {
+  resize: vertical;
+  min-height: 60px;
+  line-height: 1.5;
+  font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 12px;
+  letter-spacing: 0.3px;
+}
+
 .form-group input:focus,
-.form-group select:focus {
+.form-group select:focus,
+.form-group textarea:focus {
   outline: none;
   border-color: #89b4fa;
 }
@@ -230,6 +246,83 @@
 
 .form-hint.warning {
   color: #f38ba8;
+}
+
+/* API Key inline input in SubscriptionManager */
+.api-key-group {
+  border: 1px solid #313244;
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: #1e1e2e;
+}
+
+.optional-tag {
+  font-size: 10px;
+  color: #94e2d5;
+  margin-left: 6px;
+  font-weight: 400;
+}
+
+.required-tag {
+  font-size: 10px;
+  color: #f38ba8;
+  margin-left: 6px;
+  font-weight: 400;
+}
+
+.saved-tag {
+  font-size: 10px;
+  color: #a6e3a1;
+  margin-left: 6px;
+  font-weight: 400;
+}
+
+.key-saved-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.key-saved-text {
+  font-size: 12px;
+  color: #a6e3a1;
+}
+
+.btn-change-key {
+  font-size: 11px;
+  padding: 2px 8px;
+  border: 1px solid #45475a;
+  border-radius: 4px;
+  background: transparent;
+  color: #cdd6f4;
+  cursor: pointer;
+}
+
+.btn-change-key:hover {
+  border-color: #89b4fa;
+  color: #89b4fa;
+}
+
+.btn-save-key {
+  margin-top: 4px;
+  padding: 4px 12px;
+  font-size: 11px;
+  border: 1px solid #89b4fa;
+  border-radius: 4px;
+  background: transparent;
+  color: #89b4fa;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.btn-save-key:hover {
+  background: #89b4fa22;
+}
+
+.btn-save-key:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .form-actions {

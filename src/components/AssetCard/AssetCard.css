@@ -69,12 +69,24 @@
   display: flex;
   align-items: center;
   gap: 5px;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.asset-symbol-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .asset-name {
   font-size: 11px;
   color: #6c7086;
   margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .asset-card-body {
@@ -257,12 +269,18 @@
   font-weight: 600;
   color: #cdd6f4;
   font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .asset-list-symbol .name {
   display: block;
   font-size: 11px;
   color: #6c7086;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .asset-list-price {
@@ -386,6 +404,19 @@
 .edit-row input:focus,
 .edit-row select:focus {
   border-color: #89b4fa;
+}
+
+.edit-hint {
+  font-size: 10px;
+  color: #6c7086;
+  margin-top: 2px;
+}
+
+/* DEX address input — monospace for contract addresses */
+.dex-address-input {
+  font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace !important;
+  font-size: 12px !important;
+  letter-spacing: 0.3px;
 }
 
 .edit-type-toggle {
@@ -515,6 +546,8 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1;
 }
 
 .compact-top .asset-card-edit-btn {

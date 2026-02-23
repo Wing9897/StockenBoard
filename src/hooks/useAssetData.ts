@@ -283,9 +283,12 @@ export function useAssetData() {
   const addSubscription = useCallback(
     async (symbol: string, displayName?: string, providerId?: string, assetType?: 'crypto' | 'stock') => {
       const db = await getDb();
+      // DEX 聚合器使用合約地址，需保留原始大小寫
+      const isDexProvider = providerInfoRef.current.find(p => p.id === providerId)?.provider_type === 'dex';
+      const storedSymbol = isDexProvider ? symbol.trim() : symbol.toUpperCase();
       await db.execute(
         'INSERT INTO subscriptions (symbol, display_name, selected_provider_id, asset_type) VALUES ($1, $2, $3, $4)',
-        [symbol.toUpperCase(), displayName || null, providerId || 'binance', assetType || 'crypto']
+        [storedSymbol, displayName || null, providerId || 'binance', assetType || 'crypto']
       );
       await loadSubscriptions();
     },
@@ -297,12 +300,17 @@ export function useAssetData() {
       const sub = subscriptionsRef.current.find(s => s.id === id);
       if (!sub) return;
       const db = await getDb();
+      const targetProviderId = updates.providerId ?? sub.selected_provider_id;
+      const isDexProvider = providerInfoRef.current.find(p => p.id === targetProviderId)?.provider_type === 'dex';
+      const storedSymbol = updates.symbol
+        ? (isDexProvider ? updates.symbol.trim() : updates.symbol.toUpperCase())
+        : sub.symbol;
       await db.execute(
         'UPDATE subscriptions SET symbol = $1, display_name = $2, selected_provider_id = $3, asset_type = $4 WHERE id = $5',
         [
-          updates.symbol?.toUpperCase() ?? sub.symbol,
+          storedSymbol,
           updates.displayName !== undefined ? (updates.displayName || null) : (sub.display_name || null),
-          updates.providerId ?? sub.selected_provider_id,
+          targetProviderId,
           updates.assetType ?? sub.asset_type,
           id,
         ]

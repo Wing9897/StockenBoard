@@ -24,7 +24,7 @@ fn parse_mexc_ticker(symbol: &str, item: &serde_json::Value) -> AssetData {
         .price(pf("lastPrice").unwrap_or(0.0))
         .currency("USDT")
         .change_24h(pf("priceChange"))
-        .change_percent_24h(pf("priceChangePercent").map(|p| p * 100.0))
+        .change_percent_24h(pf("priceChangePercent"))
         .high_24h(pf("highPrice")).low_24h(pf("lowPrice"))
         .volume(pf("volume"))
         .extra_f64("成交額", pf("quoteVolume"))

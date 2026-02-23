@@ -260,6 +260,13 @@ fn build_all_provider_info() -> Vec<ProviderInfo> {
         pi("fcsapi", "FCS API", "both", true, false, false,
            "免費 500 req/月; 付費 10k+/月, 30+國股票", "AAPL, MSFT, 2330.TW",
            &["price","change_24h","high_24h","low_24h","volume"],                                    120000,  30000),
+        // DEX Aggregators
+        pi("jupiter", "Jupiter", "dex", true, false, false,
+           "需API Key (portal.jup.ag 免費申請); Solana DEX聚合器", "SOL, JUP, BONK, WIF, mint_address",
+           &["price","change_24h"],                                                                  10000,   5000),
+        pi("okx_dex", "OKX DEX", "dex", true, false, false,
+           "需API Key (OKX Web3 Portal免費申請); 多鏈DEX聚合器", "ETH, SOL, BNB, eth:0x..., sol:mint",
+           &["price"],                                                                               15000,   10000),
     ]
 }
 

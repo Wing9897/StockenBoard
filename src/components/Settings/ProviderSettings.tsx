@@ -7,6 +7,7 @@ const PROVIDER_TYPE_LABELS: Record<string, string> = {
   stock: '股票',
   both: '股票+加密',
   prediction: '預測市場',
+  dex: 'DEX 聚合器',
 };
 
 export function ProviderSettings({ onSaved }: { onSaved?: () => void }) {
@@ -79,7 +80,7 @@ export function ProviderSettings({ onSaved }: { onSaved?: () => void }) {
       <p className="settings-hint">所有數據源均可使用，在主頁切換選擇。此處僅設定 API Key 等參數。</p>
 
       <div className="filter-bar">
-        {['all', 'crypto', 'stock', 'both', 'prediction'].map(f => (
+        {['all', 'crypto', 'stock', 'both', 'prediction', 'dex'].map(f => (
           <button key={f} className={`filter-btn ${filter === f ? 'active' : ''}`} onClick={() => setFilter(f)}>
             {f === 'all' ? '全部' : PROVIDER_TYPE_LABELS[f] || f}
           </button>

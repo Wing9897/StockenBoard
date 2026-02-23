@@ -35,6 +35,10 @@ pub mod yahoo;
 // Multi-asset aggregators
 pub mod coinapi;
 
+// DEX aggregators
+pub mod jupiter;
+pub mod okx_dex;
+
 // Prediction markets
 pub mod bitquery;
 pub mod polymarket;
@@ -85,6 +89,9 @@ pub fn create_provider(
         "fcsapi" => Some(Arc::new(fcsapi::FcsApiProvider::new(api_key))),
         // Multi-asset aggregators
         "coinapi" => Some(Arc::new(coinapi::CoinApiProvider::new(api_key))),
+        // DEX aggregators
+        "jupiter" => Some(Arc::new(jupiter::JupiterProvider::new(api_key))),
+        "okx_dex" => Some(Arc::new(okx_dex::OkxDexProvider::new(api_key))),
         // Prediction markets
         "polymarket" => Some(Arc::new(polymarket::PolymarketProvider::new())),
         "bitquery" => Some(Arc::new(bitquery::BitqueryProvider::new(api_key))),

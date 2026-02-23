@@ -16,7 +16,7 @@ export interface AssetData {
 export interface ProviderInfo {
   id: string;
   name: string;
-  provider_type: 'crypto' | 'stock' | 'both' | 'prediction';
+  provider_type: 'crypto' | 'stock' | 'both' | 'prediction' | 'dex';
   requires_api_key: boolean;
   requires_api_secret: boolean;
   supports_websocket: boolean;
