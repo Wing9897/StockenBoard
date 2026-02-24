@@ -38,6 +38,8 @@ pub mod coinapi;
 // DEX aggregators
 pub mod jupiter;
 pub mod okx_dex;
+pub mod raydium;
+pub mod subgraph;
 
 // Prediction markets
 pub mod bitquery;
@@ -47,15 +49,17 @@ pub mod polymarket;
 pub mod ws_binance;
 
 pub use traits::{
-    get_all_provider_info, AssetData, DataProvider, ProviderInfo, WebSocketProvider, WsTickerUpdate,
+    get_all_provider_info, AssetData, DataProvider, DexPoolInfo, DexPoolLookup, ProviderInfo,
+    WebSocketProvider, WsTickerUpdate,
 };
 
 use std::sync::Arc;
 
-pub fn create_provider(
+pub fn create_provider_with_url(
     id: &str,
     api_key: Option<String>,
     api_secret: Option<String>,
+    api_url: Option<String>,
 ) -> Option<Arc<dyn DataProvider>> {
     match id {
         // Crypto exchanges
@@ -92,6 +96,8 @@ pub fn create_provider(
         // DEX aggregators
         "jupiter" => Some(Arc::new(jupiter::JupiterProvider::new(api_key))),
         "okx_dex" => Some(Arc::new(okx_dex::OkxDexProvider::new(api_key))),
+        "raydium" => Some(Arc::new(raydium::RaydiumProvider::new(api_key, api_url))),
+        "subgraph" => Some(Arc::new(subgraph::SubgraphProvider::new(api_key, api_url))),
         // Prediction markets
         "polymarket" => Some(Arc::new(polymarket::PolymarketProvider::new())),
         "bitquery" => Some(Arc::new(bitquery::BitqueryProvider::new(api_key))),
@@ -102,6 +108,19 @@ pub fn create_provider(
 pub fn create_ws_provider(id: &str) -> Option<Arc<dyn WebSocketProvider>> {
     match id {
         "binance" => Some(Arc::new(ws_binance::BinanceWsProvider::new())),
+        _ => None,
+    }
+}
+
+pub fn create_dex_lookup(
+    id: &str,
+    api_key: Option<String>,
+    api_url: Option<String>,
+) -> Option<Arc<dyn DexPoolLookup>> {
+    match id {
+        "raydium" => Some(Arc::new(raydium::RaydiumProvider::new(api_key, api_url))),
+        "subgraph" => Some(Arc::new(subgraph::SubgraphProvider::new(api_key, api_url))),
+        "jupiter" => Some(Arc::new(jupiter::JupiterProvider::new(api_key))),
         _ => None,
     }
 }

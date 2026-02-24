@@ -32,6 +32,7 @@ export interface ProviderSettings {
   provider_id: string;
   api_key?: string;
   api_secret?: string;
+  api_url?: string;
   refresh_interval?: number;
   connection_type: string;
   enabled: number;
@@ -39,16 +40,21 @@ export interface ProviderSettings {
 
 export interface Subscription {
   id: number;
+  sub_type: 'asset' | 'dex';
   symbol: string;
   display_name?: string;
   selected_provider_id: string;
-  asset_type: 'crypto' | 'stock';
+  asset_type: string;
+  pool_address?: string;
+  token_from_address?: string;
+  token_to_address?: string;
   sort_order: number;
 }
 
 export interface View {
   id: number;
   name: string;
+  view_type: 'asset' | 'dex';
   is_default: boolean;
 }
 

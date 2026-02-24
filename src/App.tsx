@@ -12,9 +12,10 @@ import { ProviderSettings } from './components/Settings/ProviderSettings';
 import { SubscriptionManager } from './components/Settings/SubscriptionManager';
 import { DataManager } from './components/Settings/DataManager';
 import { ToastContainer } from './components/Toast/Toast';
+import { DexPage } from './components/DexPage/DexPage';
 import './App.css';
 
-type Tab = 'dashboard' | 'settings';
+type Tab = 'dashboard' | 'dex' | 'settings';
 type ViewMode = 'grid' | 'list' | 'compact';
 type EditorState = null | { mode: 'create' } | { mode: 'rename'; viewId: number; currentName: string };
 
@@ -52,7 +53,7 @@ function App() {
     addSubscriptionToView,
     removeSubscriptionFromView,
     refresh: refreshViews,
-  } = useViews();
+  } = useViews('asset');
   const {
     subscriptions,
     providerInfoList,
@@ -105,7 +106,7 @@ function App() {
     const key = ids.join(',');
     if (key === prevVisibleRef.current) return;
     prevVisibleRef.current = key;
-    invoke('set_visible_subscriptions', { ids }).catch(err =>
+    invoke('set_visible_subscriptions', { ids, scope: 'asset' }).catch(err =>
       console.error('Failed to set visible subscriptions:', err)
     );
   }, [viewFilteredSubs]);
@@ -195,7 +196,8 @@ function App() {
       <header className="app-header">
         <h1>StockenBoard</h1>
         <nav className="app-nav">
-          <button className={`nav-btn ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>主頁</button>
+          <button className={`nav-btn ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>現貨</button>
+          <button className={`nav-btn ${activeTab === 'dex' ? 'active' : ''}`} onClick={() => setActiveTab('dex')}>DEX</button>
           <button className={`nav-btn ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>設定</button>
         </nav>
       </header>
@@ -280,10 +282,13 @@ function App() {
           </div>
         )}
 
+        {activeTab === 'dex' && (
+          <DexPage onToast={toast} />
+        )}
+
         {activeTab === 'settings' && (
           <div className="settings">
             <DataManager
-              subscriptions={subscriptions}
               views={views}
               onRefresh={() => { refreshAssets(); refreshViews(); }}
               onToast={(type, title, msg) => toast[type](title, msg)}
@@ -363,7 +368,7 @@ function App() {
                 onBatchAdd={handleAdd}
                 subscriptions={subscriptions}
                 providers={providerInfoList}
-                onToast={(title, msg) => toast.success(title, msg)}
+                onToast={(type, title, msg) => toast[type](title, msg)}
               />
             </div>
           </div>

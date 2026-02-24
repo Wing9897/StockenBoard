@@ -138,6 +138,14 @@ impl DataProvider for YahooProvider {
         }
         // 只要有部分成功就回傳，全部失敗才報錯
         if results.is_empty() && !errors.is_empty() {
+            // 去重：如果所有 symbol 都是同一個錯誤，只報一次
+            let unique_msgs: std::collections::HashSet<String> = errors.iter()
+                .map(|e| e.split_once(": ").map(|(_, msg)| msg.to_string()).unwrap_or_else(|| e.clone()))
+                .collect();
+            if unique_msgs.len() == 1 {
+                let msg = unique_msgs.into_iter().next().unwrap();
+                return Err(format!("Yahoo 批量查詢全部失敗 ({}個): {}", errors.len(), msg));
+            }
             return Err(format!("Yahoo 批量查詢全部失敗: {}", errors.join("; ")));
         }
         Ok(results)

@@ -17,7 +17,7 @@ export function useProviders() {
     try {
       const db = await getDb();
       const rows = await db.select<ProviderSettings[]>(
-        'SELECT provider_id, api_key, api_secret, refresh_interval, connection_type, enabled FROM provider_settings'
+        'SELECT provider_id, api_key, api_secret, refresh_interval, connection_type, enabled, api_url FROM provider_settings'
       );
       const map = new Map<string, ProviderSettings>();
       for (const row of rows) map.set(row.provider_id, row);
@@ -40,6 +40,7 @@ export function useProviders() {
   async function updateProvider(providerId: string, updates: {
     api_key?: string | null;
     api_secret?: string | null;
+    api_url?: string | null;
     refresh_interval?: number;
     connection_type?: string;
     enabled?: number;
@@ -50,17 +51,18 @@ export function useProviders() {
       const enabled = updates.enabled ?? current?.enabled ?? 1;
 
       await db.execute(
-        `INSERT INTO provider_settings (provider_id, api_key, api_secret, refresh_interval, connection_type, enabled)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO provider_settings (provider_id, api_key, api_secret, refresh_interval, connection_type, enabled, api_url)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          ON CONFLICT(provider_id) DO UPDATE SET
-           api_key = $2, api_secret = $3, refresh_interval = $4, connection_type = $5, enabled = $6`,
+           api_key = $2, api_secret = $3, refresh_interval = $4, connection_type = $5, enabled = $6, api_url = $7`,
         [
           providerId,
           updates.api_key || null,
           updates.api_secret || null,
-          updates.refresh_interval || null,
+          updates.refresh_interval ?? null,
           updates.connection_type || 'rest',
           enabled,
+          updates.api_url || null,
         ]
       );
       // 同步 Rust 端 provider instance + 觸發 polling reload
@@ -114,6 +116,7 @@ export function useProviders() {
       provider_type: info.provider_type,
       api_key: s?.api_key || undefined,
       api_secret: s?.api_secret || undefined,
+      api_url: s?.api_url || undefined,
       refresh_interval: s?.refresh_interval ?? (s?.api_key ? info.key_interval : info.free_interval),
       connection_type: s?.connection_type || 'rest',
       supports_websocket: info.supports_websocket ? 1 : 0,

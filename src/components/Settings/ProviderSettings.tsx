@@ -14,8 +14,8 @@ export function ProviderSettings({ onSaved }: { onSaved?: () => void }) {
   const { providers, loading, getProviderInfo, updateProvider, toggleProvider } = useProviders();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<{
-    api_key: string; api_secret: string; refresh_interval: number; connection_type: string;
-  }>({ api_key: '', api_secret: '', refresh_interval: 30000, connection_type: 'rest' });
+    api_key: string; api_secret: string; api_url: string; refresh_interval: number; connection_type: string;
+  }>({ api_key: '', api_secret: '', api_url: '', refresh_interval: 30000, connection_type: 'rest' });
   const [filter, setFilter] = useState<string>('all');
   const [useKeyMode, setUseKeyMode] = useState(false);
 
@@ -26,6 +26,7 @@ export function ProviderSettings({ onSaved }: { onSaved?: () => void }) {
     setFormData({
       api_key: p.api_key || '',
       api_secret: p.api_secret || '',
+      api_url: p.api_url || '',
       refresh_interval: p.refresh_interval,
       connection_type: p.connection_type || 'rest',
     });
@@ -37,7 +38,7 @@ export function ProviderSettings({ onSaved }: { onSaved?: () => void }) {
     if (info) {
       const newInterval = toKeyMode ? info.key_interval : info.free_interval;
       if (!toKeyMode) {
-        setFormData(prev => ({ ...prev, api_key: '', api_secret: '', refresh_interval: newInterval }));
+        setFormData(prev => ({ ...prev, api_key: '', api_secret: '', api_url: prev.api_url, refresh_interval: newInterval }));
       } else {
         setFormData(prev => ({ ...prev, refresh_interval: newInterval }));
       }
@@ -50,6 +51,7 @@ export function ProviderSettings({ onSaved }: { onSaved?: () => void }) {
     await updateProvider(editingId, {
       api_key: formData.api_key || null,
       api_secret: formData.api_secret || null,
+      api_url: formData.api_url || null,
       refresh_interval: formData.refresh_interval,
       connection_type: formData.connection_type,
       enabled: current?.enabled ?? 1,
@@ -77,7 +79,7 @@ export function ProviderSettings({ onSaved }: { onSaved?: () => void }) {
   return (
     <div className="settings-section">
       <h3>數據源設定 ({providers.length} 個)</h3>
-      <p className="settings-hint">所有數據源均可使用，在主頁切換選擇。此處僅設定 API Key 等參數。</p>
+      <p className="settings-hint">所有數據源均可使用，在現貨頁切換選擇。此處僅設定 API Key 等參數。</p>
 
       <div className="filter-bar">
         {['all', 'crypto', 'stock', 'both', 'prediction', 'dex'].map(f => (
@@ -147,6 +149,12 @@ export function ProviderSettings({ onSaved }: { onSaved?: () => void }) {
                     <div className="form-group">
                       <label>API Secret</label>
                       <input type="password" value={formData.api_secret} onChange={e => setFormData({ ...formData, api_secret: e.target.value })} placeholder="輸入 API Secret" />
+                    </div>
+                  )}
+                  {info?.provider_type === 'dex' && (
+                    <div className="form-group">
+                      <label>API URL <span className="optional-badge">可選，自訂端點</span></label>
+                      <input value={formData.api_url} onChange={e => setFormData({ ...formData, api_url: e.target.value })} placeholder="留空使用預設 URL" />
                     </div>
                   )}
                   <div className="form-group">

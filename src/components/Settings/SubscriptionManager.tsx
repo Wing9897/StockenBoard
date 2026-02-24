@@ -14,7 +14,7 @@ interface SubscriptionManagerProps {
   onBatchAdd: (symbol: string, providerId?: string, assetType?: 'crypto' | 'stock') => Promise<void>;
   subscriptions: Subscription[];
   providers: ProviderInfo[];
-  onToast?: (title: string, message?: string) => void;
+  onToast?: (type: 'success' | 'error' | 'info', title: string, message?: string) => void;
 }
 
 /** 查詢某 provider 是否已存有 API key */
@@ -96,9 +96,9 @@ export function SubscriptionManager({ onBatchAdd, subscriptions, providers: prov
     try {
       await saveApiKey(provider, apiKeyInput.trim(), needsSecret ? apiSecretInput.trim() : undefined);
       setKeySaved(true);
-      onToast?.('API Key 已儲存', `${selectedProviderInfo?.name} 的 API Key 已設定`);
+      onToast?.('success', 'API Key 已儲存', `${selectedProviderInfo?.name} 的 API Key 已設定`);
     } catch (err) {
-      onToast?.('儲存失敗', err instanceof Error ? err.message : String(err));
+      onToast?.('error', '儲存失敗', err instanceof Error ? err.message : String(err));
     } finally {
       setKeySaving(false);
     }
@@ -125,17 +125,17 @@ export function SubscriptionManager({ onBatchAdd, subscriptions, providers: prov
     // Single symbol → toast instead of modal
     if (symbols.length === 1) {
       if (duplicates.length === 1) {
-        onToast?.('已存在', `${duplicates[0]} 已訂閱`);
+        onToast?.('info', '已存在', `${duplicates[0]} 已訂閱`);
         return;
       }
       setImporting(true);
       setImportStatus({ done: 0, total: 1 });
       try {
         await onBatchAdd(unique[0], provider, assetType);
-        onToast?.('已新增', `${isDex ? unique[0] : unique[0].toUpperCase()} 訂閱成功`);
+        onToast?.('success', '已新增', `${isDex ? unique[0] : unique[0].toUpperCase()} 訂閱成功`);
         setSymbolInput('');
       } catch {
-        onToast?.('新增失敗', `${unique[0]} 無法新增`);
+        onToast?.('error', '新增失敗', `${unique[0]} 無法新增`);
       }
       setImporting(false);
       setImportStatus(null);

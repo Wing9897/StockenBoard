@@ -4,6 +4,7 @@ import { Subscription, ProviderInfo } from '../../types';
 import { useAssetPrice } from '../../hooks/useAssetData';
 import { CountdownCircle } from './CountdownCircle';
 import { AssetIcon, getIconName, invalidateIcon } from './AssetIcon';
+import { formatPrice, formatNumber } from '../../lib/format';
 import './AssetCard.css';
 
 interface AssetCardProps {
@@ -16,22 +17,6 @@ interface AssetCardProps {
   onEdit: (id: number, updates: { symbol?: string; displayName?: string; providerId?: string; assetType?: 'crypto' | 'stock' }) => Promise<void>;
   viewMode?: 'grid' | 'list' | 'compact';
   isCustomView?: boolean;
-}
-
-function formatNumber(num: number | undefined, decimals = 2): string {
-  if (num === undefined || num === null) return '-';
-  if (num >= 1e12) return (num / 1e12).toFixed(2) + 'T';
-  if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
-  if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
-  if (num >= 1e3) return (num / 1e3).toFixed(2) + 'K';
-  return num.toFixed(decimals);
-}
-
-function formatPrice(price: number | undefined | null, currency: string = 'USD'): string {
-  if (price === undefined || price === null || isNaN(price)) return '-';
-  const sym = currency === 'USD' || currency === 'USDT' ? '$' : currency + ' ';
-  if (price >= 1) return sym + price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return sym + price.toPrecision(4);
 }
 
 function formatExtraKey(key: string): string {
@@ -51,10 +36,24 @@ function formatExtraValue(value: unknown): string {
   return JSON.stringify(value);
 }
 
+/** 從冗長的批量錯誤訊息中提取簡短摘要 */
+function summarizeError(error: string): string {
+  // 去重格式: "Yahoo 批量查詢全部失敗 (27個): Yahoo cookie 獲取失敗"
+  const deduped = error.match(/批量查詢全部失敗\s*\(\d+個\):\s*(.+)/);
+  if (deduped) return deduped[1].trim();
+  // 舊格式: "Yahoo 批量查詢全部失敗: NVDA: Yahoo cookie 獲取失敗: error sending...; AAPL: ..."
+  const batchMatch = error.match(/批量查詢全部失敗:\s*\w[^:]*:\s*(.+?)(?::\s*error\b|;\s*\w|$)/);
+  if (batchMatch) return batchMatch[1].trim();
+  if (/error sending request/i.test(error)) return '連線失敗（無法連接到數據源）';
+  if (error.length > 60) return error.slice(0, 57) + '...';
+  return error;
+}
+
 export const AssetCard = memo(function AssetCard({ subscription, providers, currentProviderId, assetType, refreshInterval, onRemove, onEdit, viewMode = 'grid', isCustomView = false }: AssetCardProps) {
   // 細粒度訂閱 — 只在自己的價格變化時 re-render
   const { asset, error } = useAssetPrice(subscription.symbol, currentProviderId);
   const [expanded, setExpanded] = useState(false);
+  const [errorExpanded, setErrorExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [iconKey, setIconKey] = useState(0); // 用於 set_icon 後強制 AssetIcon 重載
   const iconName = getIconName(subscription.symbol);
@@ -81,6 +80,14 @@ export const AssetCard = memo(function AssetCard({ subscription, providers, curr
   const changePercent = asset?.change_percent_24h ?? 0;
   const isPositive = changePercent >= 0;
   const currentProvider = providers.find(p => p.id === currentProviderId);
+
+  // 錯誤變化時收起詳情，完整錯誤記錄到 console
+  useEffect(() => {
+    if (error) {
+      console.warn(`[${subscription.symbol}@${currentProviderId}]`, error);
+      setErrorExpanded(false);
+    }
+  }, [error, subscription.symbol, currentProviderId]);
 
   const filteredProviders = useMemo(() => providers.filter(p =>
     editing
@@ -202,7 +209,7 @@ export const AssetCard = memo(function AssetCard({ subscription, providers, curr
         </div>
         <div className="compact-bottom">
           <span className="compact-price">
-            {error ? <span className="asset-error">錯誤</span> : asset ? formatPrice(asset.price, asset.currency) : '-'}
+            {error ? <span className="asset-error" title={summarizeError(error)}>錯誤</span> : asset ? formatPrice(asset.price, asset.currency) : '-'}
           </span>
           {asset && !error && (
             <span className={`compact-change ${isPositive ? 'positive' : 'negative'}`}>
@@ -226,7 +233,7 @@ export const AssetCard = memo(function AssetCard({ subscription, providers, curr
           {subscription.display_name && <span className="name" title={subscription.display_name}>{subscription.display_name}</span>}
         </div>
         <div className="asset-list-price">
-          {error ? <span className="asset-error">錯誤</span> : asset ? formatPrice(asset.price, asset.currency) : '載入中...'}
+          {error ? <span className="asset-error" title={summarizeError(error)}>錯誤</span> : asset ? formatPrice(asset.price, asset.currency) : '載入中...'}
         </div>
         <div className={`asset-list-change ${isPositive ? 'positive' : 'negative'}`}>
           {asset && !error && <>{isPositive ? '▲' : '▼'} {Math.abs(changePercent).toFixed(2)}%</>}
@@ -263,7 +270,12 @@ export const AssetCard = memo(function AssetCard({ subscription, providers, curr
         )}
       </div>
 
-      {error && <div className="asset-error-detail">{error}</div>}
+      {error && (
+        <div className="asset-error-detail" onClick={() => setErrorExpanded(v => !v)} title="點擊展開/收起完整錯誤">
+          <span className="asset-error-summary">{summarizeError(error)}</span>
+          {errorExpanded && <pre className="asset-error-full">{error}</pre>}
+        </div>
+      )}
 
       {asset && !error && (
         <div className="asset-card-stats">

@@ -5,30 +5,50 @@ import { getDb } from '../../lib/db';
 import './Settings.css';
 
 interface DataManagerProps {
-  subscriptions: Subscription[];
   views: View[];
   onRefresh: () => void;
   onToast?: (type: 'success' | 'error' | 'info', title: string, message?: string) => void;
 }
 
 interface ExportData {
-  version: 1;
+  version: 2;
   exported_at: string;
-  subscriptions: { symbol: string; display_name: string | null; provider: string; asset_type: string }[];
-  views: { name: string; subscriptions: string[] }[];
+  subscriptions: {
+    sub_type: 'asset' | 'dex';
+    symbol: string;
+    display_name: string | null;
+    provider: string;
+    asset_type: string;
+    pool_address?: string;
+    token_from_address?: string;
+    token_to_address?: string;
+  }[];
+  views: { name: string; view_type: string; subscriptions: string[] }[];
 }
 
-export function DataManager({ subscriptions, views, onRefresh, onToast }: DataManagerProps) {
+export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ subs: number; views: number; skipped: number } | null>(null);
   const [showExportPicker, setShowExportPicker] = useState(false);
   const [selectedViewIds, setSelectedViewIds] = useState<Set<number>>(new Set());
+  const [allViews, setAllViews] = useState<View[]>([]);
 
-  const customViews = views.filter(v => !v.is_default);
+  const customViews = allViews.filter(v => !v.is_default);
 
-  const openExportPicker = () => {
-    // Default: select all custom views
-    setSelectedViewIds(new Set(customViews.map(v => v.id)));
+  const openExportPicker = async () => {
+    // 讀取所有 views（asset + dex）
+    try {
+      const db = await getDb();
+      const rows = await db.select<{ id: number; name: string; view_type: string; is_default: number }[]>(
+        'SELECT id, name, view_type, is_default FROM views ORDER BY id'
+      );
+      const loaded = rows.map(r => ({ id: r.id, name: r.name, view_type: r.view_type as 'asset' | 'dex', is_default: r.is_default === 1 }));
+      setAllViews(loaded);
+      setSelectedViewIds(new Set(loaded.filter(v => !v.is_default).map(v => v.id)));
+    } catch {
+      setAllViews(views);
+      setSelectedViewIds(new Set(views.filter(v => !v.is_default).map(v => v.id)));
+    }
     setShowExportPicker(true);
   };
 
@@ -46,6 +66,12 @@ export function DataManager({ subscriptions, views, onRefresh, onToast }: DataMa
 
   const handleExport = async () => {
     const db = await getDb();
+
+    // 讀取所有訂閱（asset + dex）
+    const allSubs = await db.select<Subscription[]>(
+      'SELECT id, sub_type, symbol, display_name, selected_provider_id, asset_type, pool_address, token_from_address, token_to_address, sort_order FROM subscriptions ORDER BY sort_order, id'
+    );
+
     const viewsToExport = customViews.filter(v => selectedViewIds.has(v.id));
     const viewExports: ExportData['views'] = [];
 
@@ -55,20 +81,25 @@ export function DataManager({ subscriptions, views, onRefresh, onToast }: DataMa
         [view.id]
       );
       const syms = rows
-        .map(r => subscriptions.find(s => s.id === r.subscription_id)?.symbol)
+        .map(r => allSubs.find(s => s.id === r.subscription_id)?.symbol)
         .filter((s): s is string => !!s);
-      viewExports.push({ name: view.name, subscriptions: syms });
+      viewExports.push({ name: view.name, view_type: view.view_type, subscriptions: syms });
     }
 
-    // Export all subscriptions (they're always included for completeness)
     const data: ExportData = {
-      version: 1,
+      version: 2,
       exported_at: new Date().toISOString(),
-      subscriptions: subscriptions.map(s => ({
+      subscriptions: allSubs.map(s => ({
+        sub_type: s.sub_type as 'asset' | 'dex',
         symbol: s.symbol,
         display_name: s.display_name || null,
         provider: s.selected_provider_id,
         asset_type: s.asset_type,
+        ...(s.sub_type === 'dex' ? {
+          pool_address: s.pool_address,
+          token_from_address: s.token_from_address,
+          token_to_address: s.token_to_address,
+        } : {}),
       })),
       views: viewExports,
     };
@@ -91,8 +122,28 @@ export function DataManager({ subscriptions, views, onRefresh, onToast }: DataMa
 
     let data: ExportData;
     try {
-      data = JSON.parse(raw);
-      if (!data.subscriptions || !Array.isArray(data.subscriptions)) throw new Error('invalid');
+      const parsed = JSON.parse(raw);
+      if (!parsed.subscriptions || !Array.isArray(parsed.subscriptions)) throw new Error('invalid');
+      // 相容 v1 格式
+      data = {
+        ...parsed,
+        version: 2,
+        subscriptions: parsed.subscriptions.map((s: Record<string, unknown>) => ({
+          sub_type: s.sub_type || 'asset',
+          symbol: s.symbol,
+          display_name: s.display_name || null,
+          provider: s.provider,
+          asset_type: s.asset_type || 'crypto',
+          pool_address: s.pool_address,
+          token_from_address: s.token_from_address,
+          token_to_address: s.token_to_address,
+        })),
+        views: (parsed.views || []).map((v: Record<string, unknown>) => ({
+          name: v.name,
+          view_type: v.view_type || 'asset',
+          subscriptions: v.subscriptions || [],
+        })),
+      };
     } catch {
       onToast?.('error', '匯入失敗', '檔案格式不正確');
       return;
@@ -100,40 +151,52 @@ export function DataManager({ subscriptions, views, onRefresh, onToast }: DataMa
 
     setImporting(true);
     const db = await getDb();
-    const existing = new Set(subscriptions.map(s => s.symbol));
+    const existingRows = await db.select<{ symbol: string; selected_provider_id: string }[]>(
+      'SELECT symbol, selected_provider_id FROM subscriptions'
+    );
+    const existingKeys = new Set(existingRows.map(r => `${r.selected_provider_id}:${r.symbol}`));
     let subsAdded = 0;
     let skipped = 0;
 
-    // 用事務包裹批量 INSERT，減少 I/O 次數
-    // 建立兩組 existing set：原始（DEX 用）+ 大寫（一般用）
-    const existingUpper = new Set([...existing].map(s => s.toUpperCase()));
     await db.execute('BEGIN TRANSACTION', []);
     for (const sub of data.subscriptions) {
-      // DEX 合約地址需保留原始大小寫
-      const isDex = sub.provider === 'jupiter' || sub.provider === 'okx_dex';
-      const compareKey = isDex ? sub.symbol : sub.symbol.toUpperCase();
-      if ((isDex ? existing : existingUpper).has(compareKey)) { skipped++; continue; }
+      const isDex = sub.sub_type === 'dex';
+      const storedSymbol = isDex ? sub.symbol : sub.symbol.toUpperCase();
+      const key = `${sub.provider}:${storedSymbol}`;
+      if (existingKeys.has(key)) { skipped++; continue; }
       try {
-        const storedSymbol = isDex ? sub.symbol : sub.symbol.toUpperCase();
-        await db.execute(
-          'INSERT INTO subscriptions (symbol, display_name, selected_provider_id, asset_type) VALUES ($1, $2, $3, $4)',
-          [storedSymbol, sub.display_name || null, sub.provider, sub.asset_type || 'crypto']
-        );
-        existing.add(storedSymbol);
-        existingUpper.add(storedSymbol.toUpperCase());
+        if (isDex) {
+          await db.execute(
+            'INSERT INTO subscriptions (sub_type, symbol, display_name, selected_provider_id, asset_type, pool_address, token_from_address, token_to_address) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+            [
+              'dex', storedSymbol, sub.display_name || null, sub.provider, sub.asset_type || 'crypto',
+              sub.pool_address || null, sub.token_from_address || null, sub.token_to_address || null,
+            ]
+          );
+        } else {
+          await db.execute(
+            'INSERT INTO subscriptions (sub_type, symbol, display_name, selected_provider_id, asset_type) VALUES ($1, $2, $3, $4, $5)',
+            ['asset', storedSymbol, sub.display_name || null, sub.provider, sub.asset_type || 'crypto']
+          );
+        }
+        existingKeys.add(key);
         subsAdded++;
       } catch { skipped++; }
     }
 
     let viewsAdded = 0;
     if (data.views && Array.isArray(data.views)) {
-      const existingViews = new Set(views.map(v => v.name.toLowerCase()));
+      const existingViewRows = await db.select<{ name: string; view_type: string }[]>(
+        'SELECT name, view_type FROM views'
+      );
+      const existingViews = new Set(existingViewRows.map(v => `${v.view_type}:${v.name.toLowerCase()}`));
       for (const v of data.views) {
-        if (existingViews.has(v.name.toLowerCase())) { continue; }
+        const viewType = v.view_type || 'asset';
+        if (existingViews.has(`${viewType}:${v.name.toLowerCase()}`)) { continue; }
         try {
           const result = await db.execute(
-            'INSERT INTO views (name, is_default) VALUES ($1, 0)',
-            [v.name]
+            'INSERT INTO views (name, view_type, is_default) VALUES ($1, $2, 0)',
+            [v.name, viewType]
           );
           const newViewId = result.lastInsertId;
           if (v.subscriptions && newViewId) {
@@ -166,7 +229,7 @@ export function DataManager({ subscriptions, views, onRefresh, onToast }: DataMa
     <div className="settings-section">
       <h3>資料管理</h3>
       <div className="data-manager-actions">
-        <button className="dm-btn export" onClick={openExportPicker} disabled={subscriptions.length === 0}>
+        <button className="dm-btn export" onClick={openExportPicker}>
           匯出資料
         </button>
         <button className="dm-btn import" onClick={handleImport} disabled={importing}>
@@ -189,7 +252,7 @@ export function DataManager({ subscriptions, views, onRefresh, onToast }: DataMa
               <button className="vsm-close" onClick={() => setShowExportPicker(false)}>✕</button>
             </div>
             <div className="dm-picker-info">
-              所有訂閱 ({subscriptions.length}) 將自動包含
+              所有訂閱將自動包含（現貨 + DEX）
             </div>
             {customViews.length > 0 ? (
               <>
@@ -207,6 +270,9 @@ export function DataManager({ subscriptions, views, onRefresh, onToast }: DataMa
                           onChange={() => toggleView(view.id)}
                         />
                         <span>{view.name}</span>
+                        <span className={`asset-type-tag ${view.view_type}`} style={{ marginLeft: 6, fontSize: '0.75em' }}>
+                          {view.view_type === 'dex' ? 'DEX' : '現貨'}
+                        </span>
                       </label>
                     </li>
                   ))}

@@ -1,0 +1,75 @@
+.dex-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+}
+
+/* DEX form styles */
+.dex-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.dex-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dex-form-row label {
+  font-size: 0.8rem;
+  color: var(--subtext0, #a6adc8);
+}
+.dex-form-row input,
+.dex-form-row select {
+  background: var(--surface0, #313244);
+  border: 1px solid var(--surface1, #45475a);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: var(--text, #cdd6f4);
+  font-size: 0.85rem;
+}
+.dex-form-row .dex-address-input {
+  font-family: monospace;
+  font-size: 0.8rem;
+}
+.dex-form-error {
+  font-size: 0.8rem;
+  color: var(--red, #f38ba8);
+  background: rgba(243, 139, 168, 0.1);
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+.dex-form-submit {
+  background: var(--blue, #89b4fa);
+  color: var(--base, #1e1e2e);
+  border: none;
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.dex-form-submit:hover { opacity: 0.9; }
+.dex-form-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* View action buttons inline */
+.view-actions-inline {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: -4px;
+}
+.view-action-btn {
+  background: none;
+  border: none;
+  color: var(--overlay1, #7f849c);
+  cursor: pointer;
+  font-size: 0.7rem;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+.view-action-btn:hover {
+  color: var(--text, #cdd6f4);
+  background: var(--surface1, #45475a);
+}

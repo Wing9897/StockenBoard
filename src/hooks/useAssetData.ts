@@ -12,17 +12,13 @@ class PriceStore {
   private assets = new Map<string, AssetData>();
   private errors = new Map<string, string>();
   private ticks = new Map<string, { fetchedAt: number; intervalMs: number }>();
-
-  // key-based listeners: "providerId:symbol" → Set<callback>
   private keyListeners = new Map<string, Set<() => void>>();
-  // provider-based listeners: "providerId" → Set<callback> (for tick updates)
   private tickListeners = new Map<string, Set<() => void>>();
 
   getAsset(key: string) { return this.assets.get(key); }
   getError(key: string) { return this.errors.get(key); }
   getTick(providerId: string) { return this.ticks.get(providerId); }
 
-  /** 批量更新價格 — 只通知有變化的 key */
   updatePrices(results: AssetData[]) {
     for (const d of results) {
       const key = `${d.provider_id}:${d.symbol}`;
@@ -32,20 +28,14 @@ class PriceStore {
         this.assets.set(key, d);
         changed = true;
       }
-      if (this.errors.has(key)) {
-        this.errors.delete(key);
-        changed = true;
-      }
+      if (this.errors.has(key)) { this.errors.delete(key); changed = true; }
       if (changed) this.notifyKey(key);
     }
   }
 
   updateErrors(payload: Record<string, string>) {
     for (const [k, msg] of Object.entries(payload)) {
-      if (this.errors.get(k) !== msg) {
-        this.errors.set(k, msg);
-        this.notifyKey(k);
-      }
+      if (this.errors.get(k) !== msg) { this.errors.set(k, msg); this.notifyKey(k); }
     }
   }
 
@@ -62,39 +52,26 @@ class PriceStore {
     this.notifyKey(key);
   }
 
-  clear() {
-    this.assets.clear();
-    this.errors.clear();
-    this.ticks.clear();
-  }
+  clear() { this.assets.clear(); this.errors.clear(); this.ticks.clear(); }
 
-  /** 訂閱特定 asset key 的變化 */
   subscribeKey(key: string, fn: () => void) {
     let set = this.keyListeners.get(key);
     if (!set) { set = new Set(); this.keyListeners.set(key, set); }
     set.add(fn);
-    return () => {
-      set!.delete(fn);
-      if (set!.size === 0) this.keyListeners.delete(key);
-    };
+    return () => { set!.delete(fn); if (set!.size === 0) this.keyListeners.delete(key); };
   }
 
-  /** 訂閱特定 provider 的 tick 變化 */
   subscribeTick(providerId: string, fn: () => void) {
     let set = this.tickListeners.get(providerId);
     if (!set) { set = new Set(); this.tickListeners.set(providerId, set); }
     set.add(fn);
-    return () => {
-      set!.delete(fn);
-      if (set!.size === 0) this.tickListeners.delete(providerId);
-    };
+    return () => { set!.delete(fn); if (set!.size === 0) this.tickListeners.delete(providerId); };
   }
 
   private notifyKey(key: string) {
     const fns = this.keyListeners.get(key);
     if (fns) for (const fn of fns) fn();
   }
-
   private notifyTick(providerId: string) {
     const fns = this.tickListeners.get(providerId);
     if (fns) for (const fn of fns) fn();
@@ -103,39 +80,21 @@ class PriceStore {
 
 const priceStore = new PriceStore();
 
-/**
- * 細粒度 hook — 只在自己的 key 變化時 re-render（O(1) 通知）
- */
 export function useAssetPrice(symbol: string, providerId: string) {
   const key = `${providerId}:${symbol}`;
   const [, setTick] = useState(0);
-
-  useEffect(() => {
-    return priceStore.subscribeKey(key, () => setTick(t => t + 1));
-  }, [key]);
-
-  return {
-    asset: priceStore.getAsset(key),
-    error: priceStore.getError(key),
-  };
+  useEffect(() => priceStore.subscribeKey(key, () => setTick(t => t + 1)), [key]);
+  return { asset: priceStore.getAsset(key), error: priceStore.getError(key) };
 }
 
-/**
- * 取得後端 poll-tick — 只在對應 provider 的 tick 變化時 re-render
- */
 export function usePollTick(providerId: string) {
   const [tick, setTick] = useState(() => priceStore.getTick(providerId));
-
-  useEffect(() => {
-    return priceStore.subscribeTick(providerId, () => {
-      setTick(priceStore.getTick(providerId));
-    });
-  }, [providerId]);
-
+  useEffect(() => priceStore.subscribeTick(providerId, () => setTick(priceStore.getTick(providerId))), [providerId]);
   return tick;
 }
 
-export function useAssetData() {
+/** 統一 hook — 透過 subType 參數區分 asset / dex */
+export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [providerInfoList, setProviderInfoList] = useState<ProviderInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -144,6 +103,7 @@ export function useAssetData() {
   const wsActiveRef = useRef<Set<string>>(new Set());
   const priceUnlistenRef = useRef<UnlistenFn | null>(null);
   const errorUnlistenRef = useRef<UnlistenFn | null>(null);
+  const tickUnlistenRef = useRef<UnlistenFn | null>(null);
   const providerInfoRef = useRef<ProviderInfo[]>([]);
   const subscriptionsRef = useRef<Subscription[]>([]);
   subscriptionsRef.current = subscriptions;
@@ -154,87 +114,65 @@ export function useAssetData() {
     return map;
   }, [subscriptions]);
 
-  // ── Data Loading ────────────────────────────────────────────
-
   const loadProviderInfo = useCallback(async () => {
     try {
       const info = await invoke<ProviderInfo[]>('get_all_providers');
       setProviderInfoList(info);
       providerInfoRef.current = info;
-    } catch (err) {
-      console.error('Failed to load provider info:', err);
-    }
+    } catch (err) { console.error('Failed to load provider info:', err); }
   }, []);
 
   const loadSubscriptions = useCallback(async () => {
     try {
       const db = await getDb();
       const result = await db.select<Subscription[]>(
-        'SELECT id, symbol, display_name, selected_provider_id, asset_type, sort_order FROM subscriptions ORDER BY sort_order, id'
+        'SELECT id, sub_type, symbol, display_name, selected_provider_id, asset_type, pool_address, token_from_address, token_to_address, sort_order FROM subscriptions WHERE sub_type = $1 ORDER BY sort_order, id',
+        [subType]
       );
       setSubscriptions(result);
       return result;
-    } catch (err) {
-      console.error('Failed to load subscriptions:', err);
-      return [];
-    }
-  }, []);
+    } catch (err) { console.error('Failed to load subscriptions:', err); return []; }
+  }, [subType]);
 
   const loadCachedPrices = useCallback(async () => {
     try {
       const cached = await invoke<AssetData[]>('get_cached_prices');
       if (cached.length > 0) priceStore.updatePrices(cached);
-    } catch (err) {
-      console.error('Failed to load cached prices:', err);
-    }
+    } catch (err) { console.error('Failed to load cached prices:', err); }
   }, []);
 
   const loadCachedTicks = useCallback(async () => {
     try {
       const ticks = await invoke<{ provider_id: string; fetched_at: number; interval_ms: number }[]>('get_poll_ticks');
-      for (const t of ticks) {
-        priceStore.updateTick(t.provider_id, t.fetched_at, t.interval_ms);
-      }
-    } catch (err) {
-      console.error('Failed to load cached ticks:', err);
-    }
+      for (const t of ticks) priceStore.updateTick(t.provider_id, t.fetched_at, t.interval_ms);
+    } catch (err) { console.error('Failed to load cached ticks:', err); }
   }, []);
 
-  // ── Event Listeners ─────────────────────────────────────────
-
+  // Event listeners
   const setupPriceListener = useCallback(async () => {
     if (priceUnlistenRef.current) return;
-    priceUnlistenRef.current = await listen<AssetData[]>('price-update', (event) => {
-      priceStore.updatePrices(event.payload);
-    });
+    priceUnlistenRef.current = await listen<AssetData[]>('price-update', (e) => priceStore.updatePrices(e.payload));
   }, []);
-
   const setupErrorListener = useCallback(async () => {
     if (errorUnlistenRef.current) return;
-    errorUnlistenRef.current = await listen<Record<string, string>>('price-error', (event) => {
-      priceStore.updateErrors(event.payload);
-    });
+    errorUnlistenRef.current = await listen<Record<string, string>>('price-error', (e) => priceStore.updateErrors(e.payload));
   }, []);
-
-  const tickUnlistenRef = useRef<UnlistenFn | null>(null);
   const setupTickListener = useCallback(async () => {
     if (tickUnlistenRef.current) return;
-    tickUnlistenRef.current = await listen<{ provider_id: string; fetched_at: number; interval_ms: number }>('poll-tick', (event) => {
-      const { provider_id, fetched_at, interval_ms } = event.payload;
+    tickUnlistenRef.current = await listen<{ provider_id: string; fetched_at: number; interval_ms: number }>('poll-tick', (e) => {
+      const { provider_id, fetched_at, interval_ms } = e.payload;
       priceStore.updateTick(provider_id, fetched_at, interval_ms);
     });
   }, []);
-
   const setupWsListener = useCallback(async () => {
     if (wsUnlistenRef.current) return;
-    wsUnlistenRef.current = await listen<WsTickerUpdate>('ws-ticker-update', (event) => {
-      const { provider_id, symbol, data } = event.payload;
+    wsUnlistenRef.current = await listen<WsTickerUpdate>('ws-ticker-update', (e) => {
+      const { provider_id, symbol, data } = e.payload;
       priceStore.updateWs(provider_id, symbol, data);
     });
   }, []);
 
-  // ── WebSocket ───────────────────────────────────────────────
-
+  // WebSocket
   const startWsStream = useCallback(async (providerId: string, symbols: string[]) => {
     const key = `${providerId}:${symbols.join(',')}`;
     if (wsActiveRef.current.has(key)) return;
@@ -242,9 +180,7 @@ export function useAssetData() {
       await invoke('start_ws_stream', { providerId, symbols });
       wsActiveRef.current.add(key);
       await setupWsListener();
-    } catch (err) {
-      console.error(`WS stream failed for ${providerId}:`, err);
-    }
+    } catch (err) { console.error(`WS stream failed for ${providerId}:`, err); }
   }, [setupWsListener]);
 
   const startWsConnections = useCallback(async (subs: Subscription[]) => {
@@ -260,103 +196,111 @@ export function useAssetData() {
           (groups[sub.selected_provider_id] ??= []).push(sub.symbol);
         }
       }
-      for (const [pid, syms] of Object.entries(groups)) {
-        startWsStream(pid, syms);
-      }
-    } catch (err) {
-      console.error('Failed to start WS connections:', err);
-    }
+      for (const [pid, syms] of Object.entries(groups)) startWsStream(pid, syms);
+    } catch (err) { console.error('Failed to start WS connections:', err); }
   }, [startWsStream]);
 
-  // ── Polling ─────────────────────────────────────────────────
-
   const reloadPolling = useCallback(async () => {
-    try {
-      await invoke('reload_polling');
-    } catch (err) {
-      console.error('Failed to reload polling:', err);
-    }
+    try { await invoke('reload_polling'); } catch (err) { console.error('Failed to reload polling:', err); }
   }, []);
 
-  // ── CRUD Operations ─────────────────────────────────────────
+  // ── CRUD ────────────────────────────────────────────────────
 
+  /** 新增 asset 訂閱 */
   const addSubscription = useCallback(
-    async (symbol: string, displayName?: string, providerId?: string, assetType?: 'crypto' | 'stock') => {
+    async (symbol: string, displayName?: string, providerId?: string, assetType?: string) => {
+      const pid = providerId || 'binance';
+      const isDex = providerInfoRef.current.find(p => p.id === pid)?.provider_type === 'dex';
+      const storedSymbol = isDex ? symbol.trim() : symbol.toUpperCase();
+      // 先驗證 symbol 是否有效
+      await invoke('fetch_asset_price', { providerId: pid, symbol: storedSymbol });
       const db = await getDb();
-      // DEX 聚合器使用合約地址，需保留原始大小寫
-      const isDexProvider = providerInfoRef.current.find(p => p.id === providerId)?.provider_type === 'dex';
-      const storedSymbol = isDexProvider ? symbol.trim() : symbol.toUpperCase();
       await db.execute(
-        'INSERT INTO subscriptions (symbol, display_name, selected_provider_id, asset_type) VALUES ($1, $2, $3, $4)',
-        [storedSymbol, displayName || null, providerId || 'binance', assetType || 'crypto']
+        'INSERT INTO subscriptions (sub_type, symbol, display_name, selected_provider_id, asset_type) VALUES ($1, $2, $3, $4, $5)',
+        ['asset', storedSymbol, displayName || null, pid, assetType || 'crypto']
       );
       await loadSubscriptions();
-    },
-    [loadSubscriptions]
-  );
-
-  const updateSubscription = useCallback(
-    async (id: number, updates: { symbol?: string; displayName?: string; providerId?: string; assetType?: 'crypto' | 'stock' }) => {
-      const sub = subscriptionsRef.current.find(s => s.id === id);
-      if (!sub) return;
-      const db = await getDb();
-      const targetProviderId = updates.providerId ?? sub.selected_provider_id;
-      const isDexProvider = providerInfoRef.current.find(p => p.id === targetProviderId)?.provider_type === 'dex';
-      const storedSymbol = updates.symbol
-        ? (isDexProvider ? updates.symbol.trim() : updates.symbol.toUpperCase())
-        : sub.symbol;
-      await db.execute(
-        'UPDATE subscriptions SET symbol = $1, display_name = $2, selected_provider_id = $3, asset_type = $4 WHERE id = $5',
-        [
-          storedSymbol,
-          updates.displayName !== undefined ? (updates.displayName || null) : (sub.display_name || null),
-          targetProviderId,
-          updates.assetType ?? sub.asset_type,
-          id,
-        ]
-      );
-      await loadSubscriptions();
-      // symbol 或 provider 變更時 visible IDs 不變，set_visible_subscriptions 不會觸發，
-      // 需要手動 reload 讓 backend 重新讀取 DB 配置
-      if (updates.symbol || updates.providerId) {
-        await reloadPolling();
-      }
+      await reloadPolling();
     },
     [loadSubscriptions, reloadPolling]
   );
 
-  const removeSubscription = useCallback(
-    async (id: number) => {
+  /** 新增 DEX 訂閱 */
+  const addDexSubscription = useCallback(
+    async (poolAddress: string, tokenFrom: string, tokenTo: string, providerId: string, displayName?: string) => {
       const db = await getDb();
-      await db.execute('DELETE FROM subscriptions WHERE id = $1', [id]);
+      const symbol = `${poolAddress.trim()}:${tokenFrom.trim()}:${tokenTo.trim()}`;
+      await db.execute(
+        'INSERT INTO subscriptions (sub_type, symbol, display_name, selected_provider_id, asset_type, pool_address, token_from_address, token_to_address) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+        ['dex', symbol, displayName || null, providerId, 'crypto', poolAddress.trim(), tokenFrom.trim(), tokenTo.trim()]
+      );
       await loadSubscriptions();
+      await reloadPolling();
     },
-    [loadSubscriptions]
+    [loadSubscriptions, reloadPolling]
   );
 
-  const removeSubscriptions = useCallback(
-    async (ids: number[]) => {
-      if (ids.length === 0) return;
+  const updateSubscription = useCallback(
+    async (id: number, updates: { symbol?: string; displayName?: string; providerId?: string; assetType?: string }) => {
+      const sub = subscriptionsRef.current.find(s => s.id === id);
+      if (!sub) return;
       const db = await getDb();
-      const placeholders = ids.map((_, i) => '$' + (i + 1)).join(',');
-      await db.execute(`DELETE FROM subscriptions WHERE id IN (${placeholders})`, ids);
+      const targetPid = updates.providerId ?? sub.selected_provider_id;
+      const isDex = providerInfoRef.current.find(p => p.id === targetPid)?.provider_type === 'dex';
+      const storedSymbol = updates.symbol ? (isDex ? updates.symbol.trim() : updates.symbol.toUpperCase()) : sub.symbol;
+      await db.execute(
+        'UPDATE subscriptions SET symbol = $1, display_name = $2, selected_provider_id = $3, asset_type = $4 WHERE id = $5',
+        [storedSymbol, updates.displayName !== undefined ? (updates.displayName || null) : (sub.display_name || null), targetPid, updates.assetType ?? sub.asset_type, id]
+      );
       await loadSubscriptions();
+      if (updates.symbol || updates.providerId) await reloadPolling();
     },
-    [loadSubscriptions]
+    [loadSubscriptions, reloadPolling]
   );
 
-  const reorderSubscriptions = useCallback(
-    async (orderedIds: number[]) => {
+  /** 更新 DEX 訂閱 */
+  const updateDexSubscription = useCallback(
+    async (id: number, updates: { poolAddress?: string; tokenFrom?: string; tokenTo?: string; providerId?: string; displayName?: string }) => {
+      const sub = subscriptionsRef.current.find(s => s.id === id);
+      if (!sub) return;
       const db = await getDb();
-      for (let i = 0; i < orderedIds.length; i++) {
-        await db.execute('UPDATE subscriptions SET sort_order = $1 WHERE id = $2', [i + 1, orderedIds[i]]);
-      }
+      const pool = updates.poolAddress?.trim() ?? sub.pool_address ?? '';
+      const tf = updates.tokenFrom?.trim() ?? sub.token_from_address ?? '';
+      const tt = updates.tokenTo?.trim() ?? sub.token_to_address ?? '';
+      const symbol = `${pool}:${tf}:${tt}`;
+      await db.execute(
+        'UPDATE subscriptions SET symbol = $1, pool_address = $2, token_from_address = $3, token_to_address = $4, selected_provider_id = $5, display_name = $6 WHERE id = $7',
+        [symbol, pool, tf, tt, updates.providerId ?? sub.selected_provider_id, updates.displayName !== undefined ? (updates.displayName || null) : (sub.display_name || null), id]
+      );
       await loadSubscriptions();
+      await reloadPolling();
     },
-    [loadSubscriptions]
+    [loadSubscriptions, reloadPolling]
   );
 
-  // ── Getters (穩定引用，不觸發 re-render) ───────────────────
+  const removeSubscription = useCallback(async (id: number) => {
+    const db = await getDb();
+    await db.execute('DELETE FROM subscriptions WHERE id = $1', [id]);
+    await loadSubscriptions();
+  }, [loadSubscriptions]);
+
+  const removeSubscriptions = useCallback(async (ids: number[]) => {
+    if (ids.length === 0) return;
+    const db = await getDb();
+    const placeholders = ids.map((_, i) => '$' + (i + 1)).join(',');
+    await db.execute(`DELETE FROM subscriptions WHERE id IN (${placeholders})`, ids);
+    await loadSubscriptions();
+  }, [loadSubscriptions]);
+
+  const reorderSubscriptions = useCallback(async (orderedIds: number[]) => {
+    const db = await getDb();
+    for (let i = 0; i < orderedIds.length; i++) {
+      await db.execute('UPDATE subscriptions SET sort_order = $1 WHERE id = $2', [i + 1, orderedIds[i]]);
+    }
+    await loadSubscriptions();
+  }, [loadSubscriptions]);
+
+  // ── Getters ─────────────────────────────────────────────────
 
   const getSelectedProvider = useCallback(
     (subscriptionId: number): string => selectedProviders.get(subscriptionId) || 'binance',
@@ -365,7 +309,7 @@ export function useAssetData() {
 
   const getAssetType = useCallback(
     (subscriptionId: number): 'crypto' | 'stock' => {
-      return subscriptionsRef.current.find(s => s.id === subscriptionId)?.asset_type || 'crypto';
+      return (subscriptionsRef.current.find(s => s.id === subscriptionId)?.asset_type as 'crypto' | 'stock') || 'crypto';
     },
     []
   );
@@ -380,6 +324,11 @@ export function useAssetData() {
     []
   );
 
+  /** DEX symbol 組合 */
+  const getDexSymbol = useCallback((sub: Subscription): string => {
+    return `${sub.pool_address || ''}:${sub.token_from_address || ''}:${sub.token_to_address || ''}`;
+  }, []);
+
   // ── Init ────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -391,7 +340,7 @@ export function useAssetData() {
       await setupTickListener();
       await loadCachedPrices();
       await loadCachedTicks();
-      await startWsConnections(subs);
+      if (subType === 'asset') await startWsConnections(subs);
       setLoading(false);
     })();
     return () => {
@@ -407,13 +356,16 @@ export function useAssetData() {
     providerInfoList,
     loading,
     addSubscription,
+    addDexSubscription,
     removeSubscription,
     removeSubscriptions,
     updateSubscription,
+    updateDexSubscription,
     reorderSubscriptions,
     getSelectedProvider,
     getAssetType,
     getRefreshInterval,
+    getDexSymbol,
     refresh: reloadPolling,
   };
 }

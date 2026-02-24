@@ -132,6 +132,21 @@ impl AssetDataBuilder {
     }
 }
 
+/// Pool lookup result for DEX providers
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DexPoolInfo {
+    pub token0_address: String,
+    pub token0_symbol: String,
+    pub token1_address: String,
+    pub token1_symbol: String,
+}
+
+/// Trait for DEX providers that can look up pool token info
+#[async_trait::async_trait]
+pub trait DexPoolLookup: Send + Sync {
+    async fn lookup_pool(&self, pool_address: &str) -> Result<DexPoolInfo, String>;
+}
+
 /// WebSocket message types for real-time data
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WsTickerUpdate {
@@ -266,6 +281,13 @@ fn build_all_provider_info() -> Vec<ProviderInfo> {
            &["price","change_24h"],                                                                  10000,   5000),
         pi("okx_dex", "OKX DEX", "dex", true, false, false,
            "需API Key (OKX Web3 Portal免費申請); 多鏈DEX聚合器", "ETH, SOL, BNB, eth:0x..., sol:mint",
+           &["price"],                                                                               15000,   10000),
+        // DEX Pool Providers (for DEX aggregator page)
+        pi("raydium", "Raydium", "dex", true, false, false,
+           "需API Key; Solana DEX AMM", "pool:tokenFrom:tokenTo",
+           &["price"],                                                                               10000,   5000),
+        pi("subgraph", "Subgraph (Uniswap/Sushi/Pancake)", "dex", true, false, false,
+           "需API Key (The Graph); EVM DEX 聚合", "protocol:pool:tokenFrom:tokenTo",
            &["price"],                                                                               15000,   10000),
     ]
 }

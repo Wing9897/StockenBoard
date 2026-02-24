@@ -6,9 +6,11 @@ interface BulkDeleteProps {
   isCustomView: boolean;
   onConfirm: (ids: Set<number>) => void;
   onClose: () => void;
+  /** 自訂每行顯示的主文字，預設用 symbol */
+  getLabel?: (sub: Subscription) => { primary: string; secondary?: string };
 }
 
-export function BulkDelete({ subscriptions, isCustomView, onConfirm, onClose }: BulkDeleteProps) {
+export function BulkDelete({ subscriptions, isCustomView, onConfirm, onClose, getLabel }: BulkDeleteProps) {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   const toggle = (id: number) => {
@@ -19,6 +21,13 @@ export function BulkDelete({ subscriptions, isCustomView, onConfirm, onClose }: 
       return next;
     });
   };
+
+  const defaultLabel = (sub: Subscription) => ({
+    primary: sub.display_name || sub.symbol,
+    secondary: sub.display_name ? sub.symbol : undefined,
+  });
+
+  const labelFn = getLabel || defaultLabel;
 
   return (
     <div className="bd-backdrop" onClick={onClose}>
@@ -32,16 +41,19 @@ export function BulkDelete({ subscriptions, isCustomView, onConfirm, onClose }: 
           <button className="dm-pick-btn" onClick={() => setSelectedIds(new Set())}>取消全選</button>
         </div>
         <ul className="bd-list">
-          {subscriptions.map(sub => (
-            <li key={sub.id} className="bd-item">
-              <label className="bd-label">
-                <input type="checkbox" checked={selectedIds.has(sub.id)} onChange={() => toggle(sub.id)} />
-                <span className="bd-symbol">{sub.symbol}</span>
-                {sub.display_name && <span className="bd-display-name">{sub.display_name}</span>}
-                <span className={`bd-type ${sub.asset_type}`}>{sub.asset_type === 'stock' ? '股' : '幣'}</span>
-              </label>
-            </li>
-          ))}
+          {subscriptions.map(sub => {
+            const label = labelFn(sub);
+            return (
+              <li key={sub.id} className="bd-item">
+                <label className="bd-label">
+                  <input type="checkbox" checked={selectedIds.has(sub.id)} onChange={() => toggle(sub.id)} />
+                  <span className="bd-symbol">{label.primary}</span>
+                  {label.secondary && <span className="bd-display-name">{label.secondary}</span>}
+                  <span className={`bd-type ${sub.asset_type}`}>{sub.asset_type === 'stock' ? '股' : '幣'}</span>
+                </label>
+              </li>
+            );
+          })}
         </ul>
         <div className="bd-footer">
           <span className="bd-count">{selectedIds.size} / {subscriptions.length} 已選</span>

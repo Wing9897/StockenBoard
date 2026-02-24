@@ -1,4 +1,4 @@
-use crate::providers::{create_provider, AssetData, DataProvider};
+use crate::providers::{create_provider_with_url, AssetData, DataProvider};
 use crate::providers::traits::PROVIDER_INFO_MAP;
 use rusqlite::Connection;
 use serde::Serialize;
@@ -8,24 +8,16 @@ use std::sync::Arc;
 use tauri::Emitter;
 use tokio::sync::{watch, RwLock};
 
-/// 後端 polling tick — 每次 fetch 完成後推送給前端，讓倒計時精確同步
 #[derive(Debug, Clone, Serialize)]
 pub struct PollTick {
     pub provider_id: String,
-    /// fetch 完成的時間戳 (ms since epoch)
     pub fetched_at: i64,
-    /// 下次 fetch 前的 sleep 時間 (ms)
     pub interval_ms: u64,
 }
 
-/// 後端統一 polling 管理器
-/// 讀取 DB subscriptions + provider_settings，按 provider 群組合併，
-/// 定時 fetch，透過 Tauri event 推送給所有窗口
 pub struct PollingManager {
     pub cache: Arc<RwLock<HashMap<String, AssetData>>>,
-    /// 每個 provider 最近一次 poll-tick 快照（前端 F5 後可主動拉取）
     pub ticks: Arc<RwLock<HashMap<String, PollTick>>>,
-    /// 前端目前可見的 subscription IDs（多窗口取聯集）
     visible_ids: Arc<RwLock<HashMap<String, HashSet<i64>>>>,
     reload_tx: watch::Sender<u64>,
     stop_tx: watch::Sender<bool>,
@@ -42,6 +34,7 @@ struct SubRecord {
 struct ProviderConfig {
     api_key: Option<String>,
     api_secret: Option<String>,
+    api_url: Option<String>,
     refresh_interval: Option<i64>,
     enabled: bool,
 }
@@ -65,24 +58,20 @@ impl PollingManager {
         }
     }
 
-    /// 通知 polling 重新載入 DB 配置
     pub fn reload(&self) {
         self.reload_tx.send_modify(|v| *v = v.wrapping_add(1));
     }
 
-    /// 設定某個窗口目前可見的 subscription IDs
-    /// window_id 用來區分多窗口，backend 取聯集
     pub async fn set_visible(&self, window_id: String, ids: HashSet<i64>) {
         let mut map = self.visible_ids.write().await;
-        // 比較新舊值，無變化則跳過 reload
         if ids.is_empty() {
             if map.remove(&window_id).is_none() {
-                return; // 本來就沒有，不需要 reload
+                return;
             }
         } else {
             if let Some(existing) = map.get(&window_id) {
                 if *existing == ids {
-                    return; // 完全相同，不需要 reload
+                    return;
                 }
             }
             map.insert(window_id, ids);
@@ -91,7 +80,6 @@ impl PollingManager {
         self.reload_tx.send_modify(|v| *v = v.wrapping_add(1));
     }
 
-    /// 啟動 polling 主循環（app setup 時呼叫一次）
     pub fn start(&self, app_handle: tauri::AppHandle, db_path: PathBuf) {
         let cache = self.cache.clone();
         let ticks = self.ticks.clone();
@@ -101,7 +89,6 @@ impl PollingManager {
 
         tauri::async_runtime::spawn(async move {
             loop {
-                // spawn_blocking 避免同步 DB I/O 阻塞 async runtime
                 let db_path_clone = db_path.clone();
                 let (vis_snapshot, has_windows): (HashSet<i64>, bool) = {
                     let map = visible_ids.read().await;
@@ -111,9 +98,7 @@ impl PollingManager {
                         (map.values().flat_map(|s| s.iter().copied()).collect(), true)
                     }
                 };
-                // 如果有窗口但聯集為空（所有窗口都在空頁面），跳過 fetch
                 if has_windows && vis_snapshot.is_empty() {
-                    // 清理快取
                     cache.write().await.clear();
                     ticks.write().await.clear();
                     tokio::select! {
@@ -121,7 +106,9 @@ impl PollingManager {
                         _ = stop_rx.changed() => break,
                     }
                 }
-                let config = tokio::task::spawn_blocking(move || load_config(&db_path_clone, if has_windows { Some(&vis_snapshot) } else { None })).await;
+                let config = tokio::task::spawn_blocking(move || {
+                    load_config(&db_path_clone, if has_windows { Some(&vis_snapshot) } else { None })
+                }).await;
                 let (groups, providers) = match config {
                     Ok(Ok(v)) => v,
                     Ok(Err(e)) => {
@@ -136,15 +123,13 @@ impl PollingManager {
                     }
                 };
 
-                // 清理快取：移除已不存在的 subscription
                 {
-                    let valid: std::collections::HashSet<String> = groups
+                    let valid: HashSet<String> = groups
                         .iter()
                         .flat_map(|(pid, g)| g.symbols.iter().map(move |s| format!("{}:{}", pid, s)))
                         .collect();
                     cache.write().await.retain(|k, _| valid.contains(k));
-                    // 清理不再活躍的 provider ticks
-                    let active_pids: std::collections::HashSet<&String> = groups.keys().collect();
+                    let active_pids: HashSet<&String> = groups.keys().collect();
                     ticks.write().await.retain(|k, _| active_pids.contains(k));
                 }
 
@@ -155,7 +140,6 @@ impl PollingManager {
                     }
                 }
 
-                // 為每個 provider group 啟動 polling task
                 let (gen_stop_tx, _) = watch::channel(false);
                 let mut handles = Vec::with_capacity(groups.len());
 
@@ -193,7 +177,6 @@ impl PollingManager {
                                     let _ = app.emit("price-error", &payload);
                                 }
                             }
-                            // 通知前端：此 provider 剛完成 fetch，下次在 interval_ms 後
                             let tick = PollTick {
                                 provider_id: pid.clone(),
                                 fetched_at: chrono::Utc::now().timestamp_millis(),
@@ -209,7 +192,6 @@ impl PollingManager {
                     }));
                 }
 
-                // 等待 reload 或全局停止
                 tokio::select! {
                     _ = reload_rx.changed() => {},
                     _ = stop_rx.changed() => {
@@ -226,8 +208,8 @@ impl PollingManager {
 }
 
 
-/// 從 DB 讀取 subscriptions + provider_settings，組合成 polling groups
-/// visible_ids: Some → 只 fetch 這些 subscription IDs；None → fetch 全部（啟動初期尚無窗口報告時）
+/// 從統一 subscriptions 表讀取配置，組合成 polling groups
+/// 對 DEX 類型 (sub_type='dex')，用 pool_address:token_from:token_to 組合 symbol
 fn load_config(
     db_path: &PathBuf,
     visible_ids: Option<&HashSet<i64>>,
@@ -235,33 +217,41 @@ fn load_config(
     let conn = Connection::open_with_flags(db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
         .map_err(|e| format!("開啟 DB 失敗: {}", e))?;
 
-    // 讀取 subscriptions
     let subs: Vec<SubRecord> = {
         let mut stmt = conn
-            .prepare("SELECT id, symbol, selected_provider_id FROM subscriptions")
+            .prepare("SELECT id, sub_type, symbol, selected_provider_id, pool_address, token_from_address, token_to_address FROM subscriptions")
             .map_err(|e| format!("查詢 subscriptions 失敗: {}", e))?;
         let rows = stmt.query_map([], |row| {
-            Ok(SubRecord {
-                id: row.get(0)?,
-                symbol: row.get(1)?,
-                provider_id: row.get(2)?,
-            })
+            let id: i64 = row.get(0)?;
+            let sub_type: String = row.get(1)?;
+            let symbol: String = row.get(2)?;
+            let provider_id: String = row.get(3)?;
+            let pool_address: Option<String> = row.get(4)?;
+            let token_from: Option<String> = row.get(5)?;
+            let token_to: Option<String> = row.get(6)?;
+
+            let final_symbol = if sub_type == "dex" {
+                let pool = pool_address.unwrap_or_default();
+                let tf = token_from.unwrap_or_default();
+                let tt = token_to.unwrap_or_default();
+                format!("{}:{}:{}", pool, tf, tt)
+            } else {
+                symbol
+            };
+
+            Ok(SubRecord { id, symbol: final_symbol, provider_id })
         })
         .map_err(|e| format!("讀取 subscriptions 失敗: {}", e))?;
         let all: Vec<SubRecord> = rows.filter_map(|r| r.ok()).collect();
-        // 按 visible_ids 過濾
         match visible_ids {
             Some(ids) => all.into_iter().filter(|s| ids.contains(&s.id)).collect(),
             None => all,
         }
     };
 
-    // 讀取 provider_settings
     let settings: HashMap<String, ProviderConfig> = {
         let mut stmt = conn
-            .prepare(
-                "SELECT provider_id, api_key, api_secret, refresh_interval, enabled FROM provider_settings",
-            )
+            .prepare("SELECT provider_id, api_key, api_secret, refresh_interval, enabled, api_url FROM provider_settings")
             .map_err(|e| format!("查詢 provider_settings 失敗: {}", e))?;
         let rows = stmt.query_map([], |row| {
             Ok((
@@ -271,6 +261,7 @@ fn load_config(
                     api_secret: row.get(2)?,
                     refresh_interval: row.get(3)?,
                     enabled: row.get::<_, i64>(4).unwrap_or(1) != 0,
+                    api_url: row.get(5).ok().flatten(),
                 },
             ))
         })
@@ -281,7 +272,6 @@ fn load_config(
     drop(conn);
 
     let info_map = &*PROVIDER_INFO_MAP;
-
     let mut groups: HashMap<String, PollingGroup> = HashMap::new();
     let mut provider_instances: HashMap<String, Arc<dyn DataProvider>> = HashMap::new();
 
@@ -289,7 +279,6 @@ fn load_config(
         let pid = &sub.provider_id;
         let config = settings.get(pid);
 
-        // 跳過被停用的 provider
         if config.map(|c| !c.enabled).unwrap_or(false) {
             continue;
         }
@@ -317,7 +306,8 @@ fn load_config(
         if !provider_instances.contains_key(pid) {
             let api_key = config.and_then(|c| c.api_key.clone());
             let api_secret = config.and_then(|c| c.api_secret.clone());
-            if let Some(p) = create_provider(pid, api_key, api_secret) {
+            let api_url = config.and_then(|c| c.api_url.clone());
+            if let Some(p) = create_provider_with_url(pid, api_key, api_secret, api_url) {
                 provider_instances.insert(pid.clone(), p);
             }
         }

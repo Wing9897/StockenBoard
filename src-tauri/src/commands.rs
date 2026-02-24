@@ -1,11 +1,11 @@
 use crate::polling::{PollTick, PollingManager};
 use crate::providers::{
-    create_provider, create_ws_provider, get_all_provider_info, AssetData, DataProvider,
-    ProviderInfo, WsTickerUpdate,
+    create_dex_lookup, create_provider_with_url, create_ws_provider,
+    get_all_provider_info, AssetData, DataProvider, DexPoolInfo, ProviderInfo, WsTickerUpdate,
 };
 use std::collections::HashMap;
 use std::sync::Arc;
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 use tokio::sync::{broadcast, RwLock};
 
 pub struct AppState {
@@ -14,6 +14,7 @@ pub struct AppState {
     ws_sender: broadcast::Sender<WsTickerUpdate>,
     ws_tasks: RwLock<HashMap<String, (tokio::task::JoinHandle<()>, tokio::task::JoinHandle<()>)>>,
     pub polling: PollingManager,
+    db_path: std::sync::RwLock<Option<std::path::PathBuf>>,
 }
 
 impl AppState {
@@ -24,10 +25,41 @@ impl AppState {
             ws_sender,
             ws_tasks: RwLock::new(HashMap::new()),
             polling: PollingManager::new(),
+            db_path: std::sync::RwLock::new(None),
         }
     }
 
-    /// 取得或建立 provider instance（lazy，用於 on-demand 查詢）
+    pub fn set_db_path(&self, path: std::path::PathBuf) {
+        *self.db_path.write().unwrap() = Some(path);
+    }
+
+    /// 從 DB 讀取 provider 的 api_key / api_secret / api_url
+    fn read_provider_settings(db_path: &std::path::Path, provider_id: &str) -> (Option<String>, Option<String>, Option<String>) {
+        let conn = match rusqlite::Connection::open_with_flags(db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY) {
+            Ok(c) => c,
+            Err(_) => return (None, None, None),
+        };
+        let mut stmt = match conn.prepare("SELECT api_key, api_secret, api_url FROM provider_settings WHERE provider_id = ?1") {
+            Ok(s) => s,
+            Err(_) => return (None, None, None),
+        };
+        match stmt.query_row([provider_id], |row| {
+            Ok((
+                row.get::<_, Option<String>>(0)?,
+                row.get::<_, Option<String>>(1)?,
+                row.get::<_, Option<String>>(2)?,
+            ))
+        }) {
+            Ok((key, secret, url)) => (
+                key.filter(|k| !k.is_empty()),
+                secret.filter(|s| !s.is_empty()),
+                url.filter(|u| !u.is_empty()),
+            ),
+            Err(_) => (None, None, None),
+        }
+    }
+
+    /// 取得或建立 provider instance（lazy，自動從 DB 讀取 API key）
     async fn get_provider(
         &self,
         id: &str,
@@ -40,7 +72,17 @@ impl AppState {
                 return Some(provider.clone());
             }
         }
-        let provider = create_provider(id, api_key, api_secret)?;
+        // 如果呼叫者沒提供 key，嘗試從 DB 讀取
+        let (key, secret, url) = if api_key.is_none() {
+            if let Some(ref db_path) = *self.db_path.read().unwrap() {
+                Self::read_provider_settings(db_path, id)
+            } else {
+                (None, None, None)
+            }
+        } else {
+            (api_key, api_secret, None)
+        };
+        let provider = crate::providers::create_provider_with_url(id, key, secret, url)?;
         self.providers.write().await.insert(id.to_string(), provider.clone());
         Some(provider)
     }
@@ -86,7 +128,14 @@ pub async fn enable_provider(
     api_key: Option<String>,
     api_secret: Option<String>,
 ) -> Result<(), String> {
-    if let Some(p) = create_provider(&provider_id, api_key, api_secret) {
+    // 也從 DB 讀取 api_url，確保 DEX provider 能用自訂端點
+    let api_url = if let Some(ref db_path) = *state.db_path.read().unwrap() {
+        let (_, _, url) = AppState::read_provider_settings(db_path, &provider_id);
+        url
+    } else {
+        None
+    };
+    if let Some(p) = create_provider_with_url(&provider_id, api_key, api_secret, api_url) {
         state.providers.write().await.insert(provider_id, p);
     }
     state.polling.reload();
@@ -114,11 +163,30 @@ pub async fn set_visible_subscriptions(
     state: tauri::State<'_, AppState>,
     window: tauri::Window,
     ids: Vec<i64>,
+    scope: Option<String>,
 ) -> Result<(), String> {
-    let window_id = window.label().to_string();
+    let window_id = match scope {
+        Some(s) => format!("{}_{}", window.label(), s),
+        None => window.label().to_string(),
+    };
     let id_set: std::collections::HashSet<i64> = ids.into_iter().collect();
     state.polling.set_visible(window_id, id_set).await;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn lookup_dex_pool(
+    app: tauri::AppHandle,
+    provider_id: String,
+    pool_address: String,
+) -> Result<DexPoolInfo, String> {
+    let db_path = app.path().app_data_dir()
+        .map_err(|e| format!("無法取得 app 目錄: {}", e))?
+        .join("stockenboard.db");
+    let (api_key, _, api_url) = AppState::read_provider_settings(&db_path, &provider_id);
+    let lookup = create_dex_lookup(&provider_id, api_key, api_url)
+        .ok_or_else(|| format!("{} 不支援 pool 查詢", provider_id))?;
+    lookup.lookup_pool(&pool_address).await
 }
 
 #[tauri::command]

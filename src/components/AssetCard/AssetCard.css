@@ -221,7 +221,25 @@
   background: rgba(243, 139, 168, 0.1);
   border-radius: 6px;
   margin-bottom: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.asset-error-summary {
+  display: block;
+}
+
+.asset-error-full {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(243, 139, 168, 0.2);
+  font-size: 10px;
+  white-space: pre-wrap;
   word-break: break-word;
+  max-height: 120px;
+  overflow-y: auto;
+  user-select: text;
+  cursor: text;
 }
 
 /* List View */

@@ -2,13 +2,16 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { View } from '../types';
 import { getDb } from '../lib/db';
 
-interface RawView { id: number; name: string; is_default: number }
-const toView = (r: RawView): View => ({ id: r.id, name: r.name, is_default: r.is_default === 1 });
+interface RawView { id: number; name: string; view_type: string; is_default: number }
+const toView = (r: RawView): View => ({ id: r.id, name: r.name, view_type: r.view_type as 'asset' | 'dex', is_default: r.is_default === 1 });
 
-export function useViews() {
+/** 統一 views hook — 透過 viewType 參數區分 asset / dex */
+export function useViews(viewType: 'asset' | 'dex' = 'asset') {
+  const storageKey = viewType === 'dex' ? 'sb_dex_active_view_id' : 'sb_active_view_id';
+
   const [views, setViews] = useState<View[]>([]);
   const [activeViewId, setActiveViewId] = useState<number>(() => {
-    const saved = localStorage.getItem('sb_active_view_id');
+    const saved = localStorage.getItem(storageKey);
     return saved ? parseInt(saved, 10) : -1;
   });
   const [activeViewSubscriptionIds, setActiveViewSubscriptionIds] = useState<number[] | null>(null);
@@ -30,24 +33,22 @@ export function useViews() {
       for (const v of viewsList) if (!v.is_default) counts[v.id] = 0;
       for (const r of rows) counts[r.view_id] = r.cnt;
       setViewSubCounts(counts);
-    } catch (err) {
-      console.error('Failed to load view sub counts:', err);
-    }
+    } catch (err) { console.error('Failed to load view sub counts:', err); }
   }, []);
 
   const loadViews = useCallback(async () => {
     try {
       const db = await getDb();
-      const rows = await db.select<RawView[]>('SELECT id, name, is_default FROM views ORDER BY id');
+      const rows = await db.select<RawView[]>(
+        'SELECT id, name, view_type, is_default FROM views WHERE view_type = $1 ORDER BY id',
+        [viewType]
+      );
       const loaded = rows.map(toView);
       setViews(loaded);
       await loadViewSubCounts(loaded);
       return loaded;
-    } catch (err) {
-      console.error('Failed to load views:', err);
-      return [];
-    }
-  }, [loadViewSubCounts]);
+    } catch (err) { console.error('Failed to load views:', err); return []; }
+  }, [viewType, loadViewSubCounts]);
 
   const loadActiveViewSubs = useCallback(async (viewId: number, viewsList: View[]) => {
     const view = viewsList.find(v => v.id === viewId);
@@ -66,9 +67,9 @@ export function useViews() {
 
   const setActiveView = useCallback((viewId: number) => {
     setActiveViewId(viewId);
-    localStorage.setItem('sb_active_view_id', String(viewId));
+    localStorage.setItem(storageKey, String(viewId));
     loadActiveViewSubs(viewId, viewsRef.current);
-  }, [loadActiveViewSubs]);
+  }, [storageKey, loadActiveViewSubs]);
 
   const createView = useCallback(async (name: string) => {
     const trimmed = name.trim();
@@ -76,9 +77,9 @@ export function useViews() {
     if (viewsRef.current.some(v => v.name.trim().toLowerCase() === trimmed.toLowerCase()))
       throw new Error('View name already exists');
     const db = await getDb();
-    await db.execute('INSERT INTO views (name, is_default) VALUES ($1, 0)', [trimmed]);
+    await db.execute('INSERT INTO views (name, view_type, is_default) VALUES ($1, $2, 0)', [trimmed, viewType]);
     await loadViews();
-  }, [loadViews]);
+  }, [viewType, loadViews]);
 
   const renameView = useCallback(async (viewId: number, newName: string) => {
     const view = viewsRef.current.find(v => v.id === viewId);
@@ -104,11 +105,11 @@ export function useViews() {
       const def = updated.find(v => v.is_default);
       if (def) {
         setActiveViewId(def.id);
-        localStorage.setItem('sb_active_view_id', String(def.id));
+        localStorage.setItem(storageKey, String(def.id));
         setActiveViewSubscriptionIds(null);
       }
     }
-  }, [loadViews]);
+  }, [storageKey, loadViews]);
 
   const addSubscriptionToView = useCallback(async (viewId: number, subscriptionId: number) => {
     const db = await getDb();
@@ -127,11 +128,11 @@ export function useViews() {
   useEffect(() => {
     (async () => {
       const loaded = await loadViews();
-      const savedId = parseInt(localStorage.getItem('sb_active_view_id') || '', 10);
+      const savedId = parseInt(localStorage.getItem(storageKey) || '', 10);
       const target = loaded.find(v => v.id === savedId) || loaded.find(v => v.is_default);
       if (target) {
         setActiveViewId(target.id);
-        localStorage.setItem('sb_active_view_id', String(target.id));
+        localStorage.setItem(storageKey, String(target.id));
         if (!target.is_default) await loadActiveViewSubs(target.id, loaded);
         else setActiveViewSubscriptionIds(null);
       }
