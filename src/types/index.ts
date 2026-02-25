@@ -35,7 +35,6 @@ export interface ProviderSettings {
   api_url?: string;
   refresh_interval?: number;
   connection_type: string;
-  enabled: number;
 }
 
 export interface Subscription {

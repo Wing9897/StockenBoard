@@ -2,6 +2,9 @@ import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useAssetData } from '../../hooks/useAssetData';
 import { useViews } from '../../hooks/useViews';
+import { useViewToolbar } from '../../hooks/useViewToolbar';
+import { t } from '../../lib/i18n';
+import { useLocale } from '../../hooks/useLocale';
 import { DexCard } from './DexCard';
 import { DexSubscriptionManager } from './DexSubscriptionManager';
 import { ViewEditor } from '../ViewEditor/ViewEditor';
@@ -12,7 +15,6 @@ import { BulkDelete } from '../BulkDelete/BulkDelete';
 import './DexPage.css';
 
 type ViewMode = 'grid' | 'list' | 'compact';
-type EditorState = null | { mode: 'create' } | { mode: 'rename'; viewId: number; currentName: string };
 
 interface DexPageProps {
   onToast: {
@@ -23,19 +25,16 @@ interface DexPageProps {
 }
 
 export function DexPage({ onToast }: DexPageProps) {
+  useLocale();
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem('sb_dex_view_mode');
     if (saved === 'list' || saved === 'compact') return saved;
     return 'grid';
   });
-  const [editorState, setEditorState] = useState<EditorState>(null);
   const [showAddSub, setShowAddSub] = useState(false);
   const [showSubManager, setShowSubManager] = useState(false);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
   const [showViewManager, setShowViewManager] = useState(false);
-  const [pinnedViewIds, setPinnedViewIds] = useState<number[]>(() => {
-    try { return JSON.parse(localStorage.getItem('sb_dex_pinned_views') || '[]'); } catch { return []; }
-  });
 
   const handleSetViewMode = (mode: ViewMode) => {
     setViewMode(mode);
@@ -55,6 +54,15 @@ export function DexPage({ onToast }: DexPageProps) {
     refresh: refreshViews,
   } = useViews('dex');
 
+  const {
+    editorState, setEditorState, pinnedViewIds, toolbarViews,
+    handleCreateView, handleRequestRename, handleEditorConfirm,
+    handleDeleteView, togglePinView,
+  } = useViewToolbar({
+    views, activeViewId, createView, renameView, deleteView, toast: onToast,
+    storageKey: 'sb_dex_pinned_views',
+  });
+
   const isCustomView = activeViewSubscriptionIds !== null;
 
   const viewFilteredSubs = useMemo(() => {
@@ -63,7 +71,6 @@ export function DexPage({ onToast }: DexPageProps) {
     return subscriptions.filter(sub => idSet.has(sub.id));
   }, [subscriptions, activeViewSubscriptionIds]);
 
-  // Notify backend of visible subscription IDs
   const prevVisibleRef = useRef<string>('');
   useEffect(() => {
     const ids = viewFilteredSubs.map(s => s.id);
@@ -78,10 +85,10 @@ export function DexPage({ onToast }: DexPageProps) {
   const handleRemove = useCallback(async (id: number) => {
     if (isCustomView) {
       await removeSubscriptionFromView(activeViewId, id);
-      onToast.info('已移除顯示', '已從此頁面移除');
+      onToast.info(t.subs.removedFromView, t.subs.removedFromViewMsg());
     } else {
       await removeSubscription(id);
-      onToast.info('已取消訂閱', '已取消 DEX 訂閱');
+      onToast.info(t.subs.unsubscribed, t.dex.unsubDex);
     }
   }, [removeSubscription, removeSubscriptionFromView, activeViewId, isCustomView, onToast]);
 
@@ -90,79 +97,15 @@ export function DexPage({ onToast }: DexPageProps) {
     await refreshViews();
   }, [addDexSubscription, refreshViews]);
 
-  const handleCreateView = () => setEditorState({ mode: 'create' });
-  const handleRequestRename = (viewId: number) => {
-    const view = views.find(v => v.id === viewId);
-    if (view) setEditorState({ mode: 'rename', viewId, currentName: view.name });
-  };
-  const handleEditorConfirm = (name: string) => {
-    if (!editorState) return;
-    if (editorState.mode === 'create') {
-      createView(name)
-        .then(() => onToast.success('已建立', `頁面「${name}」已建立`))
-        .catch(err => onToast.error('建立頁面失敗', err instanceof Error ? err.message : String(err)));
-    } else {
-      renameView(editorState.viewId, name)
-        .then(() => onToast.success('已重新命名', `頁面已更名為「${name}」`))
-        .catch(err => onToast.error('重新命名失敗', err instanceof Error ? err.message : String(err)));
-    }
-    setEditorState(null);
-  };
-  const handleDeleteView = (viewId: number) => {
-    if (confirm('確定要刪除此頁面嗎？')) {
-      deleteView(viewId)
-        .then(() => onToast.success('已刪除'))
-        .catch(err => onToast.error('刪除失敗', err instanceof Error ? err.message : String(err)));
-      setPinnedViewIds(prev => {
-        const next = prev.filter(id => id !== viewId);
-        localStorage.setItem('sb_dex_pinned_views', JSON.stringify(next));
-        return next;
-      });
-    }
-  };
-
-  const togglePinView = (viewId: number) => {
-    setPinnedViewIds(prev => {
-      const next = prev.includes(viewId) ? prev.filter(id => id !== viewId) : [...prev, viewId];
-      localStorage.setItem('sb_dex_pinned_views', JSON.stringify(next));
-      return next;
-    });
-  };
-
   const handleCopySymbols = () => {
     const labels = viewFilteredSubs.map(s => s.display_name || s.symbol).join(', ');
     navigator.clipboard.writeText(labels).then(() => {
-      onToast.success('已複製', `${viewFilteredSubs.length} 個交易對已複製到剪貼簿`);
+      onToast.success(t.common.copied, t.subs.pairsCopied(viewFilteredSubs.length));
     }).catch(() => {
-      onToast.error('複製失敗');
+      onToast.error(t.common.copyFailed);
     });
   };
 
-  const sortedViews = [...views].sort((a, b) => {
-    if (a.is_default) return -1;
-    if (b.is_default) return 1;
-    return a.id - b.id;
-  });
-
-  const toolbarViews = (() => {
-    if (sortedViews.length === 0) return [];
-    const pinned = sortedViews.filter(v =>
-      v.is_default || pinnedViewIds.includes(v.id) || v.id === activeViewId
-    );
-    const MAX_AUTO = 5;
-    const hasPins = pinnedViewIds.some(pid => sortedViews.some(v => v.id === pid && !v.is_default));
-    if (!hasPins && sortedViews.length > 1) {
-      const auto = sortedViews.slice(0, MAX_AUTO);
-      if (activeViewId && !auto.find(v => v.id === activeViewId)) {
-        const activeView = sortedViews.find(v => v.id === activeViewId);
-        if (activeView) auto.push(activeView);
-      }
-      return auto;
-    }
-    return pinned;
-  })();
-
-  // Convert for ViewSubscriptionManager
   const subsForViewManager = useMemo(() =>
     subscriptions.map(s => ({
       id: s.id,
@@ -176,19 +119,19 @@ export function DexPage({ onToast }: DexPageProps) {
     [subscriptions]
   );
 
-  if (loading) return <div className="loading">載入中...</div>;
+  if (loading) return <div className="loading">{t.common.loading}</div>;
 
   return (
     <div className="dex-page">
       {subscriptions.length === 0 && !showAddSub ? (
         <div className="empty-state">
-          <p>尚未訂閱任何 DEX 交易對</p>
-          <button className="btn-add" onClick={() => setShowAddSub(true)}>新增 DEX 訂閱</button>
+          <p>{t.subs.noDexSubs}</p>
+          <button className="btn-add" onClick={() => setShowAddSub(true)}>{t.subs.addDexSub}</button>
         </div>
       ) : (
         <>
           <div className="dashboard-toolbar">
-            <div className="dashboard-filters" role="tablist" aria-label="DEX 頁面切換">
+            <div className="dashboard-filters" role="tablist" aria-label={t.nav.dexPageSwitch}>
               {toolbarViews.map(view => (
                 <button
                   key={view.id}
@@ -197,7 +140,7 @@ export function DexPage({ onToast }: DexPageProps) {
                   aria-selected={view.id === activeViewId}
                   onClick={() => setActiveView(view.id)}
                 >
-                  {view.name}
+                  {view.is_default ? t.providers.all : view.name}
                   {view.is_default
                     ? ` (${subscriptions.length})`
                     : ` (${viewSubCounts[view.id] ?? 0})`
@@ -205,9 +148,9 @@ export function DexPage({ onToast }: DexPageProps) {
                 </button>
               ))}
               {views.filter(v => !v.is_default).length > 0 && (
-                <button className="view-manager-btn" onClick={() => setShowViewManager(true)} title="管理頁面">⋯</button>
+                <button className="view-manager-btn" onClick={() => setShowViewManager(true)} title={t.views.manageViews}>⋯</button>
               )}
-              <button className="add-view-btn" onClick={handleCreateView} title="新增頁面">+</button>
+              <button className="add-view-btn" onClick={handleCreateView} title={t.views.addView}>+</button>
             </div>
             <div className="toolbar-right">
               {activeViewSubscriptionIds !== null && (
@@ -215,21 +158,21 @@ export function DexPage({ onToast }: DexPageProps) {
                   className={`manage-subs-btn ${showSubManager ? 'active' : ''}`}
                   onClick={() => setShowSubManager(prev => !prev)}
                 >
-                  管理訂閱
+                  {t.subs.manageSubs}
                 </button>
               )}
-              <button className="add-sub-btn" onClick={() => setShowAddSub(true)} title="新增 DEX 訂閱">
+              <button className="add-sub-btn" onClick={() => setShowAddSub(true)} title={t.subs.addDexSub}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
               </button>
-              <button className="copy-symbols-btn" onClick={handleCopySymbols} title="複製所有交易對">
+              <button className="copy-symbols-btn" onClick={handleCopySymbols} title={t.subs.copyAllPairs}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
               </button>
               <div className="view-toggle">
-                <button className={`view-btn ${viewMode === 'compact' ? 'active' : ''}`} onClick={() => handleSetViewMode('compact')} title="小方塊">▪</button>
-                <button className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`} onClick={() => handleSetViewMode('grid')} title="方塊顯示">▦</button>
-                <button className={`view-btn ${viewMode === 'list' ? 'active' : ''}`} onClick={() => handleSetViewMode('list')} title="列表顯示">☰</button>
+                <button className={`view-btn ${viewMode === 'compact' ? 'active' : ''}`} onClick={() => handleSetViewMode('compact')} title={t.viewMode.compact}>▪</button>
+                <button className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`} onClick={() => handleSetViewMode('grid')} title={t.viewMode.grid}>▦</button>
+                <button className={`view-btn ${viewMode === 'list' ? 'active' : ''}`} onClick={() => handleSetViewMode('list')} title={t.viewMode.list}>☰</button>
               </div>
-              <button className="bulk-delete-btn" onClick={() => setShowBulkDelete(true)} title={isCustomView ? '批量移除顯示' : '批量取消訂閱'}>
+              <button className="bulk-delete-btn" onClick={() => setShowBulkDelete(true)} title={isCustomView ? t.subs.bulkRemoveView : t.subs.bulkUnsubscribe}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
               </button>
             </div>
@@ -291,11 +234,11 @@ export function DexPage({ onToast }: DexPageProps) {
                 await removeSubscriptionFromView(activeViewId, id);
               }
               setShowBulkDelete(false);
-              onToast.info('批量移除顯示', `已從此頁面移除 ${count} 個項目`);
+              onToast.info(t.subs.bulkRemoveView, t.subs.bulkRemovedView(count));
             } else {
               await removeSubscriptions([...ids]);
               setShowBulkDelete(false);
-              onToast.info('批量取消訂閱', `已取消 ${count} 個訂閱`);
+              onToast.info(t.subs.bulkUnsubscribe, t.subs.bulkUnsubscribed(count));
             }
           }}
           onClose={() => setShowBulkDelete(false)}

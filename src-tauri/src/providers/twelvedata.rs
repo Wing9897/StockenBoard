@@ -36,10 +36,10 @@ impl TwelveDataProvider {
             .high_24h(parse("high"))
             .low_24h(parse("low"))
             .volume(parse("volume"))
-            .extra_f64("開盤價", parse("open"))
-            .extra_f64("前收盤價", parse("previous_close"))
-            .extra_f64("52週高", data["fifty_two_week"]["high"].as_str().and_then(|s| s.parse().ok()))
-            .extra_f64("52週低", data["fifty_two_week"]["low"].as_str().and_then(|s| s.parse().ok()))
+            .extra_f64("open_price", parse("open"))
+            .extra_f64("prev_close", parse("previous_close"))
+            .extra_f64("52w_high", data["fifty_two_week"]["high"].as_str().and_then(|s| s.parse().ok()))
+            .extra_f64("52w_low", data["fifty_two_week"]["low"].as_str().and_then(|s| s.parse().ok()))
             .build())
     }
 }

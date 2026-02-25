@@ -19,8 +19,8 @@ impl EODHDProvider {
             .high_24h(data["high"].as_f64())
             .low_24h(data["low"].as_f64())
             .volume(data["volume"].as_f64())
-            .extra_f64("開盤價", data["open"].as_f64())
-            .extra_f64("前收盤價", data["previousClose"].as_f64())
+            .extra_f64("open_price", data["open"].as_f64())
+            .extra_f64("prev_close", data["previousClose"].as_f64())
             .build()
     }
 }

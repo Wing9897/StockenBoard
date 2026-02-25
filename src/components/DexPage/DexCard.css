@@ -1,22 +1,24 @@
 /* DexCard — Grid */
 .dex-card {
-  background: var(--surface0, #313244);
-  border-radius: 12px;
-  padding: 16px;
+  background: var(--base);
+  border-radius: 10px;
+  padding: 10px;
+  border: 1px solid var(--surface0);
   display: flex;
   flex-direction: column;
   gap: 8px;
   position: relative;
   overflow: visible;
-  transition: box-shadow 0.2s;
+  transition: all 0.2s ease;
 }
-.dex-card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.3); }
+.dex-card:hover { border-color: var(--surface1); box-shadow: 0 4px 12px var(--shadow); }
 
 .dex-card-header {
   display: flex;
   align-items: center;
   gap: 10px;
 }
+
 /* Pair icons — shared layout */
 .dex-pair-icons {
   display: flex;
@@ -27,7 +29,7 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: var(--surface1, #45475a);
+  background: var(--surface0);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -41,7 +43,7 @@
 .dex-pair-icons .dex-icon .asset-icon-fallback {
   font-size: 9px;
   font-weight: bold;
-  color: var(--text, #cdd6f4);
+  color: var(--text);
 }
 /* Second icon overlaps slightly */
 .dex-pair-icons .dex-icon + .dex-icon {
@@ -49,149 +51,152 @@
 }
 
 /* Grid icons — larger */
-.dex-pair-icons.grid-icons .dex-icon {
-  width: 32px;
-  height: 32px;
-}
-.dex-pair-icons.grid-icons .dex-icon .asset-icon-fallback {
-  font-size: 10px;
-}
+.dex-pair-icons.grid-icons .dex-icon { width: 32px; height: 32px; }
+.dex-pair-icons.grid-icons .dex-icon .asset-icon-fallback { font-size: 10px; }
 
 /* List icons */
-.dex-pair-icons.list-icons .dex-icon {
-  width: 28px;
-  height: 28px;
-}
+.dex-pair-icons.list-icons .dex-icon { width: 28px; height: 28px; }
 
 /* Compact icons — smaller */
-.dex-pair-icons.compact-icons .dex-icon {
-  width: 20px;
-  height: 20px;
-}
-.dex-pair-icons.compact-icons .dex-icon .asset-icon-fallback {
-  font-size: 7px;
-}
-.dex-pair-icons.compact-icons .dex-icon + .dex-icon {
-  margin-left: -6px;
-}
+.dex-pair-icons.compact-icons .dex-icon { width: 20px; height: 20px; }
+.dex-pair-icons.compact-icons .dex-icon .asset-icon-fallback { font-size: 7px; }
+.dex-pair-icons.compact-icons .dex-icon + .dex-icon { margin-left: -6px; }
 
 .dex-info { flex: 1; min-width: 0; }
 .dex-pair {
-  font-size: 0.85rem;
-  color: var(--text, #cdd6f4);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   margin: 0;
 }
 .dex-name {
-  font-size: 0.75rem;
-  color: var(--subtext0, #a6adc8);
+  font-size: 11px;
+  color: var(--overlay0);
   margin: 2px 0 0;
 }
 
 .dex-card-body { text-align: center; padding: 4px 0; }
 .dex-price {
-  font-size: 1.4rem;
+  font-size: 18px;
   font-weight: 700;
-  color: var(--text, #cdd6f4);
+  color: var(--text);
   margin: 0;
 }
 .dex-swap-rate {
-  font-size: 0.75rem;
-  color: var(--subtext0, #a6adc8);
+  font-size: 11px;
+  color: var(--overlay0);
   margin: 2px 0 0;
 }
 
 .dex-error-detail {
-  background: rgba(243, 139, 168, 0.1);
+  background: var(--negative-bg);
   border-radius: 6px;
   padding: 6px 8px;
   cursor: pointer;
-  font-size: 0.75rem;
-  color: var(--red, #f38ba8);
+  font-size: 11px;
+  color: var(--red);
 }
 .dex-error-summary { display: block; }
 .dex-error-full {
   margin: 6px 0 0;
-  font-size: 0.7rem;
+  padding-top: 6px;
+  border-top: 1px solid var(--negative-bg);
+  font-size: 10px;
   white-space: pre-wrap;
-  word-break: break-all;
-  color: var(--subtext0, #a6adc8);
+  word-break: break-word;
+  max-height: 120px;
+  overflow-y: auto;
+  color: var(--subtext0);
 }
 
 .dex-card-stats {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px 12px;
-  font-size: 0.75rem;
+  display: flex;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--surface0);
+  font-size: 11px;
+  flex-wrap: wrap;
 }
-.dex-stat { display: flex; justify-content: space-between; }
-.dex-stat-label { color: var(--subtext0, #a6adc8); }
-.dex-stat-value { color: var(--text, #cdd6f4); font-weight: 500; }
+.dex-stat { display: flex; flex-direction: column; gap: 1px; min-width: 50px; }
+.dex-stat-label { color: var(--overlay0); font-size: 10px; }
+.dex-stat-value { color: var(--text); font-weight: 500; font-size: 11px; }
 
 .dex-card-footer {
   display: flex;
   justify-content: space-between;
-  font-size: 0.7rem;
-  color: var(--overlay1, #7f849c);
-  padding-top: 4px;
-  border-top: 1px solid var(--surface1, #45475a);
+  align-items: center;
+  font-size: 10px;
+  color: var(--overlay0);
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--surface0);
 }
+.dex-footer-provider { color: var(--overlay0); }
+.dex-footer-pool { color: var(--overlay0); }
 
 /* DexCard — List */
 .dex-card-list {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 16px;
-  background: var(--surface0, #313244);
+  padding: 12px 16px;
+  background: var(--base);
   border-radius: 8px;
+  border: 1px solid var(--surface0);
+  transition: all 0.2s;
   position: relative;
 }
-/* list-icons sizing handled above in shared section */
+.dex-card-list:hover { border-color: var(--surface1); }
+
 .dex-list-symbol { flex: 1; min-width: 0; }
 .dex-list-symbol .symbol {
   display: block;
-  font-size: 0.85rem;
-  color: var(--text, #cdd6f4);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .dex-pool-addr {
-  font-size: 0.7rem;
-  color: var(--overlay1, #7f849c);
+  font-size: 11px;
+  color: var(--overlay0);
 }
 .dex-list-price {
-  font-size: 1rem;
+  font-size: 16px;
   font-weight: 600;
-  color: var(--text, #cdd6f4);
+  color: var(--text);
   min-width: 100px;
   text-align: right;
 }
 .dex-list-swap {
-  font-size: 0.75rem;
-  color: var(--subtext0, #a6adc8);
+  font-size: 11px;
+  color: var(--overlay0);
   min-width: 120px;
 }
 .dex-list-provider {
-  font-size: 0.7rem;
-  color: var(--overlay1, #7f849c);
+  font-size: 11px;
+  color: var(--overlay0);
   min-width: 100px;
 }
 
 /* DexCard — Compact */
 .dex-card-compact {
-  background: var(--surface0, #313244);
+  background: var(--base);
   border-radius: 8px;
   padding: 8px 10px;
+  border: 1px solid var(--surface0);
+  transition: all 0.2s ease;
   display: flex;
   flex-direction: column;
   gap: 4px;
   position: relative;
   min-width: 140px;
 }
+.dex-card-compact:hover { border-color: var(--surface1); }
 .dex-card-compact .compact-top {
   display: flex;
   align-items: center;
@@ -199,8 +204,9 @@
 }
 .dex-card-compact .compact-symbol {
   flex: 1;
-  font-size: 0.75rem;
-  color: var(--text, #cdd6f4);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -211,9 +217,9 @@
   justify-content: space-between;
 }
 .dex-card-compact .compact-price {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--text, #cdd6f4);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
 }
 
 /* Edit button hover visibility — all three view modes */
@@ -230,27 +236,28 @@
 }
 .dex-pair-icons .dex-icon.clickable:hover {
   opacity: 0.7;
-  box-shadow: 0 0 0 2px var(--blue, #89b4fa);
+  box-shadow: 0 0 0 2px var(--blue);
 }
 
 /* Edit panel */
 .dex-edit-panel {
   position: absolute;
   top: 0; left: 0; right: 0;
-  background: var(--mantle, #1e1e2e);
-  border: 1px solid var(--surface1, #45475a);
-  border-radius: 12px;
-  padding: 16px;
+  background: var(--base);
+  border: 1px solid var(--surface1);
+  border-radius: 10px;
+  padding: 12px;
   z-index: 10;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  box-shadow: 0 8px 24px var(--shadow);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 /* List view — panel pops above */
 .dex-card-list .dex-edit-panel {
   top: auto;
-  bottom: 0;
+  bottom: 100%;
+  margin-bottom: 4px;
   border-radius: 8px;
 }
 /* Compact view — panel pops above */
@@ -260,39 +267,49 @@
   border-radius: 8px;
   min-width: 300px;
 }
-.dex-edit-panel .edit-row { display: flex; flex-direction: column; gap: 4px; }
-.dex-edit-panel label { font-size: 0.75rem; color: var(--subtext0, #a6adc8); }
+.dex-edit-panel .edit-row { display: flex; flex-direction: column; gap: 3px; }
+.dex-edit-panel label { font-size: 11px; color: var(--overlay0); }
 .dex-edit-panel input,
 .dex-edit-panel select {
-  background: var(--surface0, #313244);
-  border: 1px solid var(--surface1, #45475a);
+  background: var(--surface0);
+  border: 1px solid var(--surface1);
   border-radius: 6px;
   padding: 6px 10px;
-  color: var(--text, #cdd6f4);
-  font-size: 0.85rem;
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
 }
-.dex-edit-panel .dex-address-input { font-family: monospace; font-size: 0.8rem; }
-.dex-edit-panel .edit-hint { font-size: 0.7rem; color: var(--overlay1, #7f849c); }
+.dex-edit-panel input:focus,
+.dex-edit-panel select:focus { border-color: var(--blue); }
+.dex-edit-panel .dex-address-input { font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 12px; }
+.dex-edit-panel .edit-hint { font-size: 10px; color: var(--overlay0); margin-top: 2px; }
 .dex-edit-panel .edit-error {
-  font-size: 0.8rem;
-  color: var(--red, #f38ba8);
-  background: rgba(243, 139, 168, 0.1);
+  font-size: 11px;
+  color: var(--red);
+  background: var(--negative-bg);
   padding: 6px 8px;
-  border-radius: 6px;
+  border-radius: 5px;
 }
 .dex-edit-panel .edit-actions {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
 }
-.dex-edit-panel .edit-actions-right { display: flex; gap: 8px; }
+.dex-edit-panel .edit-actions-right { display: flex; gap: 6px; }
 .dex-edit-panel .edit-btn {
-  padding: 6px 14px;
+  padding: 5px 12px;
   border-radius: 6px;
   border: none;
   cursor: pointer;
-  font-size: 0.8rem;
+  font-size: 12px;
+  transition: all 0.15s;
 }
-.dex-edit-panel .edit-btn.save { background: var(--blue, #89b4fa); color: var(--base, #1e1e2e); }
-.dex-edit-panel .edit-btn.cancel { background: var(--surface1, #45475a); color: var(--text, #cdd6f4); }
-.dex-edit-panel .edit-btn.delete { background: var(--red, #f38ba8); color: var(--base, #1e1e2e); }
+.dex-edit-panel .edit-btn.save { background: var(--blue); color: var(--crust); font-weight: 500; }
+.dex-edit-panel .edit-btn.save:hover { opacity: 0.9; }
+.dex-edit-panel .edit-btn.cancel { background: var(--surface0); color: var(--text); }
+.dex-edit-panel .edit-btn.cancel:hover { background: var(--surface1); }
+.dex-edit-panel .edit-btn.delete { background: transparent; color: var(--red); border: 1px solid var(--red); }
+.dex-edit-panel .edit-btn.delete:hover { background: var(--red); color: var(--base); }
+.dex-edit-panel .edit-btn:disabled { opacity: 0.5; cursor: not-allowed; }

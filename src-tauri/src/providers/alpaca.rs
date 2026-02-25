@@ -38,9 +38,9 @@ impl AlpacaProvider {
             .high_24h(bar["h"].as_f64())
             .low_24h(bar["l"].as_f64())
             .volume(bar["v"].as_f64())
-            .extra_f64("開盤價", bar["o"].as_f64())
-            .extra_f64("加權平均價", bar["vw"].as_f64())
-            .extra_i64("交易次數", bar["n"].as_i64())
+            .extra_f64("open_price", bar["o"].as_f64())
+            .extra_f64("weighted_avg_price", bar["vw"].as_f64())
+            .extra_i64("trade_count", bar["n"].as_i64())
             .build()
     }
 }

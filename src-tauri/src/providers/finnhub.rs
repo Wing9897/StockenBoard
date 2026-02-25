@@ -54,8 +54,8 @@ impl DataProvider for FinnhubProvider {
             .change_percent_24h(data["dp"].as_f64())
             .high_24h(data["h"].as_f64())
             .low_24h(data["l"].as_f64())
-            .extra_f64("開盤價", data["o"].as_f64())
-            .extra_f64("前收盤價", data["pc"].as_f64())
+            .extra_f64("open_price", data["o"].as_f64())
+            .extra_f64("prev_close", data["pc"].as_f64())
             .build())
     }
 
@@ -93,8 +93,8 @@ impl DataProvider for FinnhubProvider {
                         .change_percent_24h(data["dp"].as_f64())
                         .high_24h(data["h"].as_f64())
                         .low_24h(data["l"].as_f64())
-                        .extra_f64("開盤價", data["o"].as_f64())
-                        .extra_f64("前收盤價", data["pc"].as_f64())
+                        .extra_f64("open_price", data["o"].as_f64())
+                        .extra_f64("prev_close", data["pc"].as_f64())
                         .build())
                 }
             })

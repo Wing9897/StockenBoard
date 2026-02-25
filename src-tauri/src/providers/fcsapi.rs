@@ -79,6 +79,6 @@ fn parse_fcs_item(symbol: &str, item: &serde_json::Value) -> AssetData {
         .change_percent_24h(pf("cp"))
         .high_24h(pf("h")).low_24h(pf("l"))
         .volume(pf("v"))
-        .extra_str("交易所", item["cty"].as_str())
+        .extra_str("exchange", item["cty"].as_str())
         .build()
 }

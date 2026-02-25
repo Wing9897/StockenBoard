@@ -1,5 +1,6 @@
 import { useState, useEffect, memo } from 'react';
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
+import { t } from '../../lib/i18n';
 
 /**
  * 全域 icon blob 快取 — 同一個 iconName 只讀取一次檔案，
@@ -122,7 +123,7 @@ export const AssetIcon = memo(function AssetIcon({ symbol, className, onClick }:
   }, [iconName]);
 
   return (
-    <div className={`${className} clickable`} onClick={onClick} title="點擊設定圖示">
+    <div className={`${className} clickable`} onClick={onClick} title={t.asset.clickSetIcon}>
       {loaded && blobUrl && !failed ? (
         <img src={blobUrl} alt={symbol} />
       ) : (

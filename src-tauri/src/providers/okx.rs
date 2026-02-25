@@ -29,7 +29,7 @@ fn parse_okx_ticker(symbol: &str, item: &serde_json::Value) -> AssetData {
         .change_24h(change).change_percent_24h(change_pct)
         .high_24h(pf("high24h")).low_24h(pf("low24h"))
         .volume(pf("vol24h"))
-        .extra_f64("成交額", pf("volCcy24h"))
+        .extra_f64("quote_volume", pf("volCcy24h"))
         .build()
 }
 

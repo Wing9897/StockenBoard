@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Subscription } from '../../types';
+import { t } from '../../lib/i18n';
 
 interface BulkDeleteProps {
   subscriptions: Subscription[];
   isCustomView: boolean;
   onConfirm: (ids: Set<number>) => void;
   onClose: () => void;
-  /** 自訂每行顯示的主文字，預設用 symbol */
   getLabel?: (sub: Subscription) => { primary: string; secondary?: string };
 }
 
@@ -30,15 +30,15 @@ export function BulkDelete({ subscriptions, isCustomView, onConfirm, onClose, ge
   const labelFn = getLabel || defaultLabel;
 
   return (
-    <div className="bd-backdrop" onClick={onClose}>
-      <div className="bd-modal" onClick={e => e.stopPropagation()}>
+    <div className="modal-backdrop bd-backdrop" onClick={onClose}>
+      <div className="modal-container bd-modal" onClick={e => e.stopPropagation()}>
         <div className="bd-header">
-          <h4 className="bd-title">{isCustomView ? '批量移除顯示' : '批量取消訂閱'}</h4>
+          <h4 className="bd-title">{isCustomView ? t.subs.bulkRemoveView : t.subs.bulkUnsubscribe}</h4>
           <button className="vsm-close" onClick={onClose}>✕</button>
         </div>
         <div className="bd-actions">
-          <button className="dm-pick-btn" onClick={() => setSelectedIds(new Set(subscriptions.map(s => s.id)))}>全選</button>
-          <button className="dm-pick-btn" onClick={() => setSelectedIds(new Set())}>取消全選</button>
+          <button className="dm-pick-btn" onClick={() => setSelectedIds(new Set(subscriptions.map(s => s.id)))}>{t.subs.selectAll}</button>
+          <button className="dm-pick-btn" onClick={() => setSelectedIds(new Set())}>{t.subs.clearAll}</button>
         </div>
         <ul className="bd-list">
           {subscriptions.map(sub => {
@@ -49,16 +49,16 @@ export function BulkDelete({ subscriptions, isCustomView, onConfirm, onClose, ge
                   <input type="checkbox" checked={selectedIds.has(sub.id)} onChange={() => toggle(sub.id)} />
                   <span className="bd-symbol">{label.primary}</span>
                   {label.secondary && <span className="bd-display-name">{label.secondary}</span>}
-                  <span className={`bd-type ${sub.asset_type}`}>{sub.asset_type === 'stock' ? '股' : '幣'}</span>
+                  <span className={`bd-type ${sub.asset_type}`}>{sub.asset_type === 'stock' ? t.subForm.stockShort : t.subForm.cryptoShort}</span>
                 </label>
               </li>
             );
           })}
         </ul>
         <div className="bd-footer">
-          <span className="bd-count">{selectedIds.size} / {subscriptions.length} 已選</span>
+          <span className="bd-count">{selectedIds.size} / {subscriptions.length} {t.common.selected}</span>
           <button className="bd-confirm" onClick={() => onConfirm(selectedIds)} disabled={selectedIds.size === 0}>
-            {isCustomView ? '移除顯示' : '取消訂閱'} ({selectedIds.size})
+            {isCustomView ? t.subs.removeDisplay : t.subs.bulkUnsubscribe} ({selectedIds.size})
           </button>
         </div>
       </div>

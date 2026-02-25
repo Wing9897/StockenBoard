@@ -12,11 +12,27 @@ use commands::{
 use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
 
+/// 刪除舊版 DB（migration checksum 不兼容時自動重建）
+fn ensure_clean_db(app_dir: &std::path::Path) {
+    let db_path = app_dir.join("stockenboard.db");
+    // 標記檔：記錄目前 schema 版本，版本不同就刪 DB 重建
+    let marker = app_dir.join(".schema_v");
+    const SCHEMA_VER: &str = "2";
+    let current = std::fs::read_to_string(&marker).unwrap_or_default();
+    if current.trim() != SCHEMA_VER {
+        let _ = std::fs::remove_file(&db_path);
+        let _ = std::fs::remove_file(db_path.with_extension("db-shm"));
+        let _ = std::fs::remove_file(db_path.with_extension("db-wal"));
+        let _ = std::fs::create_dir_all(app_dir);
+        let _ = std::fs::write(&marker, SCHEMA_VER);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let migrations = vec![Migration {
-        version: 1,
-        description: "unified_schema",
+        version: 2,
+        description: "unified_schema_v2",
         sql: db::SCHEMA,
         kind: MigrationKind::Up,
     }];
@@ -50,6 +66,7 @@ pub fn run() {
         ])
         .setup(|app| {
             if let Ok(app_dir) = app.path().app_data_dir() {
+                ensure_clean_db(&app_dir);
                 let db_path = app_dir.join("stockenboard.db");
                 let state = app.state::<AppState>();
                 state.set_db_path(db_path.clone());

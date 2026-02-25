@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { ProviderInfo, Subscription } from '../../types';
 import { getDb } from '../../lib/db';
+import { t } from '../../lib/i18n';
 import './Settings.css';
 
 interface BatchResult {
@@ -17,7 +18,6 @@ interface SubscriptionManagerProps {
   onToast?: (type: 'success' | 'error' | 'info', title: string, message?: string) => void;
 }
 
-/** 查詢某 provider 是否已存有 API key */
 async function hasApiKey(providerId: string): Promise<boolean> {
   try {
     const db = await getDb();
@@ -29,7 +29,6 @@ async function hasApiKey(providerId: string): Promise<boolean> {
   } catch { return false; }
 }
 
-/** 儲存 API key 到 provider_settings 並同步 Rust 端 */
 async function saveApiKey(providerId: string, apiKey: string, apiSecret?: string) {
   const db = await getDb();
   await db.execute(
@@ -53,7 +52,6 @@ export function SubscriptionManager({ onBatchAdd, subscriptions, providers: prov
   const [importStatus, setImportStatus] = useState<{ done: number; total: number } | null>(null);
   const [batchResult, setBatchResult] = useState<BatchResult | null>(null);
 
-  // API key 相關
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [apiSecretInput, setApiSecretInput] = useState('');
   const [keySaved, setKeySaved] = useState(false);
@@ -76,7 +74,6 @@ export function SubscriptionManager({ onBatchAdd, subscriptions, providers: prov
   const needsSecret = selectedProviderInfo?.requires_api_secret || false;
   const showKeyInput = needsKey || optionalKey;
 
-  // 切換 provider 時檢查是否已有 key
   useEffect(() => {
     setApiKeyInput('');
     setApiSecretInput('');
@@ -96,9 +93,9 @@ export function SubscriptionManager({ onBatchAdd, subscriptions, providers: prov
     try {
       await saveApiKey(provider, apiKeyInput.trim(), needsSecret ? apiSecretInput.trim() : undefined);
       setKeySaved(true);
-      onToast?.('success', 'API Key 已儲存', `${selectedProviderInfo?.name} 的 API Key 已設定`);
+      onToast?.('success', t.apiKey.keySaved, t.apiKey.keySavedMsg(selectedProviderInfo?.name || ''));
     } catch (err) {
-      onToast?.('error', '儲存失敗', err instanceof Error ? err.message : String(err));
+      onToast?.('error', t.apiKey.saveFailed, err instanceof Error ? err.message : String(err));
     } finally {
       setKeySaving(false);
     }
@@ -107,7 +104,6 @@ export function SubscriptionManager({ onBatchAdd, subscriptions, providers: prov
   const handleImport = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // 如果需要 key 但還沒儲存，先儲存
     if (needsKey && !keySaved && apiKeyInput.trim()) {
       await handleSaveKey();
     }
@@ -122,20 +118,19 @@ export function SubscriptionManager({ onBatchAdd, subscriptions, providers: prov
     const unique = symbols.filter(s => !existing.has(isDex ? s : s.toUpperCase()));
     const duplicates = symbols.filter(s => existing.has(isDex ? s : s.toUpperCase()));
 
-    // Single symbol → toast instead of modal
     if (symbols.length === 1) {
       if (duplicates.length === 1) {
-        onToast?.('info', '已存在', `${duplicates[0]} 已訂閱`);
+        onToast?.('info', t.subForm.alreadyExists, t.subForm.alreadyExistsMsg(duplicates[0]));
         return;
       }
       setImporting(true);
       setImportStatus({ done: 0, total: 1 });
       try {
         await onBatchAdd(unique[0], provider, assetType);
-        onToast?.('success', '已新增', `${isDex ? unique[0] : unique[0].toUpperCase()} 訂閱成功`);
+        onToast?.('success', t.subForm.added, t.subForm.addedMsg(isDex ? unique[0] : unique[0].toUpperCase()));
         setSymbolInput('');
       } catch {
-        onToast?.('error', '新增失敗', `${unique[0]} 無法新增`);
+        onToast?.('error', t.subForm.addFailed, t.subForm.addFailedMsg(unique[0]));
       }
       setImporting(false);
       setImportStatus(null);
@@ -166,41 +161,41 @@ export function SubscriptionManager({ onBatchAdd, subscriptions, providers: prov
 
   return (
     <div className="settings-section">
-      <h3>新增訂閱</h3>
+      <h3>{t.subs.addSub}</h3>
 
       <form className="subscription-form" onSubmit={handleImport}>
         <div className="form-group">
-          <label>資產類型</label>
+          <label>{t.subForm.assetType}</label>
           <div className="asset-type-toggle">
-            <button type="button" className={`type-btn ${assetType === 'crypto' ? 'active' : ''}`} onClick={() => setAssetType('crypto')}>加密貨幣</button>
-            <button type="button" className={`type-btn ${assetType === 'stock' ? 'active' : ''}`} onClick={() => setAssetType('stock')}>股票</button>
+            <button type="button" className={`type-btn ${assetType === 'crypto' ? 'active' : ''}`} onClick={() => setAssetType('crypto')}>{t.subForm.crypto}</button>
+            <button type="button" className={`type-btn ${assetType === 'stock' ? 'active' : ''}`} onClick={() => setAssetType('stock')}>{t.subForm.stock}</button>
           </div>
         </div>
         <div className="form-group">
-          <label>默認數據源</label>
+          <label>{t.subForm.defaultProvider}</label>
           <select value={provider} onChange={(e) => setProvider(e.target.value)}>
             {filteredProviders.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.name} {p.requires_api_key ? '(需API Key)' : p.optional_api_key ? '(可選Key)' : ''}
+                {p.name} {p.requires_api_key ? t.subForm.needsApiKey : p.optional_api_key ? t.subForm.optionalKey : ''}
               </option>
             ))}
           </select>
-          {selectedProviderInfo && <span className="form-hint">{selectedProviderInfo.free_tier_info}</span>}
+          {selectedProviderInfo && <span className="form-hint">{(t.providerDesc as Record<string, string>)?.[provider] || selectedProviderInfo.free_tier_info}</span>}
         </div>
 
         {showKeyInput && (
           <div className="form-group api-key-group">
             <label>
-              API Key
-              {optionalKey && !needsKey && <span className="optional-tag">可選，提高速率</span>}
-              {needsKey && <span className="required-tag">必填</span>}
-              {keySaved && <span className="saved-tag">✓ 已儲存</span>}
+              {t.apiKey.label}
+              {optionalKey && !needsKey && <span className="optional-tag">{t.apiKey.optional}</span>}
+              {needsKey && <span className="required-tag">{t.apiKey.required}</span>}
+              {keySaved && <span className="saved-tag">{t.apiKey.saved}</span>}
             </label>
             {keySaved ? (
               <div className="key-saved-row">
-                <span className="key-saved-text">已設定 API Key</span>
+                <span className="key-saved-text">{t.apiKey.alreadySet}</span>
                 <button type="button" className="btn-change-key" onClick={() => { setKeySaved(false); setApiKeyInput(''); setApiSecretInput(''); }}>
-                  更換
+                  {t.apiKey.change}
                 </button>
               </div>
             ) : (
@@ -209,7 +204,7 @@ export function SubscriptionManager({ onBatchAdd, subscriptions, providers: prov
                   type="password"
                   value={apiKeyInput}
                   onChange={(e) => setApiKeyInput(e.target.value)}
-                  placeholder="輸入 API Key"
+                  placeholder={t.apiKey.placeholder}
                   disabled={importing || keySaving}
                 />
                 {needsSecret && (
@@ -217,14 +212,14 @@ export function SubscriptionManager({ onBatchAdd, subscriptions, providers: prov
                     type="password"
                     value={apiSecretInput}
                     onChange={(e) => setApiSecretInput(e.target.value)}
-                    placeholder="輸入 API Secret"
+                    placeholder={t.apiKey.secretPlaceholder}
                     disabled={importing || keySaving}
                     style={{ marginTop: '4px' }}
                   />
                 )}
                 {apiKeyInput.trim() && (
                   <button type="button" className="btn-save-key" onClick={handleSaveKey} disabled={keySaving}>
-                    {keySaving ? '儲存中...' : '儲存 Key'}
+                    {keySaving ? t.common.saving : t.apiKey.saveKey}
                   </button>
                 )}
               </>
@@ -233,12 +228,12 @@ export function SubscriptionManager({ onBatchAdd, subscriptions, providers: prov
         )}
 
         <div className="form-group">
-          <label>{isDex ? '代號 / 合約地址' : '代號'}</label>
+          <label>{isDex ? t.subForm.symbolDex : t.subForm.symbol}</label>
           {isDex ? (
             <textarea
               value={symbolInput}
               onChange={(e) => setSymbolInput(e.target.value)}
-              placeholder={examples.length > 0 ? `例如: ${examples.join(', ')}` : '輸入代號或合約地址'}
+              placeholder={examples.length > 0 ? t.subForm.example(examples.join(', ')) : t.subForm.inputSymbolOrAddr}
               required
               disabled={importing}
               rows={3}
@@ -248,67 +243,63 @@ export function SubscriptionManager({ onBatchAdd, subscriptions, providers: prov
               type="text"
               value={symbolInput}
               onChange={(e) => setSymbolInput(e.target.value)}
-              placeholder={examples.length > 0 ? `例如: ${examples.join(', ')}` : '輸入代號'}
+              placeholder={examples.length > 0 ? t.subForm.example(examples.join(', ')) : t.subForm.inputSymbol}
               required
               disabled={importing}
             />
           )}
           {isDex && provider === 'jupiter' && (
-            <span className="form-hint">
-              支援常見代號 (SOL, JUP, BONK, WIF) 或 Solana mint address
-            </span>
+            <span className="form-hint">{t.subForm.jupiterHint}</span>
           )}
           {isDex && provider === 'okx_dex' && (
-            <span className="form-hint">
-              支援常見代號 (ETH, BNB, SOL) 或「鏈:合約地址」格式，如 eth:0x..., sol:mint_address, arb:0x...
-            </span>
+            <span className="form-hint">{t.subForm.okxDexHint}</span>
           )}
-          {!isDex && <span className="form-hint">支援多個代號，用逗號或分號分隔</span>}
+          {!isDex && <span className="form-hint">{t.subForm.multiSymbolHint}</span>}
         </div>
         {importStatus && (
           <div className="batch-status">
-            <span>匯入中 {importStatus.done} / {importStatus.total}</span>
+            <span>{t.subForm.importProgress(importStatus.done, importStatus.total)}</span>
           </div>
         )}
         <button type="submit" className="btn-add" disabled={!symbolInput.trim() || importing || (needsKey && !keySaved && !apiKeyInput.trim())}>
-          {importing ? '匯入中...' : '新增'}
+          {importing ? t.subForm.importing : t.subForm.add}
         </button>
       </form>
 
       {batchResult && (
-        <div className="batch-result-backdrop" onClick={() => setBatchResult(null)}>
-          <div className="batch-result-modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-backdrop batch-result-backdrop" onClick={() => setBatchResult(null)}>
+          <div className="modal-container batch-result-modal" onClick={e => e.stopPropagation()}>
             <div className="batch-result-header">
-              <h4 className="batch-result-title">匯入結果</h4>
+              <h4 className="batch-result-title">{t.batchResult.title}</h4>
               <button className="vsm-close" onClick={() => setBatchResult(null)}>✕</button>
             </div>
             <div className="batch-result-body">
               {batchResult.succeeded.length > 0 && (
                 <div className="batch-result-group success">
-                  <span className="batch-result-label">✓ 成功 ({batchResult.succeeded.length})</span>
+                  <span className="batch-result-label">{t.batchResult.success(batchResult.succeeded.length)}</span>
                   <span className="batch-result-symbols">{batchResult.succeeded.join(', ')}</span>
                 </div>
               )}
               {batchResult.duplicates.length > 0 && (
                 <div className="batch-result-group skipped">
-                  <span className="batch-result-label">⊘ 已存在跳過 ({batchResult.duplicates.length})</span>
+                  <span className="batch-result-label">{t.batchResult.skipped(batchResult.duplicates.length)}</span>
                   <span className="batch-result-symbols">{batchResult.duplicates.join(', ')}</span>
                 </div>
               )}
               {batchResult.failed.length > 0 && (
                 <div className="batch-result-group failed">
-                  <span className="batch-result-label">✗ 失敗 ({batchResult.failed.length})</span>
+                  <span className="batch-result-label">{t.batchResult.failed(batchResult.failed.length)}</span>
                   <span className="batch-result-symbols">{batchResult.failed.join(', ')}</span>
                 </div>
               )}
               {batchResult.succeeded.length === 0 && batchResult.failed.length === 0 && (
                 <div className="batch-result-group skipped">
-                  <span className="batch-result-label">所有代號都已存在</span>
+                  <span className="batch-result-label">{t.batchResult.allExist}</span>
                 </div>
               )}
             </div>
             <div className="batch-result-footer">
-              <button className="view-editor-btn confirm" onClick={() => setBatchResult(null)}>確定</button>
+              <button className="view-editor-btn confirm" onClick={() => setBatchResult(null)}>{t.common.confirm}</button>
             </div>
           </div>
         </div>

@@ -29,7 +29,7 @@ fn parse_htx_ticker(symbol: &str, tick: &serde_json::Value) -> AssetData {
         .change_24h(change).change_percent_24h(change_pct)
         .high_24h(pf("high")).low_24h(pf("low"))
         .volume(pf("amount"))
-        .extra_f64("成交額", pf("vol"))
+        .extra_f64("quote_volume", pf("vol"))
         .build()
 }
 

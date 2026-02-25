@@ -40,9 +40,9 @@ impl PolygonProvider {
             .high_24h(r["h"].as_f64())
             .low_24h(r["l"].as_f64())
             .volume(r["v"].as_f64())
-            .extra_f64("開盤價", r["o"].as_f64())
-            .extra_f64("加權平均價", r["vw"].as_f64())
-            .extra_i64("交易次數", r["n"].as_i64())
+            .extra_f64("open_price", r["o"].as_f64())
+            .extra_f64("weighted_avg_price", r["vw"].as_f64())
+            .extra_i64("trade_count", r["n"].as_i64())
             .build()
     }
 }

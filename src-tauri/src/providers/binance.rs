@@ -20,10 +20,10 @@ impl BinanceProvider {
             .high_24h(parse_f64("highPrice"))
             .low_24h(parse_f64("lowPrice"))
             .volume(parse_f64("volume"))
-            .extra_f64("加權平均價", parse_f64("weightedAvgPrice"))
-            .extra_f64("開盤價", parse_f64("openPrice"))
-            .extra_i64("交易次數", data["count"].as_i64())
-            .extra_f64("報價成交量", parse_f64("quoteVolume"))
+            .extra_f64("weighted_avg_price", parse_f64("weightedAvgPrice"))
+            .extra_f64("open_price", parse_f64("openPrice"))
+            .extra_i64("trade_count", data["count"].as_i64())
+            .extra_f64("quote_volume", parse_f64("quoteVolume"))
             .build()
     }
 }

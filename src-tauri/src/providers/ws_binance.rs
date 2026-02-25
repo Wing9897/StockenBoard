@@ -24,7 +24,7 @@ impl BinanceWsProvider {
             .high_24h(parse_f64("h"))
             .low_24h(parse_f64("l"))
             .volume(parse_f64("v"))
-            .extra_f64("開盤價", parse_f64("o"))
+            .extra_f64("open_price", parse_f64("o"))
             .build();
 
         Some(WsTickerUpdate {

@@ -21,11 +21,11 @@ impl MboumProvider {
             .low_24h(q["regularMarketDayLow"].as_f64())
             .volume(q["regularMarketVolume"].as_f64())
             .market_cap(q["marketCap"].as_f64())
-            .extra_f64("開盤價", q["regularMarketOpen"].as_f64())
-            .extra_f64("前收盤價", q["regularMarketPreviousClose"].as_f64())
-            .extra_f64("52週高", q["fiftyTwoWeekHigh"].as_f64())
-            .extra_f64("52週低", q["fiftyTwoWeekLow"].as_f64())
-            .extra_str("名稱", q["shortName"].as_str())
+            .extra_f64("open_price", q["regularMarketOpen"].as_f64())
+            .extra_f64("prev_close", q["regularMarketPreviousClose"].as_f64())
+            .extra_f64("52w_high", q["fiftyTwoWeekHigh"].as_f64())
+            .extra_f64("52w_low", q["fiftyTwoWeekLow"].as_f64())
+            .extra_str("name", q["shortName"].as_str())
             .build()
     }
 }

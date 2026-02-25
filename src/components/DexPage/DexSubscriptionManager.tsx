@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { t } from '../../lib/i18n';
 
 const PROTOCOLS = [
   { id: 'uniswap_v3', name: 'Uniswap V3' },
@@ -51,7 +52,7 @@ export function DexSubscriptionManager({ onAdd, onToast, onClose }: DexSubscript
 
   const handleLookup = async () => {
     const pool = poolAddress.trim();
-    if (!pool) { setError(isJupiter ? '請輸入交易對，例如 SOL,USDC' : '請輸入 Pool 地址'); return; }
+    if (!pool) { setError(isJupiter ? t.errors.pairInputRequired : t.errors.poolInputRequired); return; }
     setLooking(true);
     setError(null);
     setPoolInfo(null);
@@ -60,12 +61,11 @@ export function DexSubscriptionManager({ onAdd, onToast, onClose }: DexSubscript
     try {
       let lookupAddr = pool;
       if (provider === 'subgraph') lookupAddr = `${protocol}:${pool}`;
-      // Jupiter: pool 欄位就是 "SOL,USDC" 格式，直接傳給 lookup_dex_pool
       const info = await invoke<DexPoolInfo>('lookup_dex_pool', { providerId: provider, poolAddress: lookupAddr });
       setPoolInfo(info);
       if (!displayName) setDisplayName(`${info.token0_symbol}/${info.token1_symbol}`);
     } catch (err) {
-      setError(`查詢失敗: ${err instanceof Error ? err.message : String(err)}。可改用手動輸入。`);
+      setError(`${t.dex.lookupFailed(err instanceof Error ? err.message : String(err))}${t.dex.lookupFailedManualHint}`);
     } finally {
       setLooking(false);
     }
@@ -80,7 +80,6 @@ export function DexSubscriptionManager({ onAdd, onToast, onClose }: DexSubscript
       const newSwapped = !swapped;
       setSwapped(newSwapped);
       if (poolInfo && displayName) {
-        // 翻轉後: newSwapped=true → token1/token0, newSwapped=false → token0/token1
         const s0 = newSwapped ? poolInfo.token1_symbol : poolInfo.token0_symbol;
         const s1 = newSwapped ? poolInfo.token0_symbol : poolInfo.token1_symbol;
         setDisplayName(`${s0}/${s1}`);
@@ -89,11 +88,10 @@ export function DexSubscriptionManager({ onAdd, onToast, onClose }: DexSubscript
   };
 
   const handleSubmit = async () => {
-    if (!hasTokens) { setError('請先查詢或手動輸入 Token 地址'); return; }
+    if (!hasTokens) { setError(t.dex.noTokens); return; }
     setSubmitting(true);
     setError(null);
 
-    // Jupiter: pool = "auto", Subgraph: pool = "protocol:0x...", Raydium: pool = address
     let finalPool: string;
     if (isJupiter) {
       finalPool = 'auto';
@@ -102,13 +100,13 @@ export function DexSubscriptionManager({ onAdd, onToast, onClose }: DexSubscript
     } else {
       finalPool = poolAddress.trim();
     }
-    if (!isJupiter && !finalPool) { setError('Pool 地址不能為空'); setSubmitting(false); return; }
+    if (!isJupiter && !finalPool) { setError(t.dex.poolEmpty); setSubmitting(false); return; }
 
     const testSymbol = `${finalPool}:${tokenFrom}:${tokenTo}`;
     try {
       await invoke('fetch_asset_price', { providerId: provider, symbol: testSymbol });
     } catch (err) {
-      setError(`驗證失敗: ${err instanceof Error ? err.message : String(err)}`);
+      setError(t.dex.validateFailed(err instanceof Error ? err.message : String(err)));
       setSubmitting(false);
       return;
     }
@@ -116,10 +114,10 @@ export function DexSubscriptionManager({ onAdd, onToast, onClose }: DexSubscript
     try {
       const label = fromSymbol && toSymbol ? `${fromSymbol}/${toSymbol}` : `${tokenFrom.slice(0, 8)}.../${tokenTo.slice(0, 8)}...`;
       await onAdd(finalPool, tokenFrom, tokenTo, provider, displayName || label);
-      onToast?.('success', '已新增 DEX 訂閱', label);
+      onToast?.('success', t.dex.addedDex, label);
       onClose();
     } catch (err) {
-      setError(`新增失敗: ${err instanceof Error ? err.message : String(err)}`);
+      setError(t.dex.saveFailed(err instanceof Error ? err.message : String(err)));
     } finally {
       setSubmitting(false);
     }
@@ -153,34 +151,34 @@ export function DexSubscriptionManager({ onAdd, onToast, onClose }: DexSubscript
 
   const busy = looking || submitting;
 
-  const poolLabel = isJupiter ? '交易對' : 'Pool 地址';
+  const poolLabel = isJupiter ? t.dex.tradePair : t.dex.poolAddress;
   const poolPlaceholder = isJupiter
-    ? 'SOL,USDC 或 mintAddress,mintAddress'
+    ? t.dex.jupiterPoolPlaceholder
     : provider === 'raydium'
-      ? 'Raydium pool address'
-      : '0x... pool address';
+      ? t.dex.raydiumPoolPlaceholder
+      : t.dex.evmPoolPlaceholder;
 
   return (
-    <div className="sub-modal-backdrop" onClick={onClose}>
-      <div className="sub-modal" onClick={e => e.stopPropagation()}>
+    <div className="modal-backdrop sub-modal-backdrop" onClick={onClose}>
+      <div className="modal-container sub-modal" onClick={e => e.stopPropagation()}>
         <div className="sub-modal-header">
-          <h4 className="sub-modal-title">新增 DEX 訂閱</h4>
+          <h4 className="sub-modal-title">{t.dex.addDexSub}</h4>
           <button className="vsm-close" onClick={onClose}>✕</button>
         </div>
         <div className="sub-modal-body">
           <div className="dex-form">
             <div className="dex-form-row">
-              <label>數據源</label>
+              <label>{t.dex.provider}</label>
               <select value={provider} onChange={e => handleProviderChange(e.target.value)} disabled={busy}>
-                <option value="jupiter">Jupiter (Solana 聚合器)</option>
-                <option value="raydium">Raydium (Solana AMM)</option>
-                <option value="subgraph">Subgraph (EVM DEX)</option>
+                <option value="jupiter">{t.dex.jupiterProviderLabel}</option>
+                <option value="raydium">{t.dex.raydiumProviderLabel}</option>
+                <option value="subgraph">{t.dex.subgraphProviderLabel}</option>
               </select>
             </div>
 
             {provider === 'subgraph' && (
               <div className="dex-form-row">
-                <label>DEX 協議</label>
+                <label>{t.dex.protocol}</label>
                 <select value={protocol} onChange={e => { setProtocol(e.target.value); setPoolInfo(null); setManualMode(false); }} disabled={busy}>
                   {PROTOCOLS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
@@ -201,74 +199,71 @@ export function DexSubscriptionManager({ onAdd, onToast, onClose }: DexSubscript
                 {!manualMode && (
                   <button className="dex-form-submit" onClick={handleLookup} disabled={busy}
                     style={{ whiteSpace: 'nowrap', minWidth: 'auto', padding: '6px 12px', flexShrink: 0 }}>
-                    {looking ? '查詢中...' : '查詢'}
+                    {looking ? t.dex.lookingUp : t.dex.lookup}
                   </button>
                 )}
               </div>
-              {isJupiter && <span className="edit-hint">Jupiter 自動路由，輸入代號或 mint address，逗號分隔</span>}
-              {provider === 'subgraph' && <span className="edit-hint">Subgraph 格式: 0x... pool address</span>}
+              {isJupiter && <span className="edit-hint">{t.dex.jupiterHint}</span>}
+              {provider === 'subgraph' && <span className="edit-hint">{t.dex.subgraphPoolHint}</span>}
             </div>
 
-            {/* Auto-lookup result */}
             {!manualMode && poolInfo && (
               <div className="dex-form-row">
-                <label>交易方向</label>
+                <label>{t.dex.tradeDirection}</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span className="dex-token-badge">{fromSymbol} ({tokenFrom.slice(0, 8)}...)</span>
                   <button type="button" onClick={handleSwap} disabled={busy}
-                    style={{ background: 'none', border: '1px solid var(--surface1, #45475a)', borderRadius: '4px', cursor: 'pointer', padding: '4px 8px', color: 'var(--text, #cdd6f4)' }}
-                    title="翻轉方向">⇄</button>
+                    style={{ background: 'none', border: '1px solid var(--surface1)', borderRadius: '4px', cursor: 'pointer', padding: '4px 8px', color: 'var(--text)' }}
+                    title={t.dex.flipDirection}>⇄</button>
                   <span className="dex-token-badge">{toSymbol} ({tokenTo.slice(0, 8)}...)</span>
                 </div>
               </div>
             )}
 
-            {/* Manual input fields */}
             {manualMode && (
               <>
                 <div className="dex-form-row">
-                  <label>Token From 地址</label>
+                  <label>{t.dex.tokenFromLabel}</label>
                   <input value={manualTokenFrom} onChange={e => { setManualTokenFrom(e.target.value); setError(null); }}
-                    placeholder={provider === 'subgraph' ? '0x... token address' : 'Solana mint address'}
+                    placeholder={provider === 'subgraph' ? t.dex.evmTokenPlaceholder : t.dex.solanaTokenPlaceholder}
                     className="dex-address-input" disabled={busy} />
                 </div>
                 <div className="dex-form-row">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <label>Token To 地址</label>
+                    <label>{t.dex.tokenToLabel}</label>
                     <button type="button" onClick={handleSwap} disabled={busy}
-                      style={{ background: 'none', border: '1px solid var(--surface1, #45475a)', borderRadius: '4px', cursor: 'pointer', padding: '2px 6px', fontSize: '0.8em', color: 'var(--text, #cdd6f4)' }}
-                      title="翻轉方向">⇄ 翻轉</button>
+                      style={{ background: 'none', border: '1px solid var(--surface1)', borderRadius: '4px', cursor: 'pointer', padding: '2px 6px', fontSize: '0.8em', color: 'var(--text)' }}
+                      title={t.dex.flipDirection}>⇄ {t.dex.flipShort}</button>
                   </div>
                   <input value={manualTokenTo} onChange={e => { setManualTokenTo(e.target.value); setError(null); }}
-                    placeholder={provider === 'subgraph' ? '0x... token address' : 'Solana mint address'}
+                    placeholder={provider === 'subgraph' ? t.dex.evmTokenPlaceholder : t.dex.solanaTokenPlaceholder}
                     className="dex-address-input" disabled={busy} />
                 </div>
               </>
             )}
 
-            {/* Mode switch link */}
             {!manualMode && !poolInfo && !looking && (
               <div className="dex-form-row" style={{ textAlign: 'right' }}>
                 <button type="button" onClick={switchToManual}
-                  style={{ background: 'none', border: 'none', color: 'var(--blue, #89b4fa)', cursor: 'pointer', fontSize: '0.85em', padding: 0 }}>
-                  手動輸入 Token 地址
+                  style={{ background: 'none', border: 'none', color: 'var(--blue)', cursor: 'pointer', fontSize: '0.85em', padding: 0 }}>
+                  {t.dex.manualInput}
                 </button>
               </div>
             )}
             {manualMode && (
               <div className="dex-form-row" style={{ textAlign: 'right' }}>
                 <button type="button" onClick={switchToAuto}
-                  style={{ background: 'none', border: 'none', color: 'var(--blue, #89b4fa)', cursor: 'pointer', fontSize: '0.85em', padding: 0 }}>
-                  改用自動查詢
+                  style={{ background: 'none', border: 'none', color: 'var(--blue)', cursor: 'pointer', fontSize: '0.85em', padding: 0 }}>
+                  {t.dex.switchToAuto}
                 </button>
               </div>
             )}
 
             {hasTokens && (
               <div className="dex-form-row">
-                <label>顯示暱稱（可選）</label>
+                <label>{t.dex.nickname}({t.dex.nicknameOptional})</label>
                 <input value={displayName} onChange={e => setDisplayName(e.target.value)}
-                  placeholder="例如: SOL/USDC" disabled={busy} />
+                  placeholder={t.dex.displayNamePlaceholder} disabled={busy} />
               </div>
             )}
 
@@ -276,7 +271,7 @@ export function DexSubscriptionManager({ onAdd, onToast, onClose }: DexSubscript
 
             {hasTokens && (
               <button className="dex-form-submit" onClick={handleSubmit} disabled={busy}>
-                {submitting ? '驗證中...' : '新增訂閱'}
+                {submitting ? t.dex.verifying : t.subs.addSub}
               </button>
             )}
           </div>

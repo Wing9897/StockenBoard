@@ -32,7 +32,7 @@ fn parse_gateio_ticker(symbol: &str, item: &serde_json::Value) -> AssetData {
         .change_percent_24h(pct)
         .high_24h(pf("high_24h")).low_24h(pf("low_24h"))
         .volume(pf("base_volume"))
-        .extra_f64("成交額", pf("quote_volume"))
+        .extra_f64("quote_volume", pf("quote_volume"))
         .build()
 }
 

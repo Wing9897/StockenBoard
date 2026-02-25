@@ -38,8 +38,8 @@ impl TiingoProvider {
             .high_24h(item["high"].as_f64())
             .low_24h(item["low"].as_f64())
             .volume(item["volume"].as_f64())
-            .extra_f64("開盤價", item["open"].as_f64())
-            .extra_f64("前收盤價", item["prevClose"].as_f64())
+            .extra_f64("open_price", item["open"].as_f64())
+            .extra_f64("prev_close", item["prevClose"].as_f64())
             .build())
     }
 }

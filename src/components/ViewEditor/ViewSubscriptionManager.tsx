@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Subscription } from '../../types';
+import { t } from '../../lib/i18n';
 import './ViewEditor.css';
 
 interface ViewSubscriptionManagerProps {
@@ -17,7 +18,6 @@ export function ViewSubscriptionManager({
 }: ViewSubscriptionManagerProps) {
   const [search, setSearch] = useState('');
 
-  // 支援多個代號搜尋（逗號、空格、換行分隔）
   const searchTerms = search
     .split(/[,\s\n]+/)
     .map(s => s.trim().toLowerCase())
@@ -51,30 +51,30 @@ export function ViewSubscriptionManager({
   };
 
   return (
-    <div className="vsm-backdrop" onClick={onClose}>
-      <div className="vsm-modal" role="dialog" aria-modal="true" aria-label="管理訂閱" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-backdrop vsm-backdrop" onClick={onClose}>
+      <div className="modal-container vsm-modal" role="dialog" aria-modal="true" aria-label={t.subs.manageSubs} onClick={(e) => e.stopPropagation()}>
         <div className="vsm-header">
-          <h2 className="vsm-title">管理訂閱</h2>
-          <button className="vsm-close" onClick={onClose} aria-label="關閉">✕</button>
+          <h2 className="vsm-title">{t.subs.manageSubs}</h2>
+          <button className="vsm-close" onClick={onClose} aria-label={t.common.close}>✕</button>
         </div>
         <input
           className="vsm-search"
           type="text"
-          placeholder="搜尋代號（可用逗號分隔多個）..."
+          placeholder={t.subs.searchPlaceholder}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           autoFocus
         />
         <div className="vsm-bulk-actions">
           <button className="vsm-bulk-btn" onClick={handleSelectAllFiltered} disabled={filteredAllChecked || filtered.length === 0}>
-            全選 ({filtered.length})
+            {t.subs.selectAll} ({filtered.length})
           </button>
           <button className="vsm-bulk-btn" onClick={handleClearFiltered} disabled={filteredNoneChecked || filtered.length === 0}>
-            清空
+            {t.subs.clearAll}
           </button>
         </div>
         {filtered.length === 0 ? (
-          <p className="vsm-empty">{allSubscriptions.length === 0 ? '目前沒有任何訂閱' : '找不到符合的訂閱'}</p>
+          <p className="vsm-empty">{allSubscriptions.length === 0 ? t.subs.noSubsYet : t.subs.noMatch}</p>
         ) : (
           <ul className="vsm-list" role="list">
             {filtered.map((sub) => {
@@ -87,7 +87,7 @@ export function ViewSubscriptionManager({
                       className="vsm-checkbox"
                       checked={checked}
                       onChange={() => onToggleSubscription(sub.id, !checked)}
-                      aria-label={`${checked ? '移除' : '加入'} ${sub.symbol}`}
+                      aria-label={`${checked ? t.common.remove : t.common.add} ${sub.symbol}`}
                     />
                     <span className="vsm-symbol">{sub.symbol}</span>
                     {sub.display_name && <span className="vsm-display-name">{sub.display_name}</span>}
@@ -98,7 +98,7 @@ export function ViewSubscriptionManager({
           </ul>
         )}
         <div className="vsm-footer">
-          <span className="vsm-count">已選 {viewSubscriptionIds.length} / {allSubscriptions.length}</span>
+          <span className="vsm-count">{t.subs.selected(viewSubscriptionIds.length, allSubscriptions.length)}</span>
         </div>
       </div>
     </div>

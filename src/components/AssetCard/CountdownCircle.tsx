@@ -1,15 +1,14 @@
 import { memo, useState, useEffect, useCallback } from 'react';
 import { usePollTick } from '../../hooks/useAssetData';
+import { t } from '../../lib/i18n';
 
 interface CountdownCircleProps {
   providerId: string;
-  /** fallback interval (ms) — 在收到第一個 poll-tick 前使用 */
   fallbackInterval: number;
   size?: number;
   isWebSocket?: boolean;
 }
 
-// 全域 1 秒 timer，所有 CountdownCircle 共享
 type Listener = () => void;
 const _listeners = new Set<Listener>();
 let _globalTimer: ReturnType<typeof setInterval> | null = null;
@@ -48,30 +47,28 @@ export const CountdownCircle = memo(function CountdownCircle({ providerId, fallb
   const c = 2 * Math.PI * r;
   const center = size / 2;
 
-  // WebSocket = always live
   if (isWebSocket) {
     return (
-      <div className="countdown-circle" title="WebSocket 即時">
+      <div className="countdown-circle" title={t.countdown.ws}>
         <svg width={size} height={size}>
-          <circle cx={center} cy={center} r={r} fill="none" stroke="#313244" strokeWidth="2" />
-          <circle cx={center} cy={center} r={r} fill="none" stroke="#a6e3a1" strokeWidth="2"
+          <circle cx={center} cy={center} r={r} fill="none" stroke="var(--surface0)" strokeWidth="2" />
+          <circle cx={center} cy={center} r={r} fill="none" stroke="var(--green)" strokeWidth="2"
             strokeDasharray={c} strokeDashoffset={0}
             strokeLinecap="round" transform={`rotate(-90 ${center} ${center})`} />
           <text x={center} y={center + 1} textAnchor="middle" dominantBaseline="middle"
-            fill="#a6e3a1" fontSize="7" fontWeight="600">WS</text>
+            fill="var(--green)" fontSize="7" fontWeight="600">WS</text>
         </svg>
       </div>
     );
   }
 
-  // 尚未收到後端 tick — 顯示等待狀態
   if (!tick) {
     return (
-      <div className="countdown-circle" title="等待後端...">
+      <div className="countdown-circle" title={t.countdown.waiting}>
         <svg width={size} height={size}>
-          <circle cx={center} cy={center} r={r} fill="none" stroke="#313244" strokeWidth="2" />
+          <circle cx={center} cy={center} r={r} fill="none" stroke="var(--surface0)" strokeWidth="2" />
           <text x={center} y={center + 1} textAnchor="middle" dominantBaseline="middle"
-            fill="#6c7086" fontSize="7" fontWeight="500">...</text>
+            fill="var(--overlay0)" fontSize="7" fontWeight="500">...</text>
         </svg>
       </div>
     );
@@ -81,18 +78,18 @@ export const CountdownCircle = memo(function CountdownCircle({ providerId, fallb
   const progress = Math.min(elapsed / interval, 1);
   const offset = c * (1 - progress);
   const remaining = Math.max(0, Math.ceil((interval - elapsed) / 1000));
-  const color = progress > 0.85 ? '#f9e2af' : '#89b4fa';
+  const color = progress > 0.85 ? 'var(--yellow)' : 'var(--blue)';
 
   return (
-    <div className="countdown-circle" title={`${remaining}秒後更新`}>
+    <div className="countdown-circle" title={t.countdown.updateIn(remaining)}>
       <svg width={size} height={size}>
-        <circle cx={center} cy={center} r={r} fill="none" stroke="#313244" strokeWidth="2" />
+        <circle cx={center} cy={center} r={r} fill="none" stroke="var(--surface0)" strokeWidth="2" />
         <circle cx={center} cy={center} r={r} fill="none" stroke={color} strokeWidth="2"
           strokeDasharray={c} strokeDashoffset={offset}
           strokeLinecap="round" transform={`rotate(-90 ${center} ${center})`}
           style={{ transition: 'stroke-dashoffset 1s linear' }} />
         <text x={center} y={center + 1} textAnchor="middle" dominantBaseline="middle"
-          fill="#6c7086" fontSize="8" fontWeight="500">{remaining}</text>
+          fill="var(--overlay0)" fontSize="8" fontWeight="500">{remaining}</text>
       </svg>
     </div>
   );

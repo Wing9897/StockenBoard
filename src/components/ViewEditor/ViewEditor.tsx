@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { t } from '../../lib/i18n';
 import './ViewEditor.css';
 
 interface ViewEditorProps {
@@ -29,15 +30,11 @@ export function ViewEditor({
 
   const validate = (value: string): string => {
     const trimmed = value.trim();
-    if (!trimmed) {
-      return '名稱不可為空白';
-    }
+    if (!trimmed) return t.views.viewNameEmpty;
     const isDuplicate = existingNames.some(
       (n) => n.trim().toLowerCase() === trimmed.toLowerCase()
     );
-    if (isDuplicate) {
-      return '此名稱已存在';
-    }
+    if (isDuplicate) return t.views.viewNameDuplicate;
     return '';
   };
 
@@ -51,11 +48,8 @@ export function ViewEditor({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleConfirm();
-    } else if (e.key === 'Escape') {
-      onCancel();
-    }
+    if (e.key === 'Enter') handleConfirm();
+    else if (e.key === 'Escape') onCancel();
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -63,12 +57,12 @@ export function ViewEditor({
     if (error) setError('');
   };
 
-  const title = mode === 'create' ? '建立新頁面' : '重新命名頁面';
+  const title = mode === 'create' ? t.views.createView : t.views.renameView;
 
   return (
-    <div className="view-editor-backdrop" onClick={onCancel}>
+    <div className="modal-backdrop view-editor-backdrop" onClick={onCancel}>
       <div
-        className="view-editor-modal"
+        className="modal-container view-editor-modal"
         role="dialog"
         aria-modal="true"
         aria-label={title}
@@ -82,7 +76,7 @@ export function ViewEditor({
           value={name}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          placeholder="輸入頁面名稱"
+          placeholder={t.views.viewNamePlaceholder}
           aria-invalid={!!error}
           aria-describedby={error ? 'view-editor-error' : undefined}
         />
@@ -93,10 +87,10 @@ export function ViewEditor({
         )}
         <div className="view-editor-actions">
           <button className="view-editor-btn cancel" onClick={onCancel}>
-            取消
+            {t.common.cancel}
           </button>
           <button className="view-editor-btn confirm" onClick={handleConfirm}>
-            確認
+            {t.common.confirm}
           </button>
         </div>
       </div>

@@ -28,8 +28,8 @@ fn parse_kucoin_ticker(symbol: &str, data: &serde_json::Value) -> AssetData {
         .high_24h(pf("high"))
         .low_24h(pf("low"))
         .volume(pf("vol"))
-        .extra_f64("成交額", pf("volValue"))
-        .extra_f64("均價", pf("averagePrice"))
+        .extra_f64("quote_volume", pf("volValue"))
+        .extra_f64("avg_price", pf("averagePrice"))
         .build()
 }
 

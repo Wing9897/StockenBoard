@@ -22,10 +22,10 @@ impl CoinMarketCapProvider {
             .change_percent_24h(quote["percent_change_24h"].as_f64())
             .volume(quote["volume_24h"].as_f64())
             .market_cap(quote["market_cap"].as_f64())
-            .extra_str("名稱", coin["name"].as_str())
-            .extra_i64("CMC排名", coin["cmc_rank"].as_i64())
-            .extra_f64("流通量", coin["circulating_supply"].as_f64())
-            .extra_f64("7日變動%", quote["percent_change_7d"].as_f64())
+            .extra_str("name", coin["name"].as_str())
+            .extra_i64("cmc_rank", coin["cmc_rank"].as_i64())
+            .extra_f64("circulating_supply", coin["circulating_supply"].as_f64())
+            .extra_f64("change_7d_pct", quote["percent_change_7d"].as_f64())
             .build())
     }
 }

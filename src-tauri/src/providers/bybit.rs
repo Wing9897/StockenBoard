@@ -30,7 +30,7 @@ fn parse_bybit_ticker(symbol: &str, item: &serde_json::Value) -> AssetData {
         .high_24h(pf("highPrice24h"))
         .low_24h(pf("lowPrice24h"))
         .volume(pf("volume24h"))
-        .extra_f64("成交額", pf("turnover24h"))
+        .extra_f64("quote_volume", pf("turnover24h"))
         .build()
 }
 

@@ -187,7 +187,7 @@ export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
     try {
       const db = await getDb();
       const settings = await db.select<{ provider_id: string }[]>(
-        "SELECT provider_id FROM provider_settings WHERE connection_type = 'websocket' AND enabled = 1"
+        "SELECT provider_id FROM provider_settings WHERE connection_type = 'websocket'"
       );
       const wsProviders = new Set(settings.map(s => s.provider_id));
       const groups: Record<string, string[]> = {};
@@ -292,13 +292,7 @@ export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
     await loadSubscriptions();
   }, [loadSubscriptions]);
 
-  const reorderSubscriptions = useCallback(async (orderedIds: number[]) => {
-    const db = await getDb();
-    for (let i = 0; i < orderedIds.length; i++) {
-      await db.execute('UPDATE subscriptions SET sort_order = $1 WHERE id = $2', [i + 1, orderedIds[i]]);
-    }
-    await loadSubscriptions();
-  }, [loadSubscriptions]);
+
 
   // ── Getters ─────────────────────────────────────────────────
 
@@ -361,7 +355,6 @@ export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
     removeSubscriptions,
     updateSubscription,
     updateDexSubscription,
-    reorderSubscriptions,
     getSelectedProvider,
     getAssetType,
     getRefreshInterval,

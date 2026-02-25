@@ -36,7 +36,6 @@ struct ProviderConfig {
     api_secret: Option<String>,
     api_url: Option<String>,
     refresh_interval: Option<i64>,
-    enabled: bool,
 }
 
 #[derive(Debug)]
@@ -251,7 +250,7 @@ fn load_config(
 
     let settings: HashMap<String, ProviderConfig> = {
         let mut stmt = conn
-            .prepare("SELECT provider_id, api_key, api_secret, refresh_interval, enabled, api_url FROM provider_settings")
+            .prepare("SELECT provider_id, api_key, api_secret, refresh_interval, api_url FROM provider_settings")
             .map_err(|e| format!("查詢 provider_settings 失敗: {}", e))?;
         let rows = stmt.query_map([], |row| {
             Ok((
@@ -260,8 +259,7 @@ fn load_config(
                     api_key: row.get(1)?,
                     api_secret: row.get(2)?,
                     refresh_interval: row.get(3)?,
-                    enabled: row.get::<_, i64>(4).unwrap_or(1) != 0,
-                    api_url: row.get(5).ok().flatten(),
+                    api_url: row.get(4).ok().flatten(),
                 },
             ))
         })
@@ -278,10 +276,6 @@ fn load_config(
     for sub in &subs {
         let pid = &sub.provider_id;
         let config = settings.get(pid);
-
-        if config.map(|c| !c.enabled).unwrap_or(false) {
-            continue;
-        }
 
         let has_key = config
             .and_then(|c| c.api_key.as_ref())

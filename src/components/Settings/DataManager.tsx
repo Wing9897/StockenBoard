@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Subscription, View } from '../../types';
 import { getDb } from '../../lib/db';
+import { t } from '../../lib/i18n';
 import './Settings.css';
 
 interface DataManagerProps {
@@ -36,7 +37,6 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
   const customViews = allViews.filter(v => !v.is_default);
 
   const openExportPicker = async () => {
-    // 讀取所有 views（asset + dex）
     try {
       const db = await getDb();
       const rows = await db.select<{ id: number; name: string; view_type: string; is_default: number }[]>(
@@ -67,7 +67,6 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
   const handleExport = async () => {
     const db = await getDb();
 
-    // 讀取所有訂閱（asset + dex）
     const allSubs = await db.select<Subscription[]>(
       'SELECT id, sub_type, symbol, display_name, selected_provider_id, asset_type, pool_address, token_from_address, token_to_address, sort_order FROM subscriptions ORDER BY sort_order, id'
     );
@@ -110,7 +109,7 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
         content: JSON.stringify(data, null, 2),
       });
       setShowExportPicker(false);
-      onToast?.('success', '匯出成功', '資料已儲存');
+      onToast?.('success', t.settings.exportSuccess, t.settings.exportSavedMsg);
     } catch { /* cancelled */ }
   };
 
@@ -118,13 +117,12 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
     let raw: string;
     try {
       raw = await invoke<string>('import_file');
-    } catch { return; /* cancelled */ }
+    } catch { return; }
 
     let data: ExportData;
     try {
       const parsed = JSON.parse(raw);
       if (!parsed.subscriptions || !Array.isArray(parsed.subscriptions)) throw new Error('invalid');
-      // 相容 v1 格式
       data = {
         ...parsed,
         version: 2,
@@ -145,7 +143,7 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
         })),
       };
     } catch {
-      onToast?.('error', '匯入失敗', '檔案格式不正確');
+      onToast?.('error', t.settings.importFailed, t.settings.invalidFormat);
       return;
     }
 
@@ -201,7 +199,6 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
           const newViewId = result.lastInsertId;
           if (v.subscriptions && newViewId) {
             const allSubs = await db.select<{ id: number; symbol: string }[]>('SELECT id, symbol FROM subscriptions');
-            // 同時建原始 + 大寫兩組 map，DEX 地址用原始匹配，一般 symbol 用大寫匹配
             const symMapExact = new Map(allSubs.map(s => [s.symbol, s.id]));
             const symMapUpper = new Map(allSubs.map(s => [s.symbol.toUpperCase(), s.id]));
             for (const sym of v.subscriptions) {
@@ -227,38 +224,38 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
 
   return (
     <div className="settings-section">
-      <h3>資料管理</h3>
+      <h3>{t.settings.dataManager}</h3>
       <div className="data-manager-actions">
         <button className="dm-btn export" onClick={openExportPicker}>
-          匯出資料
+          {t.settings.export}
         </button>
         <button className="dm-btn import" onClick={handleImport} disabled={importing}>
-          {importing ? '匯入中...' : '匯入資料'}
+          {importing ? t.settings.importing : t.settings.import}
         </button>
       </div>
       {importResult && (
         <div className="dm-result">
-          <span>匯入完成：新增 {importResult.subs} 訂閱、{importResult.views} 頁面</span>
-          {importResult.skipped > 0 && <span>（跳過 {importResult.skipped} 已存在）</span>}
+          <span>{t.settings.importDone(importResult.subs, importResult.views)}</span>
+          {importResult.skipped > 0 && <span>{t.settings.importSkipped(importResult.skipped)}</span>}
           <button className="dm-result-close" onClick={() => setImportResult(null)}>✕</button>
         </div>
       )}
 
       {showExportPicker && (
-        <div className="dm-picker-backdrop" onClick={() => setShowExportPicker(false)}>
-          <div className="dm-picker-modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-backdrop dm-picker-backdrop" onClick={() => setShowExportPicker(false)}>
+          <div className="modal-container dm-picker-modal" onClick={e => e.stopPropagation()}>
             <div className="dm-picker-header">
-              <h4 className="dm-picker-title">選擇匯出頁面</h4>
+              <h4 className="dm-picker-title">{t.settings.exportPicker}</h4>
               <button className="vsm-close" onClick={() => setShowExportPicker(false)}>✕</button>
             </div>
             <div className="dm-picker-info">
-              所有訂閱將自動包含（現貨 + DEX）
+              {t.settings.exportPickerInfo}
             </div>
             {customViews.length > 0 ? (
               <>
                 <div className="dm-picker-actions">
-                  <button className="dm-pick-btn" onClick={selectAll}>全選</button>
-                  <button className="dm-pick-btn" onClick={selectNone}>取消全選</button>
+                  <button className="dm-pick-btn" onClick={selectAll}>{t.subs.selectAll}</button>
+                  <button className="dm-pick-btn" onClick={selectNone}>{t.subs.clearAll}</button>
                 </div>
                 <ul className="dm-picker-list">
                   {customViews.map(view => (
@@ -271,7 +268,7 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
                         />
                         <span>{view.name}</span>
                         <span className={`asset-type-tag ${view.view_type}`} style={{ marginLeft: 6, fontSize: '0.75em' }}>
-                          {view.view_type === 'dex' ? 'DEX' : '現貨'}
+                          {view.view_type === 'dex' ? 'DEX' : t.settings.spot}
                         </span>
                       </label>
                     </li>
@@ -279,14 +276,14 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
                 </ul>
               </>
             ) : (
-              <div className="dm-picker-empty">沒有自訂頁面</div>
+              <div className="dm-picker-empty">{t.settings.noCustomViews}</div>
             )}
             <div className="dm-picker-footer">
               <span className="dm-picker-count">
-                {selectedViewIds.size} / {customViews.length} 頁面
+                {t.settings.viewCount(selectedViewIds.size, customViews.length)}
               </span>
               <button className="btn-save" onClick={handleExport}>
-                匯出
+                {t.settings.export}
               </button>
             </div>
           </div>

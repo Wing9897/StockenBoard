@@ -173,9 +173,9 @@ fn parse_yahoo_chart(symbol: &str, data: &serde_json::Value) -> Result<AssetData
         .high_24h(meta["regularMarketDayHigh"].as_f64())
         .low_24h(meta["regularMarketDayLow"].as_f64())
         .volume(meta["regularMarketVolume"].as_f64())
-        .extra_f64("前收盤價", meta["previousClose"].as_f64())
-        .extra_f64("52週高", meta["fiftyTwoWeekHigh"].as_f64())
-        .extra_f64("52週低", meta["fiftyTwoWeekLow"].as_f64())
-        .extra_str("交易所", meta["exchangeName"].as_str())
+        .extra_f64("prev_close", meta["previousClose"].as_f64())
+        .extra_f64("52w_high", meta["fiftyTwoWeekHigh"].as_f64())
+        .extra_f64("52w_low", meta["fiftyTwoWeekLow"].as_f64())
+        .extra_str("exchange", meta["exchangeName"].as_str())
         .build())
 }

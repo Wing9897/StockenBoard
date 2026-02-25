@@ -47,8 +47,8 @@ impl DataProvider for AlphaVantageProvider {
             .high_24h(parse("03. high"))
             .low_24h(parse("04. low"))
             .volume(parse("06. volume"))
-            .extra_f64("開盤價", parse("02. open"))
-            .extra_f64("前收盤價", parse("08. previous close"))
+            .extra_f64("open_price", parse("02. open"))
+            .extra_f64("prev_close", parse("08. previous close"))
             .build())
     }
 
@@ -87,8 +87,8 @@ impl DataProvider for AlphaVantageProvider {
                         .high_24h(parse("03. high"))
                         .low_24h(parse("04. low"))
                         .volume(parse("06. volume"))
-                        .extra_f64("開盤價", parse("02. open"))
-                        .extra_f64("前收盤價", parse("08. previous close"))
+                        .extra_f64("open_price", parse("02. open"))
+                        .extra_f64("prev_close", parse("08. previous close"))
                         .build())
                 }
             })

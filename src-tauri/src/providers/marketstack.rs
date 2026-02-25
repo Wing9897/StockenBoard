@@ -24,8 +24,8 @@ impl MarketstackProvider {
             .high_24h(eod["high"].as_f64())
             .low_24h(eod["low"].as_f64())
             .volume(eod["volume"].as_f64())
-            .extra_f64("開盤價", eod["open"].as_f64())
-            .extra_str("交易所", eod["exchange"].as_str())
+            .extra_f64("open_price", eod["open"].as_f64())
+            .extra_str("exchange", eod["exchange"].as_str())
             .build()
     }
 }

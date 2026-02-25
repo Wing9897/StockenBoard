@@ -39,9 +39,9 @@ impl DataProvider for PolymarketProvider {
             .price(price)
             .currency("PROB")
             .volume(volume)
-            .extra_str("問題", data["question"].as_str())
-            .extra_str("結束日期", data["end_date_iso"].as_str())
-            .extra_str("選項", outcomes.as_deref())
+            .extra_str("question", data["question"].as_str())
+            .extra_str("end_date", data["end_date_iso"].as_str())
+            .extra_str("outcomes", outcomes.as_deref())
             .build())
     }
 
@@ -71,9 +71,9 @@ impl DataProvider for PolymarketProvider {
                         .map(|arr| arr.iter().filter_map(|o| o.as_str()).collect::<Vec<_>>().join(", "));
                     Ok::<AssetData, String>(AssetDataBuilder::new(&sym, "polymarket")
                         .price(price).currency("PROB").volume(volume)
-                        .extra_str("問題", data["question"].as_str())
-                        .extra_str("結束日期", data["end_date_iso"].as_str())
-                        .extra_str("選項", outcomes.as_deref())
+                        .extra_str("question", data["question"].as_str())
+                        .extra_str("end_date", data["end_date_iso"].as_str())
+                        .extra_str("outcomes", outcomes.as_deref())
                         .build())
                 }
             })

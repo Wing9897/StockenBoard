@@ -1,4 +1,5 @@
 import { View } from '../../types';
+import { t } from '../../lib/i18n';
 
 interface ViewManagerProps {
   views: View[];
@@ -21,10 +22,10 @@ export function ViewManager({
     .sort((a, b) => a.id - b.id);
 
   return (
-    <div className="vm-backdrop" onClick={onClose}>
-      <div className="vm-modal" onClick={e => e.stopPropagation()}>
+    <div className="modal-backdrop vm-backdrop" onClick={onClose}>
+      <div className="modal-container vm-modal" onClick={e => e.stopPropagation()}>
         <div className="vm-header">
-          <h4 className="vm-title">管理頁面</h4>
+          <h4 className="vm-title">{t.views.manageViews}</h4>
           <button className="vsm-close" onClick={onClose}>✕</button>
         </div>
         <ul className="vm-list">
@@ -37,18 +38,18 @@ export function ViewManager({
                 <button
                   className={`vm-pin-btn ${pinnedViewIds.includes(view.id) ? 'pinned' : ''}`}
                   onClick={() => onTogglePin(view.id)}
-                  title={pinnedViewIds.includes(view.id) ? '取消置頂' : '置頂'}
+                  title={pinnedViewIds.includes(view.id) ? t.views.unpin : t.views.pin}
                 >
                   {pinnedViewIds.includes(view.id) ? '★' : '☆'}
                 </button>
-                <button className="vm-action-btn" onClick={() => { onRename(view.id); onClose(); }} title="重新命名">✎</button>
-                <button className="vm-action-btn danger" onClick={() => onDelete(view.id)} title="刪除">✕</button>
+                <button className="vm-action-btn" onClick={() => { onRename(view.id); onClose(); }} title={t.views.rename}>✎</button>
+                <button className="vm-action-btn danger" onClick={() => onDelete(view.id)} title={t.common.delete}>✕</button>
               </div>
             </li>
           ))}
         </ul>
         <div className="vm-footer">
-          <button className="vm-add-btn" onClick={() => { onCreate(); onClose(); }}>+ 新增頁面</button>
+          <button className="vm-add-btn" onClick={() => { onCreate(); onClose(); }}>+ {t.views.addView}</button>
         </div>
       </div>
     </div>

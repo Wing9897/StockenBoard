@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { t } from '../../lib/i18n';
 import './Toast.css';
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
@@ -36,7 +37,7 @@ function ToastItem({ toast, onRemove }: { toast: ToastMessage; onRemove: (id: nu
         <span className="toast-title">{toast.title}</span>
         {toast.message && <span className="toast-message">{toast.message}</span>}
       </div>
-      <button className="toast-close" onClick={() => onRemove(toast.id)} aria-label="關閉">✕</button>
+      <button className="toast-close" onClick={() => onRemove(toast.id)} aria-label={t.common.close}>✕</button>
     </div>
   );
 }

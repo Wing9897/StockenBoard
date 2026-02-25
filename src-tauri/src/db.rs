@@ -40,8 +40,8 @@ CREATE TABLE IF NOT EXISTS view_subscriptions (
     FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE
 );
 
-INSERT OR IGNORE INTO views (id, name, view_type, is_default) VALUES (1, '全部', 'asset', 1);
-INSERT OR IGNORE INTO views (id, name, view_type, is_default) VALUES (2, '全部', 'dex', 1);
+INSERT OR IGNORE INTO views (id, name, view_type, is_default) VALUES (1, 'All', 'asset', 1);
+INSERT OR IGNORE INTO views (id, name, view_type, is_default) VALUES (2, 'All', 'dex', 1);
 
 CREATE TRIGGER IF NOT EXISTS auto_sort_order
 AFTER INSERT ON subscriptions

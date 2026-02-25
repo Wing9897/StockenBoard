@@ -164,9 +164,9 @@ impl DataProvider for OkxDexProvider {
             AssetDataBuilder::new(symbol, "okx_dex")
                 .price(price)
                 .currency("USD")
-                .extra_str("鏈", Some(chain_name(&chain_id)))
+                .extra_str("chain", Some(chain_name(&chain_id)))
                 .extra_str("token", Some(&token_address))
-                .extra_f64("預估Gas", estimate_gas)
+                .extra_f64("est_gas", estimate_gas)
                 .build()
         )
     }
