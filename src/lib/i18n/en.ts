@@ -271,6 +271,7 @@ const en: Locale = {
     chooseBg: 'Choose Image',
     removeBg: 'Remove Image',
     bgOpacity: 'Opacity',
+    disclaimer: 'Disclaimer: All market data provided by this software is for informational purposes only and does not constitute investment advice. Data may be delayed, inaccurate, or incomplete. Users should exercise their own judgment and assume all investment risks.',
   },
   viewMode: {
     compact: 'Compact',

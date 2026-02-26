@@ -274,6 +274,7 @@ const zh_TW = {
     chooseBg: '選擇圖片',
     removeBg: '移除圖片',
     bgOpacity: '背景透明度',
+    disclaimer: '免責聲明：本軟體提供的所有市場數據僅供參考，不構成任何投資建議。數據可能存在延遲、不準確或不完整的情況。使用者應自行判斷並承擔所有投資風險。',
   },
   viewMode: {
     compact: '小方塊',

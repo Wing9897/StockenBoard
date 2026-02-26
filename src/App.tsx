@@ -240,6 +240,7 @@ function App() {
               onRefresh={() => { refreshAssets(); refreshViews(); }}
               onToast={(type, title, msg) => toast[type](title, msg)}
             />
+            <p className="settings-disclaimer">{t.settings.disclaimer}</p>
           </div>
         )}
       </main>

@@ -126,6 +126,14 @@ body {
 }
 
 .settings { max-width: 900px; margin: 0 auto; }
+.settings-disclaimer {
+  margin-top: 24px;
+  padding: 12px 16px;
+  font-size: 11px;
+  color: var(--overlay0);
+  text-align: center;
+  line-height: 1.6;
+}
 .providers-page { width: 100%; }
 
 /* Dashboard Toolbar */

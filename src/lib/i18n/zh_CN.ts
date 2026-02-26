@@ -271,6 +271,7 @@ const zh_CN: Locale = {
     chooseBg: '选择图片',
     removeBg: '移除图片',
     bgOpacity: '背景透明度',
+    disclaimer: '免责声明：本软件提供的所有市场数据仅供参考，不构成任何投资建议。数据可能存在延迟、不准确或不完整的情况。使用者应自行判断并承担所有投资风险。',
   },
   viewMode: {
     compact: '小方块',

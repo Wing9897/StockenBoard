@@ -5,12 +5,13 @@
 ## 功能
 
 - 即時價格追蹤（REST + WebSocket）
-- 29 個數據源
+- 33 個數據源
   - 加密貨幣交易所：Binance、Coinbase、Kraken、Bybit、KuCoin、OKX、Gate.io、Bitfinex、HTX、MEXC
   - 加密貨幣聚合器：CoinGecko、CoinMarketCap、CoinPaprika、CryptoCompare
   - 股票 / 多資產：Yahoo Finance、Finnhub、Alpha Vantage、Polygon、Twelve Data、Alpaca、Tiingo、FMP、Marketstack、EODHD、Mboum、FCS API
   - 多資產聚合器：CoinAPI
   - 預測市場：Polymarket、Bitquery
+  - DEX 聚合器：Jupiter、OKX DEX、Raydium、Subgraph
 - 後端統一 Polling 架構（Rust 端定時 fetch，前端零 setInterval）
 - 自訂頁面分類與置頂
 - Grid / List / Compact 三種視圖模式
@@ -50,3 +51,9 @@ npm run tauri build
 ## 授權
 
 MIT
+
+## 免責聲明
+
+本軟體提供的所有市場數據僅供參考，不構成任何投資建議。數據可能存在延遲、不準確或不完整的情況。使用者應自行判斷並承擔所有投資風險。
+
+All market data provided by this software is for informational purposes only and does not constitute investment advice. Data may be delayed, inaccurate, or incomplete. Users should exercise their own judgment and assume all investment risks.
