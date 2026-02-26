@@ -1,9 +1,10 @@
-import { useState, useRef, useEffect, useMemo, memo, useCallback, type ReactElement } from 'react';
+import { useState, useEffect, memo, useCallback, type ReactElement } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Subscription, ProviderInfo } from '../../types';
 import { useAssetPrice } from '../../hooks/useAssetData';
 import { CountdownCircle } from './CountdownCircle';
 import { AssetIcon, getIconName, invalidateIcon } from './AssetIcon';
+import { AssetEditPanel } from './AssetEditPanel';
 import { formatPrice, formatNumber, summarizeError } from '../../lib/format';
 import { t } from '../../lib/i18n';
 import './AssetCard.css';
@@ -40,20 +41,18 @@ function formatExtraValue(value: unknown): string {
   return JSON.stringify(value);
 }
 
-// 盤前/盤後/即時/收盤 — 市場狀態判斷
 type SessionInfo = { label: string; cls: string } | null;
 
+/** 主價格旁的 badge：只標示「現貨」或「收盤」，不與盤前/盤後混淆 */
 function getSessionInfo(extra: Record<string, unknown> | undefined): SessionInfo {
   if (!extra) return null;
   const state = (extra.market_session as string || '').toUpperCase();
-  if (state === 'PRE' || state === 'PREPRE') return { label: t.asset.sessionPre, cls: 'pre' };
-  if (state === 'POST' || state === 'POSTPOST') return { label: t.asset.sessionPost, cls: 'post' };
   if (state === 'REGULAR') return { label: t.asset.sessionRegular, cls: 'regular' };
-  if (state === 'CLOSED' || state === 'PREPARE') return { label: t.asset.sessionClosed, cls: 'closed' };
+  if (state === 'PRE' || state === 'PREPRE' || state === 'POST' || state === 'POSTPOST' || state === 'CLOSED' || state === 'PREPARE')
+    return { label: t.asset.sessionClosed, cls: 'closed' };
   return null;
 }
 
-// 盤前/盤後價格行 — 只在有數據時顯示
 const PREPOST_HIDDEN_KEYS = new Set([
   'pre_market_price', 'pre_market_change', 'pre_market_change_pct',
   'post_market_price', 'post_market_change', 'post_market_change_pct',
@@ -65,9 +64,7 @@ function PrePostRow({ extra, currency, className }: { extra: Record<string, unkn
   const postPrice = extra.post_market_price as number | undefined;
   const prePct = extra.pre_market_change_pct as number | undefined;
   const postPct = extra.post_market_change_pct as number | undefined;
-
   const rows: ReactElement[] = [];
-
   if (prePrice !== undefined) {
     const isPos = (prePct ?? 0) >= 0;
     rows.push(
@@ -82,7 +79,6 @@ function PrePostRow({ extra, currency, className }: { extra: Record<string, unkn
       </div>
     );
   }
-
   if (postPrice !== undefined) {
     const isPos = (postPct ?? 0) >= 0;
     rows.push(
@@ -97,7 +93,6 @@ function PrePostRow({ extra, currency, className }: { extra: Record<string, unkn
       </div>
     );
   }
-
   return rows.length > 0 ? <>{rows}</> : null;
 }
 
@@ -109,14 +104,6 @@ export const AssetCard = memo(function AssetCard({ subscription, providers, curr
   const [editing, setEditing] = useState(false);
   const [iconKey, setIconKey] = useState(0);
   const iconName = getIconName(subscription.symbol);
-
-  const [editSymbol, setEditSymbol] = useState('');
-  const [editDisplayName, setEditDisplayName] = useState('');
-  const [editProvider, setEditProvider] = useState('');
-  const [editAssetType, setEditAssetType] = useState<'crypto' | 'stock'>('crypto');
-  const [editError, setEditError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const editRef = useRef<HTMLDivElement>(null);
 
   const handleIconClick = useCallback(async () => {
     try {
@@ -131,114 +118,26 @@ export const AssetCard = memo(function AssetCard({ subscription, providers, curr
   const currentProvider = providers.find(p => p.id === currentProviderId);
   const sessionInfo = assetType === 'stock' ? getSessionInfo(asset?.extra as Record<string, unknown> | undefined) : null;
 
-  useEffect(() => {
-    if (error) setErrorExpanded(false);
-  }, [error]);
-
-  const filteredProviders = useMemo(() => providers.filter(p =>
-    editing
-      ? (editAssetType === 'crypto' ? (p.provider_type === 'crypto' || p.provider_type === 'both' || p.provider_type === 'dex') : (p.provider_type === 'stock' || p.provider_type === 'both'))
-      : (assetType === 'crypto' ? (p.provider_type === 'crypto' || p.provider_type === 'both' || p.provider_type === 'dex') : (p.provider_type === 'stock' || p.provider_type === 'both'))
-  ), [providers, editing, editAssetType, assetType]);
-
-  const editProviderInfo = providers.find(p => p.id === editProvider);
-  const isEditDex = editProviderInfo?.provider_type === 'dex';
-
-  const openEdit = () => {
-    setEditSymbol(subscription.symbol);
-    setEditDisplayName(subscription.display_name || '');
-    setEditProvider(currentProviderId);
-    setEditAssetType(assetType);
-    setEditError(null);
-    setEditing(true);
-  };
-
-  const cancelEdit = () => { setEditing(false); setEditError(null); };
-
-  const saveEdit = async () => {
-    const sym = editSymbol.trim();
-    if (!sym) { setEditError(t.subForm.symbolEmpty); return; }
-
-    setSaving(true);
-    setEditError(null);
-
-    if (sym.toUpperCase() !== subscription.symbol.toUpperCase()) {
-      try {
-        await invoke('fetch_asset_price', { providerId: editProvider, symbol: sym });
-      } catch (err) {
-        setEditError(t.subForm.validateFailed(sym, err instanceof Error ? err.message : String(err)));
-        setSaving(false);
-        return;
-      }
-    }
-
-    try {
-      await onEdit(subscription.id, {
-        symbol: sym,
-        displayName: editDisplayName,
-        providerId: editProvider,
-        assetType: editAssetType,
-      });
-      setEditing(false);
-    } catch (err) {
-      setEditError(t.dex.saveFailed(err instanceof Error ? err.message : String(err)));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!editing) return;
-    const handler = (e: MouseEvent) => {
-      if (editRef.current && !editRef.current.contains(e.target as Node)) cancelEdit();
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [editing]);
+  useEffect(() => { if (error) setErrorExpanded(false); }, [error]);
 
   const renderIcon = (className: string) => (
     <AssetIcon key={iconKey} symbol={subscription.symbol} className={className} onClick={handleIconClick} />
   );
 
-  const editPanel = (
-    <div className="asset-edit-panel" ref={editRef}>
-      <div className="edit-row">
-        <label>{isEditDex ? t.subForm.symbolDex : t.subForm.symbol}</label>
-        <input value={editSymbol} onChange={e => { setEditSymbol(e.target.value); setEditError(null); }} disabled={saving}
-          placeholder={isEditDex ? (editProvider === 'jupiter' ? t.dex.solMintEditPlaceholder : t.dex.ethAddrEditPlaceholder) : ''}
-          className={isEditDex ? 'dex-address-input' : undefined}
-        />
-        {isEditDex && editProvider === 'jupiter' && <span className="edit-hint">{t.subForm.jupiterEditHint}</span>}
-        {isEditDex && editProvider === 'okx_dex' && <span className="edit-hint">{t.subForm.okxDexEditHint}</span>}
-      </div>
-      <div className="edit-row">
-        <label>{t.dex.nickname}</label>
-        <input value={editDisplayName} onChange={e => setEditDisplayName(e.target.value)} placeholder={t.dex.nicknameOptional} disabled={saving} />
-      </div>
-      <div className="edit-row">
-        <label>{t.common.type}</label>
-        <div className="edit-type-toggle">
-          <button type="button" className={editAssetType === 'crypto' ? 'active' : ''} onClick={() => { setEditAssetType('crypto'); setEditProvider('binance'); }} disabled={saving}>{t.subForm.cryptoShort}</button>
-          <button type="button" className={editAssetType === 'stock' ? 'active' : ''} onClick={() => { setEditAssetType('stock'); setEditProvider('yahoo'); }} disabled={saving}>{t.subForm.stockShort}</button>
-        </div>
-      </div>
-      <div className="edit-row">
-        <label>{t.dex.provider}</label>
-        <select value={editProvider} onChange={e => setEditProvider(e.target.value)} disabled={saving}>
-          {filteredProviders.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-        {editProviderInfo?.requires_api_key && <span className="edit-hint warning">{t.subForm.apiKeyRequired}</span>}
-      </div>
-      {editError && <div className="edit-error">{editError}</div>}
-      <div className="edit-actions">
-        <button className="edit-btn delete" onClick={() => { onRemove(subscription.id); setEditing(false); }}>{isCustomView ? t.subs.removeDisplay : t.common.delete}</button>
-        <div className="edit-actions-right">
-          <button className="edit-btn cancel" onClick={cancelEdit} disabled={saving}>{t.common.cancel}</button>
-          <button className="edit-btn save" onClick={saveEdit} disabled={saving}>{saving ? t.common.saving : t.common.save}</button>
-        </div>
-      </div>
-    </div>
+  const editPanel = editing && (
+    <AssetEditPanel
+      subscription={subscription}
+      providers={providers}
+      currentProviderId={currentProviderId}
+      assetType={assetType}
+      isCustomView={isCustomView}
+      onSave={onEdit}
+      onRemove={onRemove}
+      onClose={() => setEditing(false)}
+    />
   );
+
+  const openEdit = () => setEditing(true);
 
   if (viewMode === 'compact') {
     return (
@@ -262,7 +161,7 @@ export const AssetCard = memo(function AssetCard({ subscription, providers, curr
           {refreshInterval > 0 && <CountdownCircle providerId={currentProviderId} fallbackInterval={refreshInterval} size={16} />}
         </div>
         {!hidePrePost && asset && !error && asset.extra && <PrePostRow extra={asset.extra as Record<string, unknown>} currency={asset.currency} className="compact-prepost" />}
-        {editing && editPanel}
+        {editPanel}
       </div>
     );
   }
@@ -285,7 +184,7 @@ export const AssetCard = memo(function AssetCard({ subscription, providers, curr
         <span className="asset-list-provider-label">{t.dex.dataSource(currentProvider?.name || currentProviderId)}</span>
         <button className="asset-card-edit-btn" onClick={openEdit} title={t.common.edit}>✎</button>
         {refreshInterval > 0 && <CountdownCircle providerId={currentProviderId} fallbackInterval={refreshInterval} size={22} />}
-        {editing && editPanel}
+        {editPanel}
       </div>
     );
   }
@@ -362,7 +261,7 @@ export const AssetCard = memo(function AssetCard({ subscription, providers, curr
         </div>
       )}
 
-      {editing && editPanel}
+      {editPanel}
     </div>
   );
 });

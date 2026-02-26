@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { ProviderInfo, Subscription } from '../../types';
-import { getDb } from '../../lib/db';
+import * as api from '../../lib/subscriptionApi';
 import { t } from '../../lib/i18n';
 import './Settings.css';
 
@@ -21,32 +20,6 @@ interface SubscriptionManagerProps {
   providers: ProviderInfo[];
   onToast?: (type: 'success' | 'error' | 'info', title: string, message?: string) => void;
   onDone?: () => void;
-}
-
-async function hasApiKey(providerId: string): Promise<boolean> {
-  try {
-    const db = await getDb();
-    const rows = await db.select<{ api_key: string | null }[]>(
-      'SELECT api_key FROM provider_settings WHERE provider_id = $1',
-      [providerId]
-    );
-    return rows.length > 0 && !!rows[0].api_key;
-  } catch { return false; }
-}
-
-async function saveApiKey(providerId: string, apiKey: string, apiSecret?: string) {
-  const db = await getDb();
-  await db.execute(
-    `INSERT INTO provider_settings (provider_id, api_key, api_secret, connection_type)
-     VALUES ($1, $2, $3, 'rest')
-     ON CONFLICT(provider_id) DO UPDATE SET api_key = $2, api_secret = $3`,
-    [providerId, apiKey || null, apiSecret || null]
-  );
-  await invoke('enable_provider', {
-    providerId,
-    apiKey: apiKey || null,
-    apiSecret: apiSecret || null,
-  });
 }
 
 export function SubscriptionManager({ onBatchAdd, onBatchAddMultiple, subscriptions, providers: providerInfoList, onToast, onDone }: SubscriptionManagerProps) {
@@ -84,7 +57,7 @@ export function SubscriptionManager({ onBatchAdd, onBatchAddMultiple, subscripti
     setApiSecretInput('');
     setKeySaved(false);
     if (showKeyInput) {
-      hasApiKey(provider).then(setKeySaved);
+      api.hasApiKey(provider).then(setKeySaved);
     }
   }, [provider, showKeyInput]);
 
@@ -96,7 +69,7 @@ export function SubscriptionManager({ onBatchAdd, onBatchAddMultiple, subscripti
     if (!apiKeyInput.trim()) return;
     setKeySaving(true);
     try {
-      await saveApiKey(provider, apiKeyInput.trim(), needsSecret ? apiSecretInput.trim() : undefined);
+      await api.saveApiKey(provider, apiKeyInput.trim(), needsSecret ? apiSecretInput.trim() : undefined);
       setKeySaved(true);
       onToast?.('success', t.apiKey.keySaved, t.apiKey.keySavedMsg(selectedProviderInfo?.name || ''));
     } catch (err) {

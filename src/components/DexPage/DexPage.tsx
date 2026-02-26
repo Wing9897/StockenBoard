@@ -3,6 +3,7 @@ import { useAssetData } from '../../hooks/useAssetData';
 import { useViews } from '../../hooks/useViews';
 import { useViewToolbar } from '../../hooks/useViewToolbar';
 import { useVisibleSubscriptions } from '../../hooks/useVisibleSubscriptions';
+import { useBulkDelete } from '../../hooks/useBulkDelete';
 import { t } from '../../lib/i18n';
 import { getGridClass } from '../../lib/viewUtils';
 import { useLocale } from '../../hooks/useLocale';
@@ -73,6 +74,13 @@ export function DexPage({ onToast }: DexPageProps) {
   const isCustomView = activeViewSubscriptionIds !== null;
 
   const viewFilteredSubs = useVisibleSubscriptions(subscriptions, activeViewSubscriptionIds, 'dex');
+
+  const handleBulkConfirm = useBulkDelete({
+    isCustomView, activeViewId,
+    removeSubscriptions, removeSubscriptionFromView,
+    requestConfirm, toast: onToast,
+    onDone: () => setShowBulkDelete(false),
+  });
 
   const handleRemove = useCallback(async (id: number) => {
     if (isCustomView) {
@@ -194,23 +202,7 @@ export function DexPage({ onToast }: DexPageProps) {
             primary: sub.display_name || `${(sub.pool_address || '').slice(0, 10)}...`,
             secondary: sub.selected_provider_id,
           })}
-          onConfirm={async (ids) => {
-            if (ids.size === 0) return;
-            const confirmed = await requestConfirm(t.subs.bulkConfirm(ids.size));
-            if (!confirmed) return;
-            const count = ids.size;
-            if (isCustomView) {
-              for (const id of ids) {
-                await removeSubscriptionFromView(activeViewId, id);
-              }
-              setShowBulkDelete(false);
-              onToast.info(t.subs.bulkRemoveView, t.subs.bulkRemovedView(count));
-            } else {
-              await removeSubscriptions([...ids]);
-              setShowBulkDelete(false);
-              onToast.info(t.subs.bulkUnsubscribe, t.subs.bulkUnsubscribed(count));
-            }
-          }}
+          onConfirm={handleBulkConfirm}
           onClose={() => setShowBulkDelete(false)}
         />
       )}

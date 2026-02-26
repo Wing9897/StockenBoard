@@ -239,34 +239,15 @@
   box-shadow: 0 0 0 2px var(--blue);
 }
 
-/* Edit panel */
+/* Edit panel (modal) */
 .dex-edit-panel {
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  background: var(--base);
-  border: 1px solid var(--surface1);
-  border-radius: var(--radius-card);
-  padding: 12px;
-  z-index: 10;
-  box-shadow: 0 8px 24px var(--shadow);
+  width: 400px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-/* List view — panel pops above */
-.dex-card-list .dex-edit-panel {
-  top: auto;
-  bottom: 100%;
-  margin-bottom: 4px;
-  border-radius: var(--radius-sm);
-}
-/* Compact view — panel pops above */
-.dex-card-compact .dex-edit-panel {
-  top: auto;
-  bottom: 0;
-  border-radius: var(--radius-sm);
-  min-width: 300px;
-}
+/* List/Compact — no special positioning needed for modal */
 .dex-edit-panel .edit-row { display: flex; flex-direction: column; gap: 3px; }
 .dex-edit-panel label { font-size: 11px; color: var(--overlay0); }
 .dex-edit-panel input,

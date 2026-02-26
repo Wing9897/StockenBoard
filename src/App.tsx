@@ -6,6 +6,7 @@ import { useToast } from './hooks/useToast';
 import { useConfirm } from './hooks/useConfirm';
 import { useEscapeKey } from './hooks/useEscapeKey';
 import { useVisibleSubscriptions } from './hooks/useVisibleSubscriptions';
+import { useBulkDelete } from './hooks/useBulkDelete';
 import { AssetCard } from './components/AssetCard/AssetCard';
 import { ViewEditor } from './components/ViewEditor/ViewEditor';
 import { ViewSubscriptionManager } from './components/ViewEditor/ViewSubscriptionManager';
@@ -31,7 +32,15 @@ type Tab = 'dashboard' | 'dex' | 'providers' | 'settings';
 
 function App() {
   useLocale(); // 訂閱語言變更，觸發整個 App 重新渲染
-  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+  const [activeTab, setActiveTabRaw] = useState<Tab>(() => {
+    const saved = localStorage.getItem('sb_active_tab') as Tab | null;
+    if (saved === 'dashboard' || saved === 'dex' || saved === 'providers' || saved === 'settings') return saved;
+    return 'dashboard';
+  });
+  const setActiveTab = useCallback((tab: Tab) => {
+    setActiveTabRaw(tab);
+    localStorage.setItem('sb_active_tab', tab);
+  }, []);
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem('sb_view_mode');
     if (saved === 'list' || saved === 'compact') return saved;
@@ -41,8 +50,8 @@ function App() {
   const [showViewManager, setShowViewManager] = useState(false);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
   const [showBatchActions, setShowBatchActions] = useState(false);
-  const [forceExpandAll, setForceExpandAll] = useState(false);
-  const [hidePrePost, setHidePrePost] = useState(false);
+  const [forceExpandAll, setForceExpandAll] = useState(() => localStorage.getItem('sb_expand_all') === '1');
+  const [hidePrePost, setHidePrePost] = useState(() => localStorage.getItem('sb_hide_prepost') === '1');
   const [showAddSubscription, setShowAddSubscription] = useState(false);
   const toast = useToast();
   const { confirmState, requestConfirm, handleConfirm, handleCancel } = useConfirm();
@@ -121,6 +130,13 @@ function App() {
   }, [removeSubscription, removeSubscriptionFromView, activeViewId, isCustomView, toast]);
 
   const viewFilteredSubs = useVisibleSubscriptions(subscriptions, activeViewSubscriptionIds, 'asset');
+
+  const handleBulkConfirm = useBulkDelete({
+    isCustomView, activeViewId,
+    removeSubscriptions, removeSubscriptionFromView: removeSubscriptionFromView,
+    requestConfirm, toast,
+    onDone: () => setShowBulkDelete(false),
+  });
 
   const handleCopySymbols = () => {
     const symbols = viewFilteredSubs.map(s => s.symbol).join(', ');
@@ -268,23 +284,7 @@ function App() {
         <BulkDelete
           subscriptions={viewFilteredSubs}
           isCustomView={isCustomView}
-          onConfirm={async (ids) => {
-            if (ids.size === 0) return;
-            const confirmed = await requestConfirm(t.subs.bulkConfirm(ids.size));
-            if (!confirmed) return;
-            const count = ids.size;
-            if (isCustomView) {
-              for (const id of ids) {
-                await removeSubscriptionFromView(activeViewId, id);
-              }
-              setShowBulkDelete(false);
-              toast.info(t.subs.bulkRemoveView, t.subs.bulkRemovedView(count));
-            } else {
-              await removeSubscriptions([...ids]);
-              setShowBulkDelete(false);
-              toast.info(t.subs.bulkUnsubscribe, t.subs.bulkUnsubscribed(count));
-            }
-          }}
+          onConfirm={handleBulkConfirm}
           onClose={() => setShowBulkDelete(false)}
         />
       )}
@@ -314,8 +314,8 @@ function App() {
           mode="spot"
           expandAll={forceExpandAll}
           showPrePost={!hidePrePost}
-          onToggleExpandAll={() => setForceExpandAll(v => !v)}
-          onTogglePrePost={() => setHidePrePost(v => !v)}
+          onToggleExpandAll={() => setForceExpandAll(v => { const next = !v; localStorage.setItem('sb_expand_all', next ? '1' : '0'); return next; })}
+          onTogglePrePost={() => setHidePrePost(v => { const next = !v; localStorage.setItem('sb_hide_prepost', next ? '1' : '0'); return next; })}
           onClose={() => setShowBatchActions(false)}
         />
       )}

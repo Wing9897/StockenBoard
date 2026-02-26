@@ -1,10 +1,11 @@
-import { useState, useRef, useEffect, memo, useCallback, useMemo } from 'react';
+import { useState, useEffect, memo, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Subscription, ProviderInfo } from '../../types';
 import { useAssetPrice } from '../../hooks/useAssetData';
 import { CountdownCircle } from '../AssetCard/CountdownCircle';
 import { AssetIcon, getIconName, invalidateIcon } from '../AssetCard/AssetIcon';
-import { formatPrice, formatNumber, summarizeError } from '../../lib/format';
+import { DexEditPanel } from './DexEditPanel';
+import { formatPrice, formatNumber, summarizeError, truncateAddr, parsePairFromName } from '../../lib/format';
 import { t } from '../../lib/i18n';
 import './DexCard.css';
 
@@ -22,22 +23,6 @@ interface DexCardProps {
   getDexSymbol: (sub: Subscription) => string;
 }
 
-function truncateAddr(addr: string, len = 6): string {
-  if (!addr) return '-';
-  if (addr.length <= len * 2 + 2) return addr;
-  return `${addr.slice(0, len)}...${addr.slice(-4)}`;
-}
-
-function parsePairFromName(displayName: string | undefined): [string, string] {
-  const dn = displayName || '';
-  const sep = dn.includes('/') ? '/' : dn.includes('→') ? '→' : null;
-  if (sep) {
-    const parts = dn.split(sep).map(s => s.trim());
-    if (parts.length === 2 && parts[0] && parts[1]) return [parts[0], parts[1]];
-  }
-  return ['', ''];
-}
-
 export const DexCard = memo(function DexCard({
   subscription, providers, refreshInterval, onRemove, onEdit, viewMode, isCustomView = false, getDexSymbol,
 }: DexCardProps) {
@@ -49,19 +34,6 @@ export const DexCard = memo(function DexCard({
   const poolAddress = subscription.pool_address || '';
   const tokenFrom = subscription.token_from_address || '';
   const tokenTo = subscription.token_to_address || '';
-
-  const [editPool, setEditPool] = useState('');
-  const [editTokenFrom, setEditTokenFrom] = useState('');
-  const [editTokenTo, setEditTokenTo] = useState('');
-  const [editFromSymbol, setEditFromSymbol] = useState('');
-  const [editToSymbol, setEditToSymbol] = useState('');
-  const [editProvider, setEditProvider] = useState('');
-  const [editDisplayName, setEditDisplayName] = useState('');
-  const [editError, setEditError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [lookingUp, setLookingUp] = useState(false);
-  const [editManualTokens, setEditManualTokens] = useState(false);
-  const editRef = useRef<HTMLDivElement>(null);
 
   const extra = asset?.extra as Record<string, unknown> | undefined;
   const gasEstimate = extra?.gas_estimate as string | undefined;
@@ -114,161 +86,17 @@ export const DexCard = memo(function DexCard({
     if (error) setErrorExpanded(false);
   }, [error]);
 
-  const openEdit = useCallback(() => {
-    const isJup = subscription.selected_provider_id === 'jupiter';
-    setEditPool(isJup ? parsePairFromName(subscription.display_name).join(',') : poolAddress);
-    setEditTokenFrom(tokenFrom);
-    setEditTokenTo(tokenTo);
-    setEditFromSymbol('');
-    setEditToSymbol('');
-    setEditProvider(subscription.selected_provider_id);
-    setEditDisplayName(subscription.display_name || '');
-    setEditError(null);
-    setEditManualTokens(false);
-    setEditing(true);
-  }, [subscription, poolAddress, tokenFrom, tokenTo]);
+  const openEdit = useCallback(() => setEditing(true), []);
 
-  const cancelEdit = () => { setEditing(false); setEditError(null); };
-
-  const handleEditLookup = async () => {
-    const pool = editPool.trim();
-    if (!pool) { setEditError(isEditJupiter ? t.errors.pairInputRequired : t.errors.poolInputRequired); return; }
-    setLookingUp(true);
-    setEditError(null);
-    try {
-      const info = await invoke<{ token0_address: string; token0_symbol: string; token1_address: string; token1_symbol: string }>(
-        'lookup_dex_pool', { providerId: editProvider, poolAddress: pool }
-      );
-      setEditTokenFrom(info.token0_address);
-      setEditTokenTo(info.token1_address);
-      setEditFromSymbol(info.token0_symbol);
-      setEditToSymbol(info.token1_symbol);
-      if (editProvider === 'jupiter' && !editDisplayName) {
-        setEditDisplayName(`${info.token0_symbol}/${info.token1_symbol}`);
-      }
-    } catch (err) {
-      setEditError(t.dex.lookupFailed(err instanceof Error ? err.message : String(err)));
-    } finally { setLookingUp(false); }
-  };
-
-  const handleEditSwap = () => {
-    const tmpFrom = editTokenFrom;
-    const tmpFromSym = editFromSymbol;
-    setEditTokenFrom(editTokenTo);
-    setEditTokenTo(tmpFrom);
-    setEditFromSymbol(editToSymbol);
-    setEditToSymbol(tmpFromSym);
-  };
-
-  const saveEdit = async () => {
-    const isJup = editProvider === 'jupiter';
-    const finalPool = isJup ? 'auto' : editPool.trim();
-    if (!isJup && !finalPool) {
-      setEditError(t.dex.poolEmpty); return;
-    }
-    if (!editTokenFrom.trim() || !editTokenTo.trim()) {
-      setEditError(t.dex.tokenEmpty); return;
-    }
-    setSaving(true);
-    setEditError(null);
-    const testSymbol = `${finalPool}:${editTokenFrom.trim()}:${editTokenTo.trim()}`;
-    try {
-      await invoke('fetch_asset_price', { providerId: editProvider, symbol: testSymbol });
-    } catch (err) {
-      setEditError(t.dex.validateFailed(err instanceof Error ? err.message : String(err)));
-      setSaving(false); return;
-    }
-    try {
-      await onEdit(subscription.id, {
-        poolAddress: finalPool, tokenFrom: editTokenFrom, tokenTo: editTokenTo,
-        providerId: editProvider, displayName: editDisplayName,
-      });
-      setEditing(false);
-    } catch (err) {
-      setEditError(t.dex.saveFailed(err instanceof Error ? err.message : String(err)));
-    } finally { setSaving(false); }
-  };
-
-  useEffect(() => {
-    if (!editing) return;
-    const handler = (e: MouseEvent) => {
-      if (editRef.current && !editRef.current.contains(e.target as Node)) cancelEdit();
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [editing]);
-
-  const editBusy = saving || lookingUp;
-  const isEditJupiter = editProvider === 'jupiter';
-  const dexProviders = useMemo(() => providers.filter(p => p.provider_type === 'dex'), [providers]);
-
-  const editPanel = (
-    <div className="dex-edit-panel" ref={editRef}>
-      <div className="edit-row">
-        <label>{t.dex.provider}</label>
-        <select value={editProvider} onChange={e => setEditProvider(e.target.value)} disabled={editBusy}>
-          {dexProviders.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-      </div>
-      <div className="edit-row">
-        <label>{isEditJupiter ? t.dex.tradePair : t.dex.poolAddress}</label>
-        <div className="dex-edit-input-row">
-          <input value={editPool} onChange={e => { setEditPool(e.target.value); setEditError(null); }} disabled={editBusy}
-            placeholder={isEditJupiter ? t.dex.pairPlaceholder : editProvider === 'subgraph' ? t.dex.subgraphProtocolPlaceholder : t.dex.evmPoolPlaceholder}
-            className="dex-address-input" />
-          <button className="edit-btn save" onClick={handleEditLookup} disabled={editBusy}>
-            {lookingUp ? t.dex.lookingUp : t.dex.lookup}
-          </button>
-        </div>
-        {isEditJupiter && <span className="edit-hint">{t.dex.jupiterHint}</span>}
-        {editProvider === 'subgraph' && <span className="edit-hint">{t.dex.subgraphHint}</span>}
-      </div>
-      <div className="edit-row">
-        <label>{t.dex.tradeDirection}</label>
-        {editManualTokens ? (
-          <>
-            <div className="dex-edit-token-col">
-              <input value={editTokenFrom} onChange={e => { setEditTokenFrom(e.target.value); setEditError(null); }} disabled={editBusy}
-                placeholder={t.dex.tokenFromPlaceholder} className="dex-address-input" />
-              <div className="dex-edit-token-input-row">
-                <input value={editTokenTo} onChange={e => { setEditTokenTo(e.target.value); setEditError(null); }} disabled={editBusy}
-                  placeholder={t.dex.tokenToPlaceholder} className="dex-address-input" />
-                <button className="edit-btn cancel dex-edit-swap-sm" onClick={handleEditSwap} disabled={editBusy} title={t.dex.flipDirection}>⇄</button>
-              </div>
-            </div>
-            <button type="button" className="dex-edit-link-btn" onClick={() => setEditManualTokens(false)}>
-              {t.dex.useAutoMode}
-            </button>
-          </>
-        ) : (
-          <>
-            <div className="dex-edit-direction-row">
-              <span className="dex-edit-direction-text">
-                {editFromSymbol || truncateAddr(editTokenFrom)} → {editToSymbol || truncateAddr(editTokenTo)}
-              </span>
-              <button className="edit-btn cancel dex-edit-swap-sm" onClick={handleEditSwap} disabled={editBusy} title={t.dex.flipDirection}>⇄</button>
-            </div>
-            <button type="button" className="dex-edit-link-btn" onClick={() => setEditManualTokens(true)}>
-              {t.dex.useManualMode}
-            </button>
-          </>
-        )}
-      </div>
-      <div className="edit-row">
-        <label>{t.dex.nickname}</label>
-        <input value={editDisplayName} onChange={e => setEditDisplayName(e.target.value)} placeholder={t.dex.nicknameOptional} disabled={editBusy} />
-      </div>
-      {editError && <div className="edit-error">{editError}</div>}
-      <div className="edit-actions">
-        <button className="edit-btn delete" onClick={() => { onRemove(subscription.id); setEditing(false); }}>
-          {isCustomView ? t.subs.removeDisplay : t.common.delete}
-        </button>
-        <div className="edit-actions-right">
-          <button className="edit-btn cancel" onClick={cancelEdit} disabled={editBusy}>{t.common.cancel}</button>
-          <button className="edit-btn save" onClick={saveEdit} disabled={editBusy}>{saving ? t.common.saving : t.common.save}</button>
-        </div>
-      </div>
-    </div>
+  const editPanel = editing && (
+    <DexEditPanel
+      subscription={subscription}
+      providers={providers}
+      isCustomView={isCustomView}
+      onSave={onEdit}
+      onRemove={onRemove}
+      onClose={() => setEditing(false)}
+    />
   );
 
   if (viewMode === 'compact') {
@@ -287,7 +115,7 @@ export const DexCard = memo(function DexCard({
           </span>
           {refreshInterval > 0 && <CountdownCircle providerId={subscription.selected_provider_id} fallbackInterval={refreshInterval} size={16} />}
         </div>
-        {editing && editPanel}
+        {editPanel}
       </div>
     );
   }
@@ -313,7 +141,7 @@ export const DexCard = memo(function DexCard({
         <span className="dex-list-provider">{t.dex.dataSource(providerName)}</span>
         <button className="asset-card-edit-btn" onClick={openEdit} title={t.common.edit}>✎</button>
         {refreshInterval > 0 && <CountdownCircle providerId={subscription.selected_provider_id} fallbackInterval={refreshInterval} size={22} />}
-        {editing && editPanel}
+        {editPanel}
       </div>
     );
   }
@@ -369,7 +197,7 @@ export const DexCard = memo(function DexCard({
         )}
       </div>
 
-      {editing && editPanel}
+      {editPanel}
     </div>
   );
 });

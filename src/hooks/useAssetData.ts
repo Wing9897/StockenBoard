@@ -1,84 +1,12 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
-import { AssetData, Subscription, ProviderInfo, WsTickerUpdate } from '../types';
+import type { AssetData, Subscription, ProviderInfo, WsTickerUpdate } from '../types';
+import { priceStore } from '../lib/priceStore';
+import * as api from '../lib/subscriptionApi';
 import { getDb } from '../lib/db';
 
-/**
- * 高效價格 store — 使用 key-based subscription，
- * 每張卡片只在自己的 key 變化時收到通知，避免 O(N) 廣播。
- */
-class PriceStore {
-  private assets = new Map<string, AssetData>();
-  private errors = new Map<string, string>();
-  private ticks = new Map<string, { fetchedAt: number; intervalMs: number }>();
-  private keyListeners = new Map<string, Set<() => void>>();
-  private tickListeners = new Map<string, Set<() => void>>();
-
-  getAsset(key: string) { return this.assets.get(key); }
-  getError(key: string) { return this.errors.get(key); }
-  getTick(providerId: string) { return this.ticks.get(providerId); }
-
-  updatePrices(results: AssetData[]) {
-    for (const d of results) {
-      const key = `${d.provider_id}:${d.symbol}`;
-      const prev = this.assets.get(key);
-      let changed = false;
-      if (!prev || prev.price !== d.price || prev.last_updated !== d.last_updated) {
-        this.assets.set(key, d);
-        changed = true;
-      }
-      if (this.errors.has(key)) { this.errors.delete(key); changed = true; }
-      if (changed) this.notifyKey(key);
-    }
-  }
-
-  updateErrors(payload: Record<string, string>) {
-    for (const [k, msg] of Object.entries(payload)) {
-      if (this.errors.get(k) !== msg) { this.errors.set(k, msg); this.notifyKey(k); }
-    }
-  }
-
-  updateTick(providerId: string, fetchedAt: number, intervalMs: number) {
-    const prev = this.ticks.get(providerId);
-    if (prev && prev.fetchedAt === fetchedAt && prev.intervalMs === intervalMs) return;
-    this.ticks.set(providerId, { fetchedAt, intervalMs });
-    this.notifyTick(providerId);
-  }
-
-  updateWs(providerId: string, symbol: string, data: AssetData) {
-    const key = `${providerId}:${symbol}`;
-    this.assets.set(key, data);
-    this.notifyKey(key);
-  }
-
-  clear() { this.assets.clear(); this.errors.clear(); this.ticks.clear(); }
-
-  subscribeKey(key: string, fn: () => void) {
-    let set = this.keyListeners.get(key);
-    if (!set) { set = new Set(); this.keyListeners.set(key, set); }
-    set.add(fn);
-    return () => { set!.delete(fn); if (set!.size === 0) this.keyListeners.delete(key); };
-  }
-
-  subscribeTick(providerId: string, fn: () => void) {
-    let set = this.tickListeners.get(providerId);
-    if (!set) { set = new Set(); this.tickListeners.set(providerId, set); }
-    set.add(fn);
-    return () => { set!.delete(fn); if (set!.size === 0) this.tickListeners.delete(providerId); };
-  }
-
-  private notifyKey(key: string) {
-    const fns = this.keyListeners.get(key);
-    if (fns) for (const fn of fns) fn();
-  }
-  private notifyTick(providerId: string) {
-    const fns = this.tickListeners.get(providerId);
-    if (fns) for (const fn of fns) fn();
-  }
-}
-
-const priceStore = new PriceStore();
+// ── React hooks for subscribing to PriceStore ──
 
 export function useAssetPrice(symbol: string, providerId: string) {
   const key = `${providerId}:${symbol}`;
@@ -93,7 +21,8 @@ export function usePollTick(providerId: string) {
   return tick;
 }
 
-/** 統一 hook — 透過 subType 參數區分 asset / dex */
+// ── Main orchestration hook ──
+
 export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [providerInfoList, setProviderInfoList] = useState<ProviderInfo[]>([]);
@@ -114,21 +43,19 @@ export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
     return map;
   }, [subscriptions]);
 
+  // ── Loaders ──
+
   const loadProviderInfo = useCallback(async () => {
     try {
-      const info = await invoke<ProviderInfo[]>('get_all_providers');
+      const info = await api.loadProviderInfo();
       setProviderInfoList(info);
       providerInfoRef.current = info;
-    } catch { /* silent — non-critical */ }
+    } catch { /* silent */ }
   }, []);
 
   const loadSubscriptions = useCallback(async () => {
     try {
-      const db = await getDb();
-      const result = await db.select<Subscription[]>(
-        'SELECT id, sub_type, symbol, display_name, selected_provider_id, asset_type, pool_address, token_from_address, token_to_address, sort_order FROM subscriptions WHERE sub_type = $1 ORDER BY sort_order, id',
-        [subType]
-      );
+      const result = await api.loadSubscriptions(subType);
       setSubscriptions(result);
       return result;
     } catch { return []; }
@@ -148,7 +75,8 @@ export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
     } catch { /* silent */ }
   }, []);
 
-  // Event listeners
+  // ── Event listeners ──
+
   const setupPriceListener = useCallback(async () => {
     if (priceUnlistenRef.current) return;
     priceUnlistenRef.current = await listen<AssetData[]>('price-update', (e) => priceStore.updatePrices(e.payload));
@@ -172,7 +100,8 @@ export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
     });
   }, []);
 
-  // WebSocket
+  // ── WebSocket ──
+
   const startWsStream = useCallback(async (providerId: string, symbols: string[]) => {
     const key = `${providerId}:${symbols.join(',')}`;
     if (wsActiveRef.current.has(key)) return;
@@ -200,147 +129,75 @@ export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
     } catch { /* silent */ }
   }, [startWsStream]);
 
-  const reloadPolling = useCallback(async () => {
-    try { await invoke('reload_polling'); } catch { /* silent */ }
-  }, []);
+  // ── CRUD (thin wrappers delegating to subscriptionApi) ──
 
-  // ── CRUD ────────────────────────────────────────────────────
-
-  /** 新增 asset 訂閱（先驗證 symbol 有效性） */
   const addSubscription = useCallback(
     async (symbol: string, displayName?: string, providerId?: string, assetType?: string) => {
-      const pid = providerId || 'binance';
-      const isDex = providerInfoRef.current.find(p => p.id === pid)?.provider_type === 'dex';
-      const storedSymbol = isDex ? symbol.trim() : symbol.toUpperCase();
-      await invoke('fetch_asset_price', { providerId: pid, symbol: storedSymbol });
-      const db = await getDb();
-      await db.execute(
-        'INSERT INTO subscriptions (sub_type, symbol, display_name, selected_provider_id, asset_type) VALUES ($1, $2, $3, $4, $5)',
-        ['asset', storedSymbol, displayName || null, pid, assetType || 'crypto']
-      );
+      await api.addAssetSubscription(symbol, providerInfoRef.current, displayName, providerId, assetType);
       await loadSubscriptions();
-      await reloadPolling();
+      await api.reloadPolling();
     },
-    [loadSubscriptions, reloadPolling]
+    [loadSubscriptions]
   );
 
-  /** 批量新增 asset 訂閱（並行驗證，只寫通過的，最後統一 reload） */
   const addSubscriptionBatch = useCallback(
     async (
       items: { symbol: string; displayName?: string; providerId?: string; assetType?: string }[],
       onProgress?: (done: number, total: number) => void,
     ) => {
-      let done = 0;
-      const total = items.length;
-      // 並行驗證所有 symbol，每完成一個即回報進度
-      const results = await Promise.allSettled(
-        items.map(item => {
-          const pid = item.providerId || 'binance';
-          const isDex = providerInfoRef.current.find(p => p.id === pid)?.provider_type === 'dex';
-          const storedSymbol = isDex ? item.symbol.trim() : item.symbol.toUpperCase();
-          return invoke('fetch_asset_price', { providerId: pid, symbol: storedSymbol })
-            .then(() => ({ ...item, storedSymbol, pid }))
-            .finally(() => { done++; onProgress?.(done, total); });
-        })
-      );
-      const valid = results.filter((r): r is PromiseFulfilledResult<{ symbol: string; displayName?: string; providerId?: string; assetType?: string; storedSymbol: string; pid: string }> => r.status === 'fulfilled').map(r => r.value);
-      const failed = items.filter((_, i) => results[i].status === 'rejected').map(item => item.symbol);
-      const succeeded: string[] = [];
-      const dbDuplicates: string[] = [];
-      if (valid.length > 0) {
-        const db = await getDb();
-        for (const v of valid) {
-          try {
-            await db.execute(
-              'INSERT INTO subscriptions (sub_type, symbol, display_name, selected_provider_id, asset_type) VALUES ($1, $2, $3, $4, $5)',
-              ['asset', v.storedSymbol, v.displayName || null, v.pid, v.assetType || 'crypto']
-            );
-            succeeded.push(v.storedSymbol);
-          } catch {
-            dbDuplicates.push(v.storedSymbol);
-          }
-        }
-        if (succeeded.length > 0) {
-          await loadSubscriptions();
-          await reloadPolling();
-        }
+      const result = await api.addAssetSubscriptionBatch(items, providerInfoRef.current, onProgress);
+      if (result.succeeded.length > 0) {
+        await loadSubscriptions();
+        await api.reloadPolling();
       }
-      return { succeeded, failed, dbDuplicates };
+      return result;
     },
-    [loadSubscriptions, reloadPolling]
+    [loadSubscriptions]
   );
 
-  /** 新增 DEX 訂閱 */
   const addDexSubscription = useCallback(
     async (poolAddress: string, tokenFrom: string, tokenTo: string, providerId: string, displayName?: string) => {
-      const db = await getDb();
-      const symbol = `${poolAddress.trim()}:${tokenFrom.trim()}:${tokenTo.trim()}`;
-      await db.execute(
-        'INSERT INTO subscriptions (sub_type, symbol, display_name, selected_provider_id, asset_type, pool_address, token_from_address, token_to_address) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
-        ['dex', symbol, displayName || null, providerId, 'crypto', poolAddress.trim(), tokenFrom.trim(), tokenTo.trim()]
-      );
+      await api.addDexSubscription(poolAddress, tokenFrom, tokenTo, providerId, displayName);
       await loadSubscriptions();
-      await reloadPolling();
+      await api.reloadPolling();
     },
-    [loadSubscriptions, reloadPolling]
+    [loadSubscriptions]
   );
 
   const updateSubscription = useCallback(
     async (id: number, updates: { symbol?: string; displayName?: string; providerId?: string; assetType?: string }) => {
       const sub = subscriptionsRef.current.find(s => s.id === id);
       if (!sub) return;
-      const db = await getDb();
-      const targetPid = updates.providerId ?? sub.selected_provider_id;
-      const isDex = providerInfoRef.current.find(p => p.id === targetPid)?.provider_type === 'dex';
-      const storedSymbol = updates.symbol ? (isDex ? updates.symbol.trim() : updates.symbol.toUpperCase()) : sub.symbol;
-      await db.execute(
-        'UPDATE subscriptions SET symbol = $1, display_name = $2, selected_provider_id = $3, asset_type = $4 WHERE id = $5',
-        [storedSymbol, updates.displayName !== undefined ? (updates.displayName || null) : (sub.display_name || null), targetPid, updates.assetType ?? sub.asset_type, id]
-      );
+      const needsReload = await api.updateAssetSubscription(sub, providerInfoRef.current, updates);
       await loadSubscriptions();
-      if (updates.symbol || updates.providerId) await reloadPolling();
+      if (needsReload) await api.reloadPolling();
     },
-    [loadSubscriptions, reloadPolling]
+    [loadSubscriptions]
   );
 
-  /** 更新 DEX 訂閱 */
   const updateDexSubscription = useCallback(
     async (id: number, updates: { poolAddress?: string; tokenFrom?: string; tokenTo?: string; providerId?: string; displayName?: string }) => {
       const sub = subscriptionsRef.current.find(s => s.id === id);
       if (!sub) return;
-      const db = await getDb();
-      const pool = updates.poolAddress?.trim() ?? sub.pool_address ?? '';
-      const tf = updates.tokenFrom?.trim() ?? sub.token_from_address ?? '';
-      const tt = updates.tokenTo?.trim() ?? sub.token_to_address ?? '';
-      const symbol = `${pool}:${tf}:${tt}`;
-      await db.execute(
-        'UPDATE subscriptions SET symbol = $1, pool_address = $2, token_from_address = $3, token_to_address = $4, selected_provider_id = $5, display_name = $6 WHERE id = $7',
-        [symbol, pool, tf, tt, updates.providerId ?? sub.selected_provider_id, updates.displayName !== undefined ? (updates.displayName || null) : (sub.display_name || null), id]
-      );
+      await api.updateDexSub(sub, updates);
       await loadSubscriptions();
-      await reloadPolling();
+      await api.reloadPolling();
     },
-    [loadSubscriptions, reloadPolling]
+    [loadSubscriptions]
   );
 
   const removeSubscription = useCallback(async (id: number) => {
-    const db = await getDb();
-    await db.execute('DELETE FROM subscriptions WHERE id = $1', [id]);
+    await api.removeSubscription(id);
     await loadSubscriptions();
   }, [loadSubscriptions]);
 
   const removeSubscriptions = useCallback(async (ids: number[]) => {
-    if (ids.length === 0) return;
-    const db = await getDb();
-    const placeholders = ids.map((_, i) => '$' + (i + 1)).join(',');
-    await db.execute(`DELETE FROM subscriptions WHERE id IN (${placeholders})`, ids);
+    await api.removeSubscriptions(ids);
     await loadSubscriptions();
-    await reloadPolling();
-  }, [loadSubscriptions, reloadPolling]);
+    await api.reloadPolling();
+  }, [loadSubscriptions]);
 
-
-
-  // ── Getters ─────────────────────────────────────────────────
+  // ── Getters ──
 
   const getSelectedProvider = useCallback(
     (subscriptionId: number): string => selectedProviders.get(subscriptionId) || 'binance',
@@ -364,12 +221,11 @@ export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
     []
   );
 
-  /** DEX symbol 組合 */
   const getDexSymbol = useCallback((sub: Subscription): string => {
     return `${sub.pool_address || ''}:${sub.token_from_address || ''}:${sub.token_to_address || ''}`;
   }, []);
 
-  // ── Init ────────────────────────────────────────────────────
+  // ── Init ──
 
   useEffect(() => {
     (async () => {
@@ -392,20 +248,11 @@ export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
   }, []);
 
   return {
-    subscriptions,
-    providerInfoList,
-    loading,
-    addSubscription,
-    addSubscriptionBatch,
-    addDexSubscription,
-    removeSubscription,
-    removeSubscriptions,
-    updateSubscription,
-    updateDexSubscription,
-    getSelectedProvider,
-    getAssetType,
-    getRefreshInterval,
-    getDexSymbol,
-    refresh: reloadPolling,
+    subscriptions, providerInfoList, loading,
+    addSubscription, addSubscriptionBatch, addDexSubscription,
+    removeSubscription, removeSubscriptions,
+    updateSubscription, updateDexSubscription,
+    getSelectedProvider, getAssetType, getRefreshInterval, getDexSymbol,
+    refresh: useCallback(async () => { await api.reloadPolling(); }, []),
   };
 }

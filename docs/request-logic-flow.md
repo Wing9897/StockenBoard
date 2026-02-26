@@ -42,7 +42,7 @@ StockenBoard 的資料請求架構，從 app 啟動到價格顯示在卡片上�
 │    ├── visible_ids: RwLock<HashMap<window_id, HashSet<id>>> │
 │    └── start() → 主循環 (spawn per-provider polling tasks)  │
 │                                                             │
-│  providers/*.rs — 31 個 DataProvider 實現                    │
+│  providers/*.rs — 33 個 DataProvider 實現                    │
 │    └── fetch_prices(&[String]) → Vec<AssetData>             │
 │                                                             │
 │  db.rs — SQLite (stockenboard.db)                           │
@@ -212,39 +212,52 @@ create_provider(id, api_key, api_secret) → Option<Arc<dyn DataProvider>>
 ## 資料庫 Schema
 
 ```sql
--- 訂閱
+-- 訂閱（asset + dex 統一表，透過 sub_type 區分）
 subscriptions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  symbol TEXT NOT NULL UNIQUE,
-  display_name TEXT,
+  id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+  sub_type             TEXT NOT NULL DEFAULT 'asset',   -- 'asset' | 'dex'
+  symbol               TEXT NOT NULL,
+  display_name         TEXT,
   selected_provider_id TEXT NOT NULL DEFAULT 'binance',
-  asset_type TEXT NOT NULL DEFAULT 'crypto',
-  sort_order INTEGER NOT NULL DEFAULT 0
+  asset_type           TEXT NOT NULL DEFAULT 'crypto',
+  pool_address         TEXT,            -- DEX 用
+  token_from_address   TEXT,            -- DEX 用
+  token_to_address     TEXT,            -- DEX 用
+  sort_order           INTEGER NOT NULL DEFAULT 0,
+  UNIQUE(symbol, selected_provider_id)
 )
 
 -- Provider 設定
 provider_settings (
-  provider_id TEXT PRIMARY KEY,
-  api_key TEXT,
-  api_secret TEXT,
+  provider_id      TEXT PRIMARY KEY,
+  api_key          TEXT,
+  api_secret       TEXT,
+  api_url          TEXT,                -- 自訂 API endpoint（DEX 等）
   refresh_interval INTEGER,
-  connection_type TEXT NOT NULL DEFAULT 'rest',
-  enabled INTEGER NOT NULL DEFAULT 1
+  connection_type  TEXT NOT NULL DEFAULT 'rest'
 )
 
--- 自訂頁面
+-- 自訂頁面（asset + dex 統一表，透過 view_type 區分）
 views (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL UNIQUE,
-  is_default INTEGER NOT NULL DEFAULT 0
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  name       TEXT NOT NULL,
+  view_type  TEXT NOT NULL DEFAULT 'asset',  -- 'asset' | 'dex'
+  is_default INTEGER NOT NULL DEFAULT 0,
+  UNIQUE(name, view_type)
 )
 
 -- 頁面-訂閱關聯
 view_subscriptions (
-  view_id INTEGER NOT NULL,
+  view_id         INTEGER NOT NULL,
   subscription_id INTEGER NOT NULL,
-  PRIMARY KEY (view_id, subscription_id)
+  PRIMARY KEY (view_id, subscription_id),
+  FOREIGN KEY (view_id) REFERENCES views(id) ON DELETE CASCADE,
+  FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE
 )
+
+-- 預設頁面
+INSERT OR IGNORE INTO views (id, name, view_type, is_default) VALUES (1, 'All', 'asset', 1);
+INSERT OR IGNORE INTO views (id, name, view_type, is_default) VALUES (2, 'All', 'dex', 1);
 ```
 
 ## PriceStore 架構（前端 singleton）

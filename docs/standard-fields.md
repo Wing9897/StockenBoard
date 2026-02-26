@@ -25,13 +25,13 @@ pub struct AssetData {
 
 | 欄位 | 有提供的 provider 數 | 覆蓋率 |
 |---|:---:|:---:|
-| price | 31/31 | 100% |
-| volume | 26/31 | 84% |
-| change_percent_24h | 27/31 | 87% |
-| change_24h | 25/31 | 81% |
-| high_24h | 21/31 | 68% |
-| low_24h | 21/31 | 68% |
-| market_cap | 6/31 | 19% |
+| price | 33/33 | 100% |
+| volume | 26/33 | 79% |
+| change_percent_24h | 27/33 | 82% |
+| change_24h | 25/33 | 76% |
+| high_24h | 21/33 | 64% |
+| low_24h | 21/33 | 64% |
+| market_cap | 6/33 | 18% |
 
 ## 完整對照表
 
@@ -69,23 +69,26 @@ pub struct AssetData {
 | 30 | FCS API | both | ✅ | USD | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
 | 31 | Jupiter | dex | ✅ | USD | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | 32 | OKX DEX | dex | ✅ | USD | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| 33 | Raydium | dex | ✅ | USD | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| 34 | Subgraph | dex | ✅ | USD | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 > 注意：Tiingo 根據查詢的是股票還是加密貨幣，回傳的欄位不同，因此分兩行列出。
+> Raydium 和 Subgraph 為 DEX Pool Provider，主要透過 extra 欄位提供 pool_tvl、route_path 等資訊。
 
 ## 分類
 
 ### 通用欄位（建議 Card 永遠顯示）
 - `price` — 100% 覆蓋
-- `change_percent_24h` — 86% 覆蓋
+- `change_percent_24h` — 82% 覆蓋
 - `currency` — 100% 覆蓋（但值不同：USD / USDT / PROB / 動態）
 
 ### 高覆蓋欄位（建議 Card 預設顯示，無資料時隱藏）
-- `volume` — 90%
-- `change_24h` — 79%
-- `high_24h` / `low_24h` — 72%
+- `volume` — 79%
+- `change_24h` — 76%
+- `high_24h` / `low_24h` — 64%
 
 ### 低覆蓋欄位（建議放在展開區域）
-- `market_cap` — 21%（僅 CoinGecko, CoinMarketCap, CryptoCompare, FMP, Mboum, CoinPaprika）
+- `market_cap` — 18%（僅 CoinGecko, CoinMarketCap, CryptoCompare, FMP, Mboum, CoinPaprika）
 
 ## 缺少關鍵欄位的 Provider
 

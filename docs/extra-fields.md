@@ -39,6 +39,8 @@
 | 30 | FCS API | 交易所 |
 | 31 | Jupiter | mint |
 | 32 | OKX DEX | 鏈, token, 預估Gas |
+| 33 | Raydium | pool_tvl, route_path, token_from, token_to, amount_out, gas_estimate |
+| 34 | Subgraph | pool_tvl, volume_24h, route_path, token_from, token_to |
 
 ## Extra 欄位交叉對照表
 
@@ -132,14 +134,20 @@
 - 加密聚合器：CMC排名, 流通量, ATH, 1h%, 7d%
 - 預測市場：問題, 結束日期, 選項（需要特殊 UI）
 
-### 無 extra 的 Provider（10 個）
+### 無 extra 的 Provider（8 個）
 Coinbase, CoinGecko, CryptoCompare, Tiingo(加密), Bitquery, Kraken, Bitfinex, CoinAPI
 
 ### DEX 聚合器欄位
 
-| 欄位 | Jupiter | OKX DEX | 說明 |
-|---|:---:|:---:|---|
-| mint | ✅ | | Solana mint address |
-| 鏈 | | ✅ | 所在區塊鏈 (Ethereum, BSC, Solana 等) |
-| token | | ✅ | Token 合約地址 |
-| 預估Gas | | ✅ | 預估 Gas 費用 |
+| 欄位 | Jupiter | OKX DEX | Raydium | Subgraph | 說明 |
+|---|:---:|:---:|:---:|:---:|---|
+| mint | ✅ | | | | Solana mint address |
+| 鏈 | | ✅ | | | 所在區塊鏈 (Ethereum, BSC, Solana 等) |
+| token | | ✅ | | | Token 合約地址 |
+| 預估Gas | | ✅ | ✅ | | 預估 Gas 費用 |
+| pool_tvl | | | ✅ | ✅ | 池 TVL |
+| route_path | | | ✅ | ✅ | 路由路徑 |
+| token_from | | | ✅ | ✅ | 來源 token 地址 |
+| token_to | | | ✅ | ✅ | 目標 token 地址 |
+| amount_out | | | ✅ | | 1 個 token_from 可換得的 token_to 數量 |
+| volume_24h | | | | ✅ | 24h 成交量 (USD) |

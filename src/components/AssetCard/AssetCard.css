@@ -196,24 +196,17 @@
 .asset-footer-provider { font-size: 10px; color: var(--overlay0); }
 .asset-list-provider-label { font-size: 11px; color: var(--overlay0); min-width: 80px; }
 
-/* Edit Panel */
+/* Edit Panel (modal) */
 .asset-edit-panel {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 50;
-  background: var(--base);
-  border: 1px solid var(--surface1);
-  border-radius: var(--radius-card);
-  padding: 12px;
-  box-shadow: 0 8px 24px var(--shadow);
+  width: 360px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.asset-card-list .asset-edit-panel { border-radius: var(--radius-sm); top: auto; bottom: 100%; margin-bottom: 4px; }
+.asset-card-list .asset-edit-panel,
+.asset-card-compact .asset-edit-panel { /* no special positioning needed for modal */ }
 
 .edit-row { display: flex; flex-direction: column; gap: 3px; }
 .edit-row label { font-size: 11px; color: var(--overlay0); }

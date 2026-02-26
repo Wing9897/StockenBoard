@@ -19,6 +19,24 @@ export function formatPrice(price: number | undefined | null, currency: string =
   return sym + price.toPrecision(4);
 }
 
+/** 截斷地址顯示 — DexCard / DexEditPanel 共用 */
+export function truncateAddr(addr: string, len = 6): string {
+  if (!addr) return '-';
+  if (addr.length <= len * 2 + 2) return addr;
+  return `${addr.slice(0, len)}...${addr.slice(-4)}`;
+}
+
+/** 從 displayName 解析交易對 — DexCard 共用 */
+export function parsePairFromName(displayName: string | undefined): [string, string] {
+  const dn = displayName || '';
+  const sep = dn.includes('/') ? '/' : dn.includes('→') ? '→' : null;
+  if (sep) {
+    const parts = dn.split(sep).map(s => s.trim());
+    if (parts.length === 2 && parts[0] && parts[1]) return [parts[0], parts[1]];
+  }
+  return ['', ''];
+}
+
 /** 從冗長的批量錯誤訊息中提取簡短摘要
  *  注意：regex 匹配的是 Rust 後端回傳的中文錯誤格式，這是刻意設計 */
 export function summarizeError(error: string): string {
