@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Subscription } from '../../types';
 import { t } from '../../lib/i18n';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
 
 interface BulkDeleteProps {
   subscriptions: Subscription[];
@@ -12,6 +13,7 @@ interface BulkDeleteProps {
 
 export function BulkDelete({ subscriptions, isCustomView, onConfirm, onClose, getLabel }: BulkDeleteProps) {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  useEscapeKey(onClose);
 
   const toggle = (id: number) => {
     setSelectedIds(prev => {
@@ -31,10 +33,10 @@ export function BulkDelete({ subscriptions, isCustomView, onConfirm, onClose, ge
 
   return (
     <div className="modal-backdrop bd-backdrop" onClick={onClose}>
-      <div className="modal-container bd-modal" onClick={e => e.stopPropagation()}>
+      <div className="modal-container bd-modal" role="dialog" aria-modal="true" aria-label={isCustomView ? t.subs.bulkRemoveView : t.subs.bulkUnsubscribe} onClick={e => e.stopPropagation()}>
         <div className="bd-header">
           <h4 className="bd-title">{isCustomView ? t.subs.bulkRemoveView : t.subs.bulkUnsubscribe}</h4>
-          <button className="vsm-close" onClick={onClose}>✕</button>
+          <button className="vsm-close" onClick={onClose} aria-label={t.common.close}>✕</button>
         </div>
         <div className="bd-actions">
           <button className="dm-pick-btn" onClick={() => setSelectedIds(new Set(subscriptions.map(s => s.id)))}>{t.subs.selectAll}</button>

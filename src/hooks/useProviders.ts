@@ -22,8 +22,8 @@ export function useProviders() {
       const map = new Map<string, ProviderSettings>();
       for (const row of rows) map.set(row.provider_id, row);
       setSettings(map);
-    } catch (error) {
-      console.error('Failed to load provider settings:', error);
+    } catch {
+      // silent
     } finally {
       setLoading(false);
     }
@@ -32,8 +32,8 @@ export function useProviders() {
   async function loadProviderInfos() {
     try {
       setProviderInfos(await invoke<ProviderInfo[]>('get_all_providers'));
-    } catch (error) {
-      console.error('Failed to load provider infos:', error);
+    } catch {
+      // silent
     }
   }
 
@@ -48,8 +48,8 @@ export function useProviders() {
       const db = await getDb();
 
       await db.execute(
-        `INSERT INTO provider_settings (provider_id, api_key, api_secret, refresh_interval, connection_type, enabled, api_url)
-         VALUES ($1, $2, $3, $4, $5, 1, $6)
+        `INSERT INTO provider_settings (provider_id, api_key, api_secret, refresh_interval, connection_type, api_url)
+         VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT(provider_id) DO UPDATE SET
            api_key = $2, api_secret = $3, refresh_interval = $4, connection_type = $5, api_url = $6`,
         [
@@ -68,8 +68,8 @@ export function useProviders() {
         apiSecret: updates.api_secret || null,
       });
       await loadSettings();
-    } catch (error) {
-      console.error('Failed to update provider:', error);
+    } catch {
+      // silent
     }
   }
 

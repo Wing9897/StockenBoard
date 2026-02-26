@@ -62,3 +62,5 @@ export interface WsTickerUpdate {
   provider_id: string;
   data: AssetData;
 }
+
+export type ViewMode = 'grid' | 'list' | 'compact';

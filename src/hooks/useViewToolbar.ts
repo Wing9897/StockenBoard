@@ -18,10 +18,12 @@ interface UseViewToolbarOptions {
   deleteView: (viewId: number) => Promise<void>;
   toast: ToastLike;
   storageKey: string;
+  /** 自訂確認刪除 — 回傳 true 表示確認 */
+  confirmDelete?: (message: string) => Promise<boolean>;
 }
 
 export function useViewToolbar({
-  views, activeViewId, createView, renameView, deleteView, toast, storageKey,
+  views, activeViewId, createView, renameView, deleteView, toast, storageKey, confirmDelete,
 }: UseViewToolbarOptions) {
   const [editorState, setEditorState] = useState<EditorState>(null);
   const [pinnedViewIds, setPinnedViewIds] = useState<number[]>(() => {
@@ -49,8 +51,11 @@ export function useViewToolbar({
     setEditorState(null);
   }, [editorState, createView, renameView, toast]);
 
-  const handleDeleteView = useCallback((viewId: number) => {
-    if (confirm(t.views.deleteViewConfirm)) {
+  const handleDeleteView = useCallback(async (viewId: number) => {
+    const confirmed = confirmDelete
+      ? await confirmDelete(t.views.deleteViewConfirm)
+      : true;
+    if (confirmed) {
       const viewName = views.find(v => v.id === viewId)?.name;
       deleteView(viewId)
         .then(() => toast.success(t.views.deleted, viewName ? t.views.viewDeleted(viewName) : ''))
@@ -61,7 +66,7 @@ export function useViewToolbar({
         return next;
       });
     }
-  }, [views, deleteView, toast, storageKey]);
+  }, [views, deleteView, toast, storageKey, confirmDelete]);
 
   const togglePinView = useCallback((viewId: number) => {
     setPinnedViewIds(prev => {

@@ -1,5 +1,6 @@
 import { View } from '../../types';
 import { t } from '../../lib/i18n';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
 
 interface ViewManagerProps {
   views: View[];
@@ -17,16 +18,17 @@ export function ViewManager({
   views, activeViewId, pinnedViewIds,
   onSelectView, onTogglePin, onRename, onDelete, onCreate, onClose,
 }: ViewManagerProps) {
+  useEscapeKey(onClose);
   const sorted = [...views]
     .filter(v => !v.is_default)
     .sort((a, b) => a.id - b.id);
 
   return (
     <div className="modal-backdrop vm-backdrop" onClick={onClose}>
-      <div className="modal-container vm-modal" onClick={e => e.stopPropagation()}>
+      <div className="modal-container vm-modal" role="dialog" aria-modal="true" aria-label={t.views.manageViews} onClick={e => e.stopPropagation()}>
         <div className="vm-header">
           <h4 className="vm-title">{t.views.manageViews}</h4>
-          <button className="vsm-close" onClick={onClose}>✕</button>
+          <button className="vsm-close" onClick={onClose} aria-label={t.common.close}>✕</button>
         </div>
         <ul className="vm-list">
           {sorted.map(view => (
@@ -39,11 +41,12 @@ export function ViewManager({
                   className={`vm-pin-btn ${pinnedViewIds.includes(view.id) ? 'pinned' : ''}`}
                   onClick={() => onTogglePin(view.id)}
                   title={pinnedViewIds.includes(view.id) ? t.views.unpin : t.views.pin}
+                  aria-label={pinnedViewIds.includes(view.id) ? t.views.unpin : t.views.pin}
                 >
                   {pinnedViewIds.includes(view.id) ? '★' : '☆'}
                 </button>
-                <button className="vm-action-btn" onClick={() => { onRename(view.id); onClose(); }} title={t.views.rename}>✎</button>
-                <button className="vm-action-btn danger" onClick={() => onDelete(view.id)} title={t.common.delete}>✕</button>
+                <button className="vm-action-btn" onClick={() => { onRename(view.id); onClose(); }} title={t.views.rename} aria-label={t.views.rename}>✎</button>
+                <button className="vm-action-btn danger" onClick={() => onDelete(view.id)} title={t.common.delete} aria-label={t.common.delete}>✕</button>
               </div>
             </li>
           ))}

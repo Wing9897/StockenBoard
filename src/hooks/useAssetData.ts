@@ -119,7 +119,7 @@ export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
       const info = await invoke<ProviderInfo[]>('get_all_providers');
       setProviderInfoList(info);
       providerInfoRef.current = info;
-    } catch (err) { console.error('Failed to load provider info:', err); }
+    } catch { /* silent — non-critical */ }
   }, []);
 
   const loadSubscriptions = useCallback(async () => {
@@ -131,21 +131,21 @@ export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
       );
       setSubscriptions(result);
       return result;
-    } catch (err) { console.error('Failed to load subscriptions:', err); return []; }
+    } catch { return []; }
   }, [subType]);
 
   const loadCachedPrices = useCallback(async () => {
     try {
       const cached = await invoke<AssetData[]>('get_cached_prices');
       if (cached.length > 0) priceStore.updatePrices(cached);
-    } catch (err) { console.error('Failed to load cached prices:', err); }
+    } catch { /* silent */ }
   }, []);
 
   const loadCachedTicks = useCallback(async () => {
     try {
       const ticks = await invoke<{ provider_id: string; fetched_at: number; interval_ms: number }[]>('get_poll_ticks');
       for (const t of ticks) priceStore.updateTick(t.provider_id, t.fetched_at, t.interval_ms);
-    } catch (err) { console.error('Failed to load cached ticks:', err); }
+    } catch { /* silent */ }
   }, []);
 
   // Event listeners
@@ -180,7 +180,7 @@ export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
       await invoke('start_ws_stream', { providerId, symbols });
       wsActiveRef.current.add(key);
       await setupWsListener();
-    } catch (err) { console.error(`WS stream failed for ${providerId}:`, err); }
+    } catch { /* silent */ }
   }, [setupWsListener]);
 
   const startWsConnections = useCallback(async (subs: Subscription[]) => {
@@ -197,22 +197,21 @@ export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
         }
       }
       for (const [pid, syms] of Object.entries(groups)) startWsStream(pid, syms);
-    } catch (err) { console.error('Failed to start WS connections:', err); }
+    } catch { /* silent */ }
   }, [startWsStream]);
 
   const reloadPolling = useCallback(async () => {
-    try { await invoke('reload_polling'); } catch (err) { console.error('Failed to reload polling:', err); }
+    try { await invoke('reload_polling'); } catch { /* silent */ }
   }, []);
 
   // ── CRUD ────────────────────────────────────────────────────
 
-  /** 新增 asset 訂閱 */
+  /** 新增 asset 訂閱（先驗證 symbol 有效性） */
   const addSubscription = useCallback(
     async (symbol: string, displayName?: string, providerId?: string, assetType?: string) => {
       const pid = providerId || 'binance';
       const isDex = providerInfoRef.current.find(p => p.id === pid)?.provider_type === 'dex';
       const storedSymbol = isDex ? symbol.trim() : symbol.toUpperCase();
-      // 先驗證 symbol 是否有效
       await invoke('fetch_asset_price', { providerId: pid, symbol: storedSymbol });
       const db = await getDb();
       await db.execute(
@@ -221,6 +220,52 @@ export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
       );
       await loadSubscriptions();
       await reloadPolling();
+    },
+    [loadSubscriptions, reloadPolling]
+  );
+
+  /** 批量新增 asset 訂閱（並行驗證，只寫通過的，最後統一 reload） */
+  const addSubscriptionBatch = useCallback(
+    async (
+      items: { symbol: string; displayName?: string; providerId?: string; assetType?: string }[],
+      onProgress?: (done: number, total: number) => void,
+    ) => {
+      let done = 0;
+      const total = items.length;
+      // 並行驗證所有 symbol，每完成一個即回報進度
+      const results = await Promise.allSettled(
+        items.map(item => {
+          const pid = item.providerId || 'binance';
+          const isDex = providerInfoRef.current.find(p => p.id === pid)?.provider_type === 'dex';
+          const storedSymbol = isDex ? item.symbol.trim() : item.symbol.toUpperCase();
+          return invoke('fetch_asset_price', { providerId: pid, symbol: storedSymbol })
+            .then(() => ({ ...item, storedSymbol, pid }))
+            .finally(() => { done++; onProgress?.(done, total); });
+        })
+      );
+      const valid = results.filter((r): r is PromiseFulfilledResult<{ symbol: string; displayName?: string; providerId?: string; assetType?: string; storedSymbol: string; pid: string }> => r.status === 'fulfilled').map(r => r.value);
+      const failed = items.filter((_, i) => results[i].status === 'rejected').map(item => item.symbol);
+      const succeeded: string[] = [];
+      const dbDuplicates: string[] = [];
+      if (valid.length > 0) {
+        const db = await getDb();
+        for (const v of valid) {
+          try {
+            await db.execute(
+              'INSERT INTO subscriptions (sub_type, symbol, display_name, selected_provider_id, asset_type) VALUES ($1, $2, $3, $4, $5)',
+              ['asset', v.storedSymbol, v.displayName || null, v.pid, v.assetType || 'crypto']
+            );
+            succeeded.push(v.storedSymbol);
+          } catch {
+            dbDuplicates.push(v.storedSymbol);
+          }
+        }
+        if (succeeded.length > 0) {
+          await loadSubscriptions();
+          await reloadPolling();
+        }
+      }
+      return { succeeded, failed, dbDuplicates };
     },
     [loadSubscriptions, reloadPolling]
   );
@@ -290,7 +335,8 @@ export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
     const placeholders = ids.map((_, i) => '$' + (i + 1)).join(',');
     await db.execute(`DELETE FROM subscriptions WHERE id IN (${placeholders})`, ids);
     await loadSubscriptions();
-  }, [loadSubscriptions]);
+    await reloadPolling();
+  }, [loadSubscriptions, reloadPolling]);
 
 
 
@@ -350,6 +396,7 @@ export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
     providerInfoList,
     loading,
     addSubscription,
+    addSubscriptionBatch,
     addDexSubscription,
     removeSubscription,
     removeSubscriptions,

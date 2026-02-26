@@ -1,20 +1,24 @@
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { useState, useMemo, useCallback } from 'react';
 import { useAssetData } from '../../hooks/useAssetData';
 import { useViews } from '../../hooks/useViews';
 import { useViewToolbar } from '../../hooks/useViewToolbar';
+import { useVisibleSubscriptions } from '../../hooks/useVisibleSubscriptions';
 import { t } from '../../lib/i18n';
+import { getGridClass } from '../../lib/viewUtils';
 import { useLocale } from '../../hooks/useLocale';
+import { useConfirm } from '../../hooks/useConfirm';
 import { DexCard } from './DexCard';
 import { DexSubscriptionManager } from './DexSubscriptionManager';
 import { ViewEditor } from '../ViewEditor/ViewEditor';
 import { ViewSubscriptionManager } from '../ViewEditor/ViewSubscriptionManager';
 import { ViewManager } from '../ViewManager/ViewManager';
 import { BulkDelete } from '../BulkDelete/BulkDelete';
+import { BatchActions } from '../BatchActions/BatchActions';
+import { ConfirmDialog } from '../ConfirmDialog/ConfirmDialog';
+import { DashboardToolbar } from '../DashboardToolbar/DashboardToolbar';
 
+import type { ViewMode } from '../../types';
 import './DexPage.css';
-
-type ViewMode = 'grid' | 'list' | 'compact';
 
 interface DexPageProps {
   onToast: {
@@ -26,6 +30,7 @@ interface DexPageProps {
 
 export function DexPage({ onToast }: DexPageProps) {
   useLocale();
+  const { confirmState, requestConfirm, handleConfirm, handleCancel } = useConfirm();
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem('sb_dex_view_mode');
     if (saved === 'list' || saved === 'compact') return saved;
@@ -35,6 +40,7 @@ export function DexPage({ onToast }: DexPageProps) {
   const [showSubManager, setShowSubManager] = useState(false);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
   const [showViewManager, setShowViewManager] = useState(false);
+  const [showBatchActions, setShowBatchActions] = useState(false);
 
   const handleSetViewMode = (mode: ViewMode) => {
     setViewMode(mode);
@@ -61,26 +67,12 @@ export function DexPage({ onToast }: DexPageProps) {
   } = useViewToolbar({
     views, activeViewId, createView, renameView, deleteView, toast: onToast,
     storageKey: 'sb_dex_pinned_views',
+    confirmDelete: requestConfirm,
   });
 
   const isCustomView = activeViewSubscriptionIds !== null;
 
-  const viewFilteredSubs = useMemo(() => {
-    if (activeViewSubscriptionIds === null) return subscriptions;
-    const idSet = new Set(activeViewSubscriptionIds);
-    return subscriptions.filter(sub => idSet.has(sub.id));
-  }, [subscriptions, activeViewSubscriptionIds]);
-
-  const prevVisibleRef = useRef<string>('');
-  useEffect(() => {
-    const ids = viewFilteredSubs.map(s => s.id);
-    const key = ids.join(',');
-    if (key === prevVisibleRef.current) return;
-    prevVisibleRef.current = key;
-    invoke('set_visible_subscriptions', { ids, scope: 'dex' }).catch(err =>
-      console.error('Failed to set visible subscriptions:', err)
-    );
-  }, [viewFilteredSubs]);
+  const viewFilteredSubs = useVisibleSubscriptions(subscriptions, activeViewSubscriptionIds, 'dex');
 
   const handleRemove = useCallback(async (id: number) => {
     if (isCustomView) {
@@ -130,55 +122,31 @@ export function DexPage({ onToast }: DexPageProps) {
         </div>
       ) : (
         <>
-          <div className="dashboard-toolbar">
-            <div className="dashboard-filters" role="tablist" aria-label={t.nav.dexPageSwitch}>
-              {toolbarViews.map(view => (
-                <button
-                  key={view.id}
-                  className={`view-tag ${view.id === activeViewId ? 'active' : ''} ${view.is_default ? 'default' : ''}`}
-                  role="tab"
-                  aria-selected={view.id === activeViewId}
-                  onClick={() => setActiveView(view.id)}
-                >
-                  {view.is_default ? t.providers.all : view.name}
-                  {view.is_default
-                    ? ` (${subscriptions.length})`
-                    : ` (${viewSubCounts[view.id] ?? 0})`
-                  }
-                </button>
-              ))}
-              {views.filter(v => !v.is_default).length > 0 && (
-                <button className="view-manager-btn" onClick={() => setShowViewManager(true)} title={t.views.manageViews}>⋯</button>
-              )}
-              <button className="add-view-btn" onClick={handleCreateView} title={t.views.addView}>+</button>
-            </div>
-            <div className="toolbar-right">
-              {activeViewSubscriptionIds !== null && (
-                <button
-                  className={`manage-subs-btn ${showSubManager ? 'active' : ''}`}
-                  onClick={() => setShowSubManager(prev => !prev)}
-                >
-                  {t.subs.manageSubs}
-                </button>
-              )}
-              <button className="add-sub-btn" onClick={() => setShowAddSub(true)} title={t.subs.addDexSub}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-              </button>
-              <button className="copy-symbols-btn" onClick={handleCopySymbols} title={t.subs.copyAllPairs}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              </button>
-              <div className="view-toggle">
-                <button className={`view-btn ${viewMode === 'compact' ? 'active' : ''}`} onClick={() => handleSetViewMode('compact')} title={t.viewMode.compact}>▪</button>
-                <button className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`} onClick={() => handleSetViewMode('grid')} title={t.viewMode.grid}>▦</button>
-                <button className={`view-btn ${viewMode === 'list' ? 'active' : ''}`} onClick={() => handleSetViewMode('list')} title={t.viewMode.list}>☰</button>
-              </div>
-              <button className="bulk-delete-btn" onClick={() => setShowBulkDelete(true)} title={isCustomView ? t.subs.bulkRemoveView : t.subs.bulkUnsubscribe}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-              </button>
-            </div>
-          </div>
+          <DashboardToolbar
+            toolbarViews={toolbarViews}
+            views={views}
+            activeViewId={activeViewId}
+            totalCount={subscriptions.length}
+            viewSubCounts={viewSubCounts}
+            isCustomView={isCustomView}
+            showSubManager={showSubManager}
+            viewMode={viewMode}
+            onSetViewMode={handleSetViewMode}
+            onSelectView={setActiveView}
+            onCreateView={handleCreateView}
+            onOpenViewManager={() => setShowViewManager(true)}
+            onToggleSubManager={() => setShowSubManager(prev => !prev)}
+            onAdd={() => setShowAddSub(true)}
+            onCopy={handleCopySymbols}
+            onBatchActions={() => setShowBatchActions(true)}
+            onBulkDelete={() => setShowBulkDelete(true)}
+            addTitle={t.subs.addDexSub}
+            copyTitle={t.subs.copyAllPairs}
+            bulkDeleteTitle={isCustomView ? t.subs.bulkRemoveView : t.subs.bulkUnsubscribe}
+            tabListLabel={t.nav.dexPageSwitch}
+          />
 
-          <div className={viewMode === 'grid' ? 'asset-grid' : viewMode === 'compact' ? 'asset-grid compact' : 'asset-list'}>
+          <div className={getGridClass(viewMode)}>
             {viewFilteredSubs.map(sub => (
               <DexCard
                 key={sub.id}
@@ -228,6 +196,8 @@ export function DexPage({ onToast }: DexPageProps) {
           })}
           onConfirm={async (ids) => {
             if (ids.size === 0) return;
+            const confirmed = await requestConfirm(t.subs.bulkConfirm(ids.size));
+            if (!confirmed) return;
             const count = ids.size;
             if (isCustomView) {
               for (const id of ids) {
@@ -248,6 +218,7 @@ export function DexPage({ onToast }: DexPageProps) {
       {showAddSub && (
         <DexSubscriptionManager
           onAdd={handleAdd}
+          existingKeys={new Set(subscriptions.map(s => `${s.selected_provider_id}:${s.symbol}`))}
           onToast={(type, title, msg) => onToast[type](title, msg)}
           onClose={() => setShowAddSub(false)}
         />
@@ -265,6 +236,17 @@ export function DexPage({ onToast }: DexPageProps) {
           onCreate={handleCreateView}
           onClose={() => setShowViewManager(false)}
         />
+      )}
+
+      {showBatchActions && (
+        <BatchActions
+          mode="dex"
+          onClose={() => setShowBatchActions(false)}
+        />
+      )}
+
+      {confirmState && (
+        <ConfirmDialog message={confirmState.message} onConfirm={handleConfirm} onCancel={handleCancel} />
       )}
     </div>
   );

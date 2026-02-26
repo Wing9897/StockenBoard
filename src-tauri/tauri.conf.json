@@ -22,7 +22,7 @@
     "security": {
       "csp": null,
       "assetProtocol": {
-        "scope": ["$APPDATA/icons/**"]
+        "scope": ["$APPDATA/icons/**", "$APPDATA/theme_bg/**"]
       }
     }
   },

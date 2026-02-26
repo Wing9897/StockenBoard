@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useProviders } from '../../hooks/useProviders';
 import { t } from '../../lib/i18n';
 import { useLocale } from '../../hooks/useLocale';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
 import './Settings.css';
 
 type SettingsViewMode = 'grid' | 'list';
@@ -107,6 +108,8 @@ export function ProviderSettings({ onSaved }: { onSaved?: () => void }) {
     onSaved?.();
   };
 
+  useEscapeKey(() => { if (editingId) setEditingId(null); });
+
   const showModeToggle = (pid: string) => {
     const info = getProviderInfo(pid);
     return info ? (info.requires_api_key || info.optional_api_key) : false;
@@ -134,8 +137,8 @@ export function ProviderSettings({ onSaved }: { onSaved?: () => void }) {
         <div className="ps-toolbar-right">
           <div className="ps-search-wrap">
             <svg className="ps-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input className="ps-search" type="text" placeholder={t.providers.searchPlaceholder} value={search} onChange={e => setSearch(e.target.value)} />
-            {search && <button className="ps-search-clear" onClick={() => setSearch('')}>&#x2715;</button>}
+            <input className="ps-search" type="text" placeholder={t.providers.searchPlaceholder} value={search} onChange={e => setSearch(e.target.value)} aria-label={t.providers.searchPlaceholder} />
+            {search && <button className="ps-search-clear" onClick={() => setSearch('')} aria-label={t.common.clearSearch}>&#x2715;</button>}
           </div>
           <div className="ps-view-toggle">
             <button className={`ps-vbtn ${viewMode === 'grid' ? 'active' : ''}`} onClick={() => handleSetView('grid')} title={t.viewMode.grid}>
@@ -221,13 +224,13 @@ export function ProviderSettings({ onSaved }: { onSaved?: () => void }) {
 
       {editingId && editingProvider && (
         <div className="modal-backdrop ps-modal-backdrop" onClick={() => setEditingId(null)}>
-          <div className="modal-container ps-modal" onClick={e => e.stopPropagation()}>
+          <div className="modal-container ps-modal" role="dialog" aria-modal="true" aria-label={editingProvider.name} onClick={e => e.stopPropagation()}>
             <div className="ps-modal-head">
               <div>
                 <h4 className="ps-modal-title">{editingProvider.name}</h4>
                 <span className="ps-modal-type" style={{ color: TYPE_COLORS[editingProvider.provider_type] }}>{TYPE_LABELS[editingProvider.provider_type]}</span>
               </div>
-              <button className="ps-modal-close" onClick={() => setEditingId(null)}>&#x2715;</button>
+              <button className="ps-modal-close" onClick={() => setEditingId(null)} aria-label={t.common.close}>&#x2715;</button>
             </div>
             {editInfo && (
               <div className="ps-modal-meta">

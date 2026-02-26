@@ -33,7 +33,7 @@ export function useViews(viewType: 'asset' | 'dex' = 'asset') {
       for (const v of viewsList) if (!v.is_default) counts[v.id] = 0;
       for (const r of rows) counts[r.view_id] = r.cnt;
       setViewSubCounts(counts);
-    } catch (err) { console.error('Failed to load view sub counts:', err); }
+    } catch { /* silent */ }
   }, []);
 
   const loadViews = useCallback(async () => {
@@ -47,7 +47,7 @@ export function useViews(viewType: 'asset' | 'dex' = 'asset') {
       setViews(loaded);
       await loadViewSubCounts(loaded);
       return loaded;
-    } catch (err) { console.error('Failed to load views:', err); return []; }
+    } catch { return []; }
   }, [viewType, loadViewSubCounts]);
 
   const loadActiveViewSubs = useCallback(async (viewId: number, viewsList: View[]) => {
@@ -59,8 +59,7 @@ export function useViews(viewType: 'asset' | 'dex' = 'asset') {
         'SELECT subscription_id FROM view_subscriptions WHERE view_id = $1', [viewId]
       );
       setActiveViewSubscriptionIds(rows.map(r => r.subscription_id));
-    } catch (err) {
-      console.error('Failed to load view subscriptions:', err);
+    } catch {
       setActiveViewSubscriptionIds(null);
     }
   }, []);

@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Subscription, View } from '../../types';
 import { getDb } from '../../lib/db';
+import { useConfirm } from '../../hooks/useConfirm';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
+import { ConfirmDialog } from '../ConfirmDialog/ConfirmDialog';
 import { t } from '../../lib/i18n';
 import './Settings.css';
 
@@ -12,7 +15,7 @@ interface DataManagerProps {
 }
 
 interface ExportData {
-  version: 2;
+  version: 1;
   exported_at: string;
   subscriptions: {
     sub_type: 'asset' | 'dex';
@@ -33,8 +36,11 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
   const [showExportPicker, setShowExportPicker] = useState(false);
   const [selectedViewIds, setSelectedViewIds] = useState<Set<number>>(new Set());
   const [allViews, setAllViews] = useState<View[]>([]);
+  const { confirmState, requestConfirm, handleConfirm, handleCancel } = useConfirm();
 
   const customViews = allViews.filter(v => !v.is_default);
+
+  useEscapeKey(() => { if (showExportPicker) setShowExportPicker(false); });
 
   const openExportPicker = async () => {
     try {
@@ -86,7 +92,7 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
     }
 
     const data: ExportData = {
-      version: 2,
+      version: 1,
       exported_at: new Date().toISOString(),
       subscriptions: allSubs.map(s => ({
         sub_type: s.sub_type as 'asset' | 'dex',
@@ -124,21 +130,21 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
       const parsed = JSON.parse(raw);
       if (!parsed.subscriptions || !Array.isArray(parsed.subscriptions)) throw new Error('invalid');
       data = {
-        ...parsed,
-        version: 2,
-        subscriptions: parsed.subscriptions.map((s: Record<string, unknown>) => ({
-          sub_type: s.sub_type || 'asset',
+        version: 1,
+        exported_at: parsed.exported_at || '',
+        subscriptions: parsed.subscriptions.map((s: ExportData['subscriptions'][0]) => ({
+          sub_type: s.sub_type,
           symbol: s.symbol,
           display_name: s.display_name || null,
           provider: s.provider,
-          asset_type: s.asset_type || 'crypto',
+          asset_type: s.asset_type,
           pool_address: s.pool_address,
           token_from_address: s.token_from_address,
           token_to_address: s.token_to_address,
         })),
-        views: (parsed.views || []).map((v: Record<string, unknown>) => ({
+        views: (parsed.views || []).map((v: ExportData['views'][0]) => ({
           name: v.name,
-          view_type: v.view_type || 'asset',
+          view_type: v.view_type,
           subscriptions: v.subscriptions || [],
         })),
       };
@@ -146,6 +152,11 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
       onToast?.('error', t.settings.importFailed, t.settings.invalidFormat);
       return;
     }
+
+    const confirmed = await requestConfirm(
+      t.settings.importConfirm(data.subscriptions.length, data.views?.length || 0)
+    );
+    if (!confirmed) return;
 
     setImporting(true);
     const db = await getDb();
@@ -237,16 +248,16 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
         <div className="dm-result">
           <span>{t.settings.importDone(importResult.subs, importResult.views)}</span>
           {importResult.skipped > 0 && <span>{t.settings.importSkipped(importResult.skipped)}</span>}
-          <button className="dm-result-close" onClick={() => setImportResult(null)}>✕</button>
+          <button className="dm-result-close" onClick={() => setImportResult(null)} aria-label={t.common.close}>✕</button>
         </div>
       )}
 
       {showExportPicker && (
         <div className="modal-backdrop dm-picker-backdrop" onClick={() => setShowExportPicker(false)}>
-          <div className="modal-container dm-picker-modal" onClick={e => e.stopPropagation()}>
+          <div className="modal-container dm-picker-modal" role="dialog" aria-modal="true" aria-label={t.settings.exportPicker} onClick={e => e.stopPropagation()}>
             <div className="dm-picker-header">
               <h4 className="dm-picker-title">{t.settings.exportPicker}</h4>
-              <button className="vsm-close" onClick={() => setShowExportPicker(false)}>✕</button>
+              <button className="vsm-close" onClick={() => setShowExportPicker(false)} aria-label={t.common.close}>✕</button>
             </div>
             <div className="dm-picker-info">
               {t.settings.exportPickerInfo}
@@ -267,7 +278,7 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
                           onChange={() => toggleView(view.id)}
                         />
                         <span>{view.name}</span>
-                        <span className={`asset-type-tag ${view.view_type}`} style={{ marginLeft: 6, fontSize: '0.75em' }}>
+                        <span className={`asset-type-tag ${view.view_type} dm-picker-tag`}>
                           {view.view_type === 'dex' ? 'DEX' : t.settings.spot}
                         </span>
                       </label>
@@ -288,6 +299,10 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
             </div>
           </div>
         </div>
+      )}
+
+      {confirmState && (
+        <ConfirmDialog message={confirmState.message} onConfirm={handleConfirm} onCancel={handleCancel} />
       )}
     </div>
   );

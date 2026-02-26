@@ -143,19 +143,25 @@ pub async fn enable_provider(
 }
 
 #[tauri::command]
-pub async fn disable_provider(
-    state: tauri::State<'_, AppState>,
-    provider_id: String,
-) -> Result<(), String> {
-    state.providers.write().await.remove(&provider_id);
+pub async fn reload_polling(state: tauri::State<'_, AppState>) -> Result<(), String> {
     state.polling.reload();
     Ok(())
 }
 
 #[tauri::command]
-pub async fn reload_polling(state: tauri::State<'_, AppState>) -> Result<(), String> {
-    state.polling.reload();
+pub async fn set_unattended_polling(
+    state: tauri::State<'_, AppState>,
+    enabled: bool,
+) -> Result<(), String> {
+    state.polling.set_unattended(enabled).await;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn get_unattended_polling(
+    state: tauri::State<'_, AppState>,
+) -> Result<bool, String> {
+    Ok(state.polling.is_unattended().await)
 }
 
 #[tauri::command]
@@ -250,7 +256,6 @@ pub async fn stop_ws_stream(
 
 #[tauri::command]
 pub async fn set_icon(app: tauri::AppHandle, symbol: String) -> Result<String, String> {
-    use tauri::Manager;
     let file = rfd::AsyncFileDialog::new()
         .add_filter("圖片", &["png", "jpg", "jpeg", "webp", "svg"])
         .set_title("選擇圖示")
@@ -275,7 +280,6 @@ pub async fn set_icon(app: tauri::AppHandle, symbol: String) -> Result<String, S
 
 #[tauri::command]
 pub async fn remove_icon(app: tauri::AppHandle, symbol: String) -> Result<(), String> {
-    use tauri::Manager;
     let icon_name = symbol.to_lowercase().replace("usdt", "").replace("-usd", "");
     let dest = app
         .path()
@@ -293,13 +297,93 @@ pub async fn remove_icon(app: tauri::AppHandle, symbol: String) -> Result<(), St
 
 #[tauri::command]
 pub async fn get_icons_dir(app: tauri::AppHandle) -> Result<String, String> {
-    use tauri::Manager;
     let dir = app
         .path()
         .app_data_dir()
         .map_err(|e| format!("無法取得 app 目錄: {}", e))?
         .join("icons");
     Ok(dir.to_string_lossy().to_string())
+}
+
+/// 讀取本地檔案並回傳 base64 data URL — 繞過 asset protocol，dev/prod 都能用
+#[tauri::command]
+pub async fn read_local_file_base64(path: String) -> Result<String, String> {
+    let bytes = tokio::fs::read(&path).await
+        .map_err(|e| format!("讀取失敗: {}", e))?;
+    use base64::Engine;
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    // 根據副檔名推斷 MIME type
+    let mime = if path.ends_with(".png") { "image/png" }
+        else if path.ends_with(".jpg") || path.ends_with(".jpeg") { "image/jpeg" }
+        else if path.ends_with(".webp") { "image/webp" }
+        else if path.ends_with(".svg") { "image/svg+xml" }
+        else if path.ends_with(".gif") { "image/gif" }
+        else { "application/octet-stream" };
+    Ok(format!("data:{};base64,{}", mime, b64))
+}
+
+// ── Theme Background ────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn save_theme_bg(app: tauri::AppHandle, theme_id: String) -> Result<String, String> {
+    let file = rfd::AsyncFileDialog::new()
+        .add_filter("圖片", &["png", "jpg", "jpeg", "webp"])
+        .set_title("選擇背景圖片")
+        .pick_file()
+        .await
+        .ok_or_else(|| "已取消".to_string())?;
+    let dir = app.path().app_data_dir()
+        .map_err(|e| format!("無法取得 app 目錄: {}", e))?
+        .join("theme_bg");
+    tokio::fs::create_dir_all(&dir).await
+        .map_err(|e| format!("建立目錄失敗: {}", e))?;
+
+    // 取得原始副檔名，保留正確的 MIME type 讓 asset protocol 能正確回傳
+    let ext = file.file_name()
+        .rsplit('.')
+        .next()
+        .map(|e| e.to_lowercase())
+        .filter(|e| matches!(e.as_str(), "png" | "jpg" | "jpeg" | "webp"))
+        .unwrap_or_else(|| "png".to_string());
+
+    // 清除舊檔（可能是不同副檔名）
+    for old_ext in &["png", "jpg", "jpeg", "webp", "img"] {
+        let old = dir.join(format!("{}.{}", theme_id, old_ext));
+        let _ = tokio::fs::remove_file(&old).await;
+    }
+
+    let dest = dir.join(format!("{}.{}", theme_id, ext));
+    tokio::fs::write(&dest, file.read().await).await
+        .map_err(|e| format!("寫入失敗: {}", e))?;
+    Ok(dest.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub async fn remove_theme_bg(app: tauri::AppHandle, theme_id: String) -> Result<(), String> {
+    let dir = app.path().app_data_dir()
+        .map_err(|e| format!("無法取得 app 目錄: {}", e))?
+        .join("theme_bg");
+    // 清除所有可能的副檔名
+    for ext in &["png", "jpg", "jpeg", "webp", "img"] {
+        let path = dir.join(format!("{}.{}", theme_id, ext));
+        let _ = tokio::fs::remove_file(&path).await;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_theme_bg_path(app: tauri::AppHandle, theme_id: String) -> Result<Option<String>, String> {
+    let dir = app.path().app_data_dir()
+        .map_err(|e| format!("無法取得 app 目錄: {}", e))?
+        .join("theme_bg");
+    // 搜尋所有支援的副檔名
+    for ext in &["png", "jpg", "jpeg", "webp", "img"] {
+        let path = dir.join(format!("{}.{}", theme_id, ext));
+        if path.exists() {
+            return Ok(Some(path.to_string_lossy().to_string()));
+        }
+    }
+    Ok(None)
 }
 
 // ── Import / Export ─────────────────────────────────────────────

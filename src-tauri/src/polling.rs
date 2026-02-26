@@ -19,6 +19,7 @@ pub struct PollingManager {
     pub cache: Arc<RwLock<HashMap<String, AssetData>>>,
     pub ticks: Arc<RwLock<HashMap<String, PollTick>>>,
     visible_ids: Arc<RwLock<HashMap<String, HashSet<i64>>>>,
+    unattended: Arc<RwLock<bool>>,
     reload_tx: watch::Sender<u64>,
     stop_tx: watch::Sender<bool>,
 }
@@ -52,6 +53,7 @@ impl PollingManager {
             cache: Arc::new(RwLock::new(HashMap::new())),
             ticks: Arc::new(RwLock::new(HashMap::new())),
             visible_ids: Arc::new(RwLock::new(HashMap::new())),
+            unattended: Arc::new(RwLock::new(false)),
             reload_tx,
             stop_tx,
         }
@@ -79,17 +81,35 @@ impl PollingManager {
         self.reload_tx.send_modify(|v| *v = v.wrapping_add(1));
     }
 
+    pub async fn set_unattended(&self, enabled: bool) {
+        let mut flag = self.unattended.write().await;
+        if *flag == enabled { return; }
+        *flag = enabled;
+        drop(flag);
+        self.reload_tx.send_modify(|v| *v = v.wrapping_add(1));
+    }
+
+    pub async fn is_unattended(&self) -> bool {
+        *self.unattended.read().await
+    }
+
     pub fn start(&self, app_handle: tauri::AppHandle, db_path: PathBuf) {
         let cache = self.cache.clone();
         let ticks = self.ticks.clone();
         let visible_ids = self.visible_ids.clone();
+        let unattended = self.unattended.clone();
         let mut reload_rx = self.reload_tx.subscribe();
         let mut stop_rx = self.stop_tx.subscribe();
 
         tauri::async_runtime::spawn(async move {
             loop {
                 let db_path_clone = db_path.clone();
-                let (vis_snapshot, has_windows): (HashSet<i64>, bool) = {
+                let is_unattended = *unattended.read().await;
+
+                // unattended 模式: 忽略 visible filter，poll 全部
+                let (vis_snapshot, has_windows): (HashSet<i64>, bool) = if is_unattended {
+                    (HashSet::new(), false) // None → load_config 不 filter
+                } else {
                     let map = visible_ids.read().await;
                     if map.is_empty() {
                         (HashSet::new(), false)
@@ -97,7 +117,7 @@ impl PollingManager {
                         (map.values().flat_map(|s| s.iter().copied()).collect(), true)
                     }
                 };
-                if has_windows && vis_snapshot.is_empty() {
+                if !is_unattended && has_windows && vis_snapshot.is_empty() {
                     cache.write().await.clear();
                     ticks.write().await.clear();
                     tokio::select! {

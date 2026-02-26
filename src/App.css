@@ -18,41 +18,11 @@
 .modal-container {
   background: var(--base);
   border: 1px solid var(--surface0);
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   box-shadow: 0 8px 32px var(--shadow);
   animation: modal-in 0.18s ease-out;
   display: flex;
   flex-direction: column;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 18px 20px 0;
-}
-
-.modal-title {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.modal-close {
-  background: none;
-  border: none;
-  color: var(--overlay0);
-  font-size: 14px;
-  cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 4px;
-  transition: all 0.15s;
-}
-
-.modal-close:hover {
-  background: var(--surface0);
-  color: var(--text);
 }
 
 @keyframes modal-in {
@@ -99,10 +69,10 @@ body {
   border: none;
   color: var(--overlay0);
   padding: 8px 16px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 14px;
-  transition: all 0.2s;
+  transition: all var(--transition-normal);
 }
 
 .nav-btn:hover {
@@ -179,10 +149,10 @@ body {
   border: none;
   color: var(--overlay0);
   padding: 5px 14px;
-  border-radius: 12px;
+  border-radius: var(--radius-pill);
   cursor: pointer;
   font-size: 12px;
-  transition: all 0.2s;
+  transition: all var(--transition-normal);
   white-space: nowrap;
   user-select: none;
 }
@@ -209,13 +179,13 @@ body {
   color: var(--overlay0);
   width: 28px;
   height: 24px;
-  border-radius: 12px;
+  border-radius: var(--radius-pill);
   cursor: pointer;
   font-size: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s;
+  transition: all var(--transition-fast);
   flex-shrink: 0;
 }
 
@@ -235,7 +205,7 @@ body {
   width: 28px;
   height: 28px;
   border: 1px dashed var(--surface1);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--overlay0);
   font-size: 16px;
@@ -243,7 +213,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s ease;
+  transition: all var(--transition-fast);
 }
 
 .add-view-btn:hover {
@@ -256,7 +226,7 @@ body {
   width: 32px;
   height: 32px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--surface0);
   color: var(--overlay0);
   font-size: 14px;
@@ -264,7 +234,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s;
+  transition: all var(--transition-fast);
 }
 
 .copy-symbols-btn:hover {
@@ -283,10 +253,10 @@ body {
   color: var(--overlay0);
   width: 32px;
   height: 32px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 16px;
-  transition: all 0.2s;
+  transition: all var(--transition-normal);
 }
 
 .view-btn:hover {
@@ -304,10 +274,10 @@ body {
   border: none;
   color: var(--overlay0);
   padding: 5px 12px;
-  border-radius: 12px;
+  border-radius: var(--radius-pill);
   cursor: pointer;
   font-size: 12px;
-  transition: all 0.2s;
+  transition: all var(--transition-normal);
 }
 
 .manage-subs-btn:hover {
@@ -332,11 +302,11 @@ body {
   border: none;
   color: var(--base);
   padding: 10px 20px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
-  transition: all 0.2s;
+  transition: all var(--transition-normal);
 }
 
 .btn-add:hover {
@@ -344,10 +314,6 @@ body {
 }
 
 /* View Manager Modal */
-.vm-backdrop {
-  /* extends .modal-backdrop */
-}
-
 .vm-modal {
   width: 360px;
   max-height: 60vh;
@@ -376,7 +342,7 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 8px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   transition: background 0.12s;
 }
 
@@ -439,10 +405,10 @@ body {
   color: var(--overlay0);
   width: 100%;
   padding: 8px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 13px;
-  transition: all 0.15s;
+  transition: all var(--transition-fast);
 }
 
 .vm-add-btn:hover { background: var(--surface0); color: var(--green); border-color: var(--green); }
@@ -452,7 +418,7 @@ body {
   width: 32px;
   height: 32px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--surface0);
   color: var(--overlay0);
   font-size: 14px;
@@ -460,14 +426,28 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s;
+  transition: all var(--transition-fast);
 }
 
 .bulk-delete-btn:hover { background: var(--negative-bg); color: var(--red); }
 
-.bd-backdrop {
-  /* extends .modal-backdrop */
+/* Batch Actions */
+.batch-actions-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--surface0);
+  color: var(--overlay0);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
 }
+
+.batch-actions-btn:hover { background: var(--surface1); color: var(--text); }
 
 .bd-modal {
   width: 400px;
@@ -499,11 +479,11 @@ body {
   border: none;
   color: var(--base);
   padding: 6px 16px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition-normal);
 }
 
 .bd-confirm:hover { opacity: 0.9; }
@@ -514,7 +494,7 @@ body {
   width: 32px;
   height: 32px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--surface0);
   color: var(--overlay0);
   font-size: 14px;
@@ -522,14 +502,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s;
+  transition: all var(--transition-fast);
 }
 
 .add-sub-btn:hover { background: var(--surface1); color: var(--green); }
-
-.sub-modal-backdrop {
-  /* extends .modal-backdrop */
-}
 
 .sub-modal {
   width: 420px;

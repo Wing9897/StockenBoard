@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { t } from '../../lib/i18n';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
 
 const PROTOCOLS = [
   { id: 'uniswap_v3', name: 'Uniswap V3' },
@@ -17,11 +18,13 @@ interface DexPoolInfo {
 
 interface DexSubscriptionManagerProps {
   onAdd: (poolAddress: string, tokenFrom: string, tokenTo: string, providerId: string, displayName?: string) => Promise<void>;
+  /** 已存在的 symbol+provider 組合，用於前端重複檢查 */
+  existingKeys?: Set<string>;
   onToast?: (type: 'success' | 'error' | 'info', title: string, msg?: string) => void;
   onClose: () => void;
 }
 
-export function DexSubscriptionManager({ onAdd, onToast, onClose }: DexSubscriptionManagerProps) {
+export function DexSubscriptionManager({ onAdd, existingKeys, onToast, onClose }: DexSubscriptionManagerProps) {
   const [provider, setProvider] = useState('jupiter');
   const [protocol, setProtocol] = useState('uniswap_v3');
   const [poolAddress, setPoolAddress] = useState('');
@@ -103,6 +106,15 @@ export function DexSubscriptionManager({ onAdd, onToast, onClose }: DexSubscript
     if (!isJupiter && !finalPool) { setError(t.dex.poolEmpty); setSubmitting(false); return; }
 
     const testSymbol = `${finalPool}:${tokenFrom}:${tokenTo}`;
+
+    // 前端重複檢查 — 相同 symbol + provider 已存在
+    if (existingKeys?.has(`${provider}:${testSymbol}`)) {
+      const label = displayName || (fromSymbol && toSymbol ? `${fromSymbol}/${toSymbol}` : testSymbol);
+      onToast?.('info', t.subForm.alreadyExists, t.dex.alreadySubscribed(label));
+      setSubmitting(false);
+      return;
+    }
+
     try {
       await invoke('fetch_asset_price', { providerId: provider, symbol: testSymbol });
     } catch (err) {
@@ -151,6 +163,8 @@ export function DexSubscriptionManager({ onAdd, onToast, onClose }: DexSubscript
 
   const busy = looking || submitting;
 
+  useEscapeKey(() => { if (!busy) onClose(); });
+
   const poolLabel = isJupiter ? t.dex.tradePair : t.dex.poolAddress;
   const poolPlaceholder = isJupiter
     ? t.dex.jupiterPoolPlaceholder
@@ -160,10 +174,10 @@ export function DexSubscriptionManager({ onAdd, onToast, onClose }: DexSubscript
 
   return (
     <div className="modal-backdrop sub-modal-backdrop" onClick={onClose}>
-      <div className="modal-container sub-modal" onClick={e => e.stopPropagation()}>
+      <div className="modal-container sub-modal" role="dialog" aria-modal="true" aria-label={t.dex.addDexSub} onClick={e => e.stopPropagation()}>
         <div className="sub-modal-header">
           <h4 className="sub-modal-title">{t.dex.addDexSub}</h4>
-          <button className="vsm-close" onClick={onClose}>✕</button>
+          <button className="vsm-close" onClick={onClose} aria-label={t.common.close}>✕</button>
         </div>
         <div className="sub-modal-body">
           <div className="dex-form">
@@ -187,18 +201,16 @@ export function DexSubscriptionManager({ onAdd, onToast, onClose }: DexSubscript
 
             <div className="dex-form-row">
               <label>{poolLabel}</label>
-              <div style={{ display: 'flex', gap: '8px', minWidth: 0 }}>
+              <div className="dex-input-row">
                 <input
                   value={poolAddress}
                   onChange={e => { setPoolAddress(e.target.value); setError(null); if (!manualMode) setPoolInfo(null); }}
                   placeholder={poolPlaceholder}
                   className="dex-address-input"
-                  style={{ flex: 1, minWidth: 0 }}
                   disabled={busy}
                 />
                 {!manualMode && (
-                  <button className="dex-form-submit" onClick={handleLookup} disabled={busy}
-                    style={{ whiteSpace: 'nowrap', minWidth: 'auto', padding: '6px 12px', flexShrink: 0 }}>
+                  <button className="dex-form-submit dex-lookup-btn" onClick={handleLookup} disabled={busy}>
                     {looking ? t.dex.lookingUp : t.dex.lookup}
                   </button>
                 )}
@@ -210,10 +222,10 @@ export function DexSubscriptionManager({ onAdd, onToast, onClose }: DexSubscript
             {!manualMode && poolInfo && (
               <div className="dex-form-row">
                 <label>{t.dex.tradeDirection}</label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div className="dex-direction-row">
                   <span className="dex-token-badge">{fromSymbol} ({tokenFrom.slice(0, 8)}...)</span>
                   <button type="button" onClick={handleSwap} disabled={busy}
-                    style={{ background: 'none', border: '1px solid var(--surface1)', borderRadius: '4px', cursor: 'pointer', padding: '4px 8px', color: 'var(--text)' }}
+                    className="dex-swap-btn"
                     title={t.dex.flipDirection}>⇄</button>
                   <span className="dex-token-badge">{toSymbol} ({tokenTo.slice(0, 8)}...)</span>
                 </div>
@@ -229,10 +241,10 @@ export function DexSubscriptionManager({ onAdd, onToast, onClose }: DexSubscript
                     className="dex-address-input" disabled={busy} />
                 </div>
                 <div className="dex-form-row">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div className="dex-label-row">
                     <label>{t.dex.tokenToLabel}</label>
                     <button type="button" onClick={handleSwap} disabled={busy}
-                      style={{ background: 'none', border: '1px solid var(--surface1)', borderRadius: '4px', cursor: 'pointer', padding: '2px 6px', fontSize: '0.8em', color: 'var(--text)' }}
+                      className="dex-swap-btn-sm"
                       title={t.dex.flipDirection}>⇄ {t.dex.flipShort}</button>
                   </div>
                   <input value={manualTokenTo} onChange={e => { setManualTokenTo(e.target.value); setError(null); }}
@@ -243,17 +255,15 @@ export function DexSubscriptionManager({ onAdd, onToast, onClose }: DexSubscript
             )}
 
             {!manualMode && !poolInfo && !looking && (
-              <div className="dex-form-row" style={{ textAlign: 'right' }}>
-                <button type="button" onClick={switchToManual}
-                  style={{ background: 'none', border: 'none', color: 'var(--blue)', cursor: 'pointer', fontSize: '0.85em', padding: 0 }}>
+              <div className="dex-form-row dex-text-right">
+                <button type="button" onClick={switchToManual} className="dex-link-btn">
                   {t.dex.manualInput}
                 </button>
               </div>
             )}
             {manualMode && (
-              <div className="dex-form-row" style={{ textAlign: 'right' }}>
-                <button type="button" onClick={switchToAuto}
-                  style={{ background: 'none', border: 'none', color: 'var(--blue)', cursor: 'pointer', fontSize: '0.85em', padding: 0 }}>
+              <div className="dex-form-row dex-text-right">
+                <button type="button" onClick={switchToAuto} className="dex-link-btn">
                   {t.dex.switchToAuto}
                 </button>
               </div>

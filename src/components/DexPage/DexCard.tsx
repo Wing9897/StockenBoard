@@ -111,11 +111,8 @@ export const DexCard = memo(function DexCard({
     || subscription.selected_provider_id;
 
   useEffect(() => {
-    if (error) {
-      console.warn(`[DEX ${poolAddress}@${subscription.selected_provider_id}]`, error);
-      setErrorExpanded(false);
-    }
-  }, [error, poolAddress, subscription.selected_provider_id]);
+    if (error) setErrorExpanded(false);
+  }, [error]);
 
   const openEdit = useCallback(() => {
     const isJup = subscription.selected_provider_id === 'jupiter';
@@ -215,11 +212,11 @@ export const DexCard = memo(function DexCard({
       </div>
       <div className="edit-row">
         <label>{isEditJupiter ? t.dex.tradePair : t.dex.poolAddress}</label>
-        <div style={{ display: 'flex', gap: '6px', minWidth: 0 }}>
+        <div className="dex-edit-input-row">
           <input value={editPool} onChange={e => { setEditPool(e.target.value); setEditError(null); }} disabled={editBusy}
             placeholder={isEditJupiter ? t.dex.pairPlaceholder : editProvider === 'subgraph' ? t.dex.subgraphProtocolPlaceholder : t.dex.evmPoolPlaceholder}
-            className="dex-address-input" style={{ flex: 1, minWidth: 0 }} />
-          <button className="edit-btn save" onClick={handleEditLookup} disabled={editBusy} style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
+            className="dex-address-input" />
+          <button className="edit-btn save" onClick={handleEditLookup} disabled={editBusy}>
             {lookingUp ? t.dex.lookingUp : t.dex.lookup}
           </button>
         </div>
@@ -230,30 +227,28 @@ export const DexCard = memo(function DexCard({
         <label>{t.dex.tradeDirection}</label>
         {editManualTokens ? (
           <>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <div className="dex-edit-token-col">
               <input value={editTokenFrom} onChange={e => { setEditTokenFrom(e.target.value); setEditError(null); }} disabled={editBusy}
-                placeholder={t.dex.tokenFromPlaceholder} className="dex-address-input" style={{ minWidth: 0 }} />
-              <div style={{ display: 'flex', gap: '4px', alignItems: 'center', minWidth: 0 }}>
+                placeholder={t.dex.tokenFromPlaceholder} className="dex-address-input" />
+              <div className="dex-edit-token-input-row">
                 <input value={editTokenTo} onChange={e => { setEditTokenTo(e.target.value); setEditError(null); }} disabled={editBusy}
-                  placeholder={t.dex.tokenToPlaceholder} className="dex-address-input" style={{ flex: 1, minWidth: 0 }} />
-                <button className="edit-btn cancel" onClick={handleEditSwap} disabled={editBusy} title={t.dex.flipDirection} style={{ padding: '2px 8px', flexShrink: 0 }}>⇄</button>
+                  placeholder={t.dex.tokenToPlaceholder} className="dex-address-input" />
+                <button className="edit-btn cancel dex-edit-swap-sm" onClick={handleEditSwap} disabled={editBusy} title={t.dex.flipDirection}>⇄</button>
               </div>
             </div>
-            <button type="button" onClick={() => setEditManualTokens(false)}
-              style={{ background: 'none', border: 'none', color: 'var(--blue)', cursor: 'pointer', fontSize: '0.8em', padding: '2px 0 0', textAlign: 'right' }}>
+            <button type="button" className="dex-edit-link-btn" onClick={() => setEditManualTokens(false)}>
               {t.dex.useAutoMode}
             </button>
           </>
         ) : (
           <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ flex: 1, fontSize: '0.85em', color: 'var(--subtext0)' }}>
+            <div className="dex-edit-direction-row">
+              <span className="dex-edit-direction-text">
                 {editFromSymbol || truncateAddr(editTokenFrom)} → {editToSymbol || truncateAddr(editTokenTo)}
               </span>
-              <button className="edit-btn cancel" onClick={handleEditSwap} disabled={editBusy} title={t.dex.flipDirection} style={{ padding: '2px 8px' }}>⇄</button>
+              <button className="edit-btn cancel dex-edit-swap-sm" onClick={handleEditSwap} disabled={editBusy} title={t.dex.flipDirection}>⇄</button>
             </div>
-            <button type="button" onClick={() => setEditManualTokens(true)}
-              style={{ background: 'none', border: 'none', color: 'var(--blue)', cursor: 'pointer', fontSize: '0.8em', padding: '2px 0 0', textAlign: 'right' }}>
+            <button type="button" className="dex-edit-link-btn" onClick={() => setEditManualTokens(true)}>
               {t.dex.useManualMode}
             </button>
           </>

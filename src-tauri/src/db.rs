@@ -1,4 +1,4 @@
-/// StockenBoard DB schema — 不需要向後兼容，刪除舊 DB 重新建立即可
+/// StockenBoard DB schema
 pub const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS provider_settings (
     provider_id      TEXT PRIMARY KEY,
@@ -6,8 +6,7 @@ CREATE TABLE IF NOT EXISTS provider_settings (
     api_secret       TEXT,
     api_url          TEXT,
     refresh_interval INTEGER,
-    connection_type  TEXT NOT NULL DEFAULT 'rest',
-    enabled          INTEGER NOT NULL DEFAULT 1
+    connection_type  TEXT NOT NULL DEFAULT 'rest'
 );
 
 CREATE TABLE IF NOT EXISTS subscriptions (

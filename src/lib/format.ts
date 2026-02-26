@@ -19,7 +19,8 @@ export function formatPrice(price: number | undefined | null, currency: string =
   return sym + price.toPrecision(4);
 }
 
-/** 從冗長的批量錯誤訊息中提取簡短摘要 */
+/** 從冗長的批量錯誤訊息中提取簡短摘要
+ *  注意：regex 匹配的是 Rust 後端回傳的中文錯誤格式，這是刻意設計 */
 export function summarizeError(error: string): string {
   const deduped = error.match(/批量查詢全部失敗\s*\(\d+個\):\s*(.+)/);
   if (deduped) return deduped[1].trim();

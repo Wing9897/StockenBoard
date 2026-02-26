@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, memo, useCallback } from 'react';
+import { useState, useRef, useEffect, useMemo, memo, useCallback, type ReactElement } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Subscription, ProviderInfo } from '../../types';
 import { useAssetPrice } from '../../hooks/useAssetData';
@@ -18,6 +18,8 @@ interface AssetCardProps {
   onEdit: (id: number, updates: { symbol?: string; displayName?: string; providerId?: string; assetType?: 'crypto' | 'stock' }) => Promise<void>;
   viewMode?: 'grid' | 'list' | 'compact';
   isCustomView?: boolean;
+  forceExpand?: boolean;
+  hidePrePost?: boolean;
 }
 
 function formatExtraKey(key: string): string {
@@ -38,9 +40,71 @@ function formatExtraValue(value: unknown): string {
   return JSON.stringify(value);
 }
 
-export const AssetCard = memo(function AssetCard({ subscription, providers, currentProviderId, assetType, refreshInterval, onRemove, onEdit, viewMode = 'grid', isCustomView = false }: AssetCardProps) {
+// 盤前/盤後/即時/收盤 — 市場狀態判斷
+type SessionInfo = { label: string; cls: string } | null;
+
+function getSessionInfo(extra: Record<string, unknown> | undefined): SessionInfo {
+  if (!extra) return null;
+  const state = (extra.market_session as string || '').toUpperCase();
+  if (state === 'PRE' || state === 'PREPRE') return { label: t.asset.sessionPre, cls: 'pre' };
+  if (state === 'POST' || state === 'POSTPOST') return { label: t.asset.sessionPost, cls: 'post' };
+  if (state === 'REGULAR') return { label: t.asset.sessionRegular, cls: 'regular' };
+  if (state === 'CLOSED' || state === 'PREPARE') return { label: t.asset.sessionClosed, cls: 'closed' };
+  return null;
+}
+
+// 盤前/盤後價格行 — 只在有數據時顯示
+const PREPOST_HIDDEN_KEYS = new Set([
+  'pre_market_price', 'pre_market_change', 'pre_market_change_pct',
+  'post_market_price', 'post_market_change', 'post_market_change_pct',
+  'market_session',
+]);
+
+function PrePostRow({ extra, currency, className }: { extra: Record<string, unknown>; currency: string; className?: string }) {
+  const prePrice = extra.pre_market_price as number | undefined;
+  const postPrice = extra.post_market_price as number | undefined;
+  const prePct = extra.pre_market_change_pct as number | undefined;
+  const postPct = extra.post_market_change_pct as number | undefined;
+
+  const rows: ReactElement[] = [];
+
+  if (prePrice !== undefined) {
+    const isPos = (prePct ?? 0) >= 0;
+    rows.push(
+      <div key="pre" className={`prepost-row ${className || ''}`}>
+        <span className="market-session-badge pre">{t.asset.sessionPre}</span>
+        <span className="prepost-price">{formatPrice(prePrice, currency)}</span>
+        {prePct !== undefined && (
+          <span className={`prepost-change ${isPos ? 'positive' : 'negative'}`}>
+            {isPos ? '▲' : '▼'} {Math.abs(prePct).toFixed(2)}%
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  if (postPrice !== undefined) {
+    const isPos = (postPct ?? 0) >= 0;
+    rows.push(
+      <div key="post" className={`prepost-row ${className || ''}`}>
+        <span className="market-session-badge post">{t.asset.sessionPost}</span>
+        <span className="prepost-price">{formatPrice(postPrice, currency)}</span>
+        {postPct !== undefined && (
+          <span className={`prepost-change ${isPos ? 'positive' : 'negative'}`}>
+            {isPos ? '▲' : '▼'} {Math.abs(postPct).toFixed(2)}%
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  return rows.length > 0 ? <>{rows}</> : null;
+}
+
+export const AssetCard = memo(function AssetCard({ subscription, providers, currentProviderId, assetType, refreshInterval, onRemove, onEdit, viewMode = 'grid', isCustomView = false, forceExpand = false, hidePrePost = false }: AssetCardProps) {
   const { asset, error } = useAssetPrice(subscription.symbol, currentProviderId);
-  const [expanded, setExpanded] = useState(false);
+  const [localExpanded, setLocalExpanded] = useState(false);
+  const expanded = forceExpand || localExpanded;
   const [errorExpanded, setErrorExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [iconKey, setIconKey] = useState(0);
@@ -65,13 +129,11 @@ export const AssetCard = memo(function AssetCard({ subscription, providers, curr
   const changePercent = asset?.change_percent_24h ?? 0;
   const isPositive = changePercent >= 0;
   const currentProvider = providers.find(p => p.id === currentProviderId);
+  const sessionInfo = assetType === 'stock' ? getSessionInfo(asset?.extra as Record<string, unknown> | undefined) : null;
 
   useEffect(() => {
-    if (error) {
-      console.warn(`[${subscription.symbol}@${currentProviderId}]`, error);
-      setErrorExpanded(false);
-    }
-  }, [error, subscription.symbol, currentProviderId]);
+    if (error) setErrorExpanded(false);
+  }, [error]);
 
   const filteredProviders = useMemo(() => providers.filter(p =>
     editing
@@ -165,7 +227,7 @@ export const AssetCard = memo(function AssetCard({ subscription, providers, curr
         <select value={editProvider} onChange={e => setEditProvider(e.target.value)} disabled={saving}>
           {filteredProviders.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        {editProviderInfo?.requires_api_key && <span className="edit-hint" style={{ color: 'var(--yellow)' }}>{t.subForm.apiKeyRequired}</span>}
+        {editProviderInfo?.requires_api_key && <span className="edit-hint warning">{t.subForm.apiKeyRequired}</span>}
       </div>
       {editError && <div className="edit-error">{editError}</div>}
       <div className="edit-actions">
@@ -185,6 +247,7 @@ export const AssetCard = memo(function AssetCard({ subscription, providers, curr
           {renderIcon('asset-icon compact-icon')}
           <span className="compact-symbol" title={subscription.symbol}>{subscription.symbol}</span>
           <span className={`asset-type-tag ${assetType}`}>{assetType === 'crypto' ? t.subForm.cryptoShort : t.subForm.stockShort}</span>
+          {sessionInfo && <span className={`market-session-badge ${sessionInfo.cls}`}>{sessionInfo.label}</span>}
           <button className="asset-card-edit-btn" onClick={openEdit} title={t.common.edit}>✎</button>
         </div>
         <div className="compact-bottom">
@@ -198,6 +261,7 @@ export const AssetCard = memo(function AssetCard({ subscription, providers, curr
           )}
           {refreshInterval > 0 && <CountdownCircle providerId={currentProviderId} fallbackInterval={refreshInterval} size={16} />}
         </div>
+        {!hidePrePost && asset && !error && asset.extra && <PrePostRow extra={asset.extra as Record<string, unknown>} currency={asset.currency} className="compact-prepost" />}
         {editing && editPanel}
       </div>
     );
@@ -208,7 +272,7 @@ export const AssetCard = memo(function AssetCard({ subscription, providers, curr
       <div className="asset-card-list">
         {renderIcon('asset-list-icon')}
         <div className="asset-list-symbol">
-          <span className="symbol" title={subscription.symbol}>{subscription.symbol} <span className={`asset-type-tag ${assetType}`}>{assetType === 'crypto' ? t.subForm.cryptoShort : t.subForm.stockShort}</span></span>
+          <span className="symbol" title={subscription.symbol}>{subscription.symbol} <span className={`asset-type-tag ${assetType}`}>{assetType === 'crypto' ? t.subForm.cryptoShort : t.subForm.stockShort}</span>{sessionInfo && <> <span className={`market-session-badge ${sessionInfo.cls}`}>{sessionInfo.label}</span></>}</span>
           {subscription.display_name && <span className="name" title={subscription.display_name}>{subscription.display_name}</span>}
         </div>
         <div className="asset-list-price">
@@ -217,6 +281,7 @@ export const AssetCard = memo(function AssetCard({ subscription, providers, curr
         <div className={`asset-list-change ${isPositive ? 'positive' : 'negative'}`}>
           {asset && !error && <>{isPositive ? '▲' : '▼'} {Math.abs(changePercent).toFixed(2)}%</>}
         </div>
+        {!hidePrePost && asset && !error && asset.extra && <PrePostRow extra={asset.extra as Record<string, unknown>} currency={asset.currency} className="list-prepost" />}
         <span className="asset-list-provider-label">{t.dex.dataSource(currentProvider?.name || currentProviderId)}</span>
         <button className="asset-card-edit-btn" onClick={openEdit} title={t.common.edit}>✎</button>
         {refreshInterval > 0 && <CountdownCircle providerId={currentProviderId} fallbackInterval={refreshInterval} size={22} />}
@@ -240,6 +305,7 @@ export const AssetCard = memo(function AssetCard({ subscription, providers, curr
       <div className="asset-card-body">
         <p className="asset-price">
           {error ? <span className="asset-error">{t.dex.fetchFailed}</span> : asset ? formatPrice(asset.price, asset.currency) : t.common.loading}
+          {sessionInfo && asset && !error && <> <span className={`market-session-badge ${sessionInfo.cls}`}>{sessionInfo.label}</span></>}
         </p>
         {asset && !error && (
           <span className={`asset-change ${isPositive ? 'positive' : 'negative'}`}>
@@ -247,6 +313,8 @@ export const AssetCard = memo(function AssetCard({ subscription, providers, curr
           </span>
         )}
       </div>
+
+      {!hidePrePost && asset && !error && asset.extra && <PrePostRow extra={asset.extra as Record<string, unknown>} currency={asset.currency} />}
 
       {error && (
         <div className="asset-error-detail" onClick={() => setErrorExpanded(v => !v)} title={t.asset.clickExpandCollapse}>
@@ -273,7 +341,7 @@ export const AssetCard = memo(function AssetCard({ subscription, providers, curr
         <span className="asset-footer-provider">{t.dex.dataSource(currentProvider?.name || currentProviderId)}</span>
       </div>
 
-      <button className="asset-card-toggle" onClick={() => setExpanded(!expanded)}>
+      <button className="asset-card-toggle" onClick={() => setLocalExpanded(!localExpanded)}>
         {expanded ? t.asset.collapse : t.asset.expand}
       </button>
 
@@ -286,7 +354,7 @@ export const AssetCard = memo(function AssetCard({ subscription, providers, curr
             {asset.change_24h !== undefined && (
               <div className="asset-stat"><span className="asset-stat-label">{t.asset.change24h}</span><span className="asset-stat-value">{formatPrice(asset.change_24h, asset.currency)}</span></div>
             )}
-            {asset.extra && Object.entries(asset.extra).map(([key, value]) => (
+            {asset.extra && Object.entries(asset.extra).filter(([key]) => !PREPOST_HIDDEN_KEYS.has(key)).map(([key, value]) => (
               <div className="asset-stat" key={key}><span className="asset-stat-label">{formatExtraKey(key)}</span><span className="asset-stat-value">{formatExtraValue(value)}</span></div>
             ))}
             <div className="asset-stat"><span className="asset-stat-label">{t.asset.updatedAt}</span><span className="asset-stat-value">{new Date(asset.last_updated).toLocaleTimeString()}</span></div>

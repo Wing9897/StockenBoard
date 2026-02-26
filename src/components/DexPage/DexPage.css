@@ -42,18 +42,18 @@
   color: var(--red);
   background: var(--negative-bg);
   padding: 8px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 }
 .dex-form-submit {
   background: var(--blue);
   color: var(--crust);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   padding: 10px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: opacity 0.2s;
+  transition: opacity var(--transition-normal);
 }
 .dex-form-submit:hover { opacity: 0.9; }
 .dex-form-submit:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -62,8 +62,58 @@
 .dex-token-badge {
   font-size: 12px;
   padding: 3px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--blue-bg);
   color: var(--blue);
   font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+}
+
+/* DexSubscriptionManager layout helpers */
+.dex-input-row {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+.dex-input-row > input { flex: 1; min-width: 0; }
+.dex-lookup-btn {
+  white-space: nowrap;
+  min-width: auto;
+  padding: 6px 12px;
+  flex-shrink: 0;
+}
+.dex-direction-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dex-swap-btn {
+  background: none;
+  border: 1px solid var(--surface1);
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 4px 8px;
+  color: var(--text);
+}
+.dex-swap-btn-sm {
+  background: none;
+  border: 1px solid var(--surface1);
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 0.8em;
+  color: var(--text);
+}
+.dex-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.dex-text-right { text-align: right; }
+.dex-link-btn {
+  background: none;
+  border: none;
+  color: var(--blue);
+  cursor: pointer;
+  font-size: 0.85em;
+  padding: 0;
 }

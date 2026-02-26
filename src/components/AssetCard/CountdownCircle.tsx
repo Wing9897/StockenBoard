@@ -87,7 +87,7 @@ export const CountdownCircle = memo(function CountdownCircle({ providerId, fallb
         <circle cx={center} cy={center} r={r} fill="none" stroke={color} strokeWidth="2"
           strokeDasharray={c} strokeDashoffset={offset}
           strokeLinecap="round" transform={`rotate(-90 ${center} ${center})`}
-          style={{ transition: 'stroke-dashoffset 1s linear' }} />
+          className="countdown-progress" />
         <text x={center} y={center + 1} textAnchor="middle" dominantBaseline="middle"
           fill="var(--overlay0)" fontSize="8" fontWeight="500">{remaining}</text>
       </svg>

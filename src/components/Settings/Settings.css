@@ -1,6 +1,6 @@
 ﻿.settings-section {
   background: var(--base);
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   padding: 20px;
   margin-bottom: 16px;
 }
@@ -12,43 +12,13 @@
   flex-direction: column;
   gap: 4px;
   padding: 8px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--positive-bg);
   color: var(--green);
   font-size: 12px;
 }
 
-.batch-status.has-errors { background: var(--yellow-bg); color: var(--yellow); }
 
-.filter-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
-
-.filter-btn {
-  background: var(--surface0);
-  border: none;
-  color: var(--overlay0);
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.filter-btn:hover { background: var(--surface1); color: var(--text); }
-.filter-btn.active { background: var(--blue); color: var(--base); }
-
-.badge { font-size: 9px; padding: 2px 5px; border-radius: 3px; }
-.badge.api-required { background: var(--negative-bg); color: var(--red); }
-.badge.api-optional { background: var(--teal-bg); color: var(--teal); }
-.badge.ws-support { background: var(--positive-bg); color: var(--green); }
-
-.provider-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--surface0);
-}
 
 .form-group { display: flex; flex-direction: column; gap: 4px; }
 .form-group label { font-size: 12px; color: var(--overlay0); }
@@ -101,6 +71,8 @@
 
 .btn-change-key:hover { border-color: var(--blue); color: var(--blue); }
 
+.api-secret-input { margin-top: 4px; }
+
 .btn-save-key {
   margin-top: 4px;
   padding: 4px 12px;
@@ -120,10 +92,10 @@
 
 .btn-edit, .btn-cancel, .btn-save, .btn-add {
   padding: 6px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition-normal);
 }
 
 .btn-edit { background: transparent; border: 1px solid var(--blue); color: var(--blue); }
@@ -143,10 +115,10 @@
   border: 1px solid var(--surface1);
   background: var(--surface0);
   color: var(--overlay0);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 14px;
-  transition: all 0.2s;
+  transition: all var(--transition-normal);
 }
 
 .type-btn:hover { background: var(--surface1); color: var(--text); }
@@ -164,10 +136,10 @@
   border: 1px solid var(--surface1);
   background: var(--surface0);
   color: var(--overlay0);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 13px;
-  transition: all 0.2s;
+  transition: all var(--transition-normal);
 }
 
 .mode-btn:hover { background: var(--surface1); color: var(--text); }
@@ -178,10 +150,6 @@
 .badge.api-key-mode { background: var(--blue-bg); color: var(--blue); }
 
 /* Batch Result Modal */
-.batch-result-backdrop {
-  /* extends .modal-backdrop */
-}
-
 .batch-result-modal {
   width: 380px;
 }
@@ -190,7 +158,7 @@
 .batch-result-title { margin: 0; font-size: 16px; font-weight: 600; color: var(--text); }
 .batch-result-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; }
 
-.batch-result-group { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 8px; font-size: 13px; }
+.batch-result-group { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: var(--radius-sm); font-size: 13px; }
 .batch-result-group.success { background: var(--positive-bg); }
 .batch-result-group.skipped { background: var(--yellow-bg); }
 .batch-result-group.failed { background: var(--negative-bg); }
@@ -210,12 +178,12 @@
   flex: 1;
   padding: 10px 16px;
   border: 1px solid var(--surface1);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--surface0);
   color: var(--text);
   font-size: 13px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition-normal);
 }
 
 .dm-btn:hover { background: var(--surface1); }
@@ -231,7 +199,7 @@
   gap: 8px;
   margin-top: 10px;
   padding: 8px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--positive-bg);
   color: var(--green);
   font-size: 12px;
@@ -241,8 +209,6 @@
 .dm-result-close:hover { background: var(--surface0); color: var(--text); }
 
 /* Export Picker Modal */
-.dm-picker-backdrop { /* extends .modal-backdrop */ }
-
 .dm-picker-modal {
   width: 380px;
   max-height: 70vh;
@@ -264,6 +230,7 @@
 .dm-picker-empty { padding: 20px; text-align: center; color: var(--overlay0); font-size: 13px; }
 .dm-picker-footer { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; border-top: 1px solid var(--surface0); }
 .dm-picker-count { font-size: 12px; color: var(--overlay0); }
+.dm-picker-tag { margin-left: 6px; font-size: 0.75em; }
 
 /* ===== ProviderSettings — Full Redesign ===== */
 
@@ -448,10 +415,10 @@
 
 .theme-card {
   border: 2px solid var(--surface0);
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   padding: 12px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition-normal);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -509,10 +476,10 @@
 
 .lang-card {
   border: 2px solid var(--surface0);
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   padding: 12px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition-normal);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -551,10 +518,10 @@
 
 .theme-bg-btn {
   padding: 6px 14px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--transition-fast);
   border: 1px solid var(--surface1);
   background: var(--surface0);
   color: var(--text);
@@ -584,7 +551,7 @@
 
 .theme-bg-preview-wrap {
   margin-top: 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
   border: 1px solid var(--surface0);
   max-height: 120px;

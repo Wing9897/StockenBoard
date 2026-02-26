@@ -45,6 +45,63 @@ impl PolygonProvider {
             .extra_i64("trade_count", r["n"].as_i64())
             .build()
     }
+
+    /// 從 snapshot 回應解析，包含盤前盤後數據
+    fn parse_snapshot(symbol: &str, snap: &serde_json::Value) -> AssetData {
+        let day = &snap["day"];
+        let price = day["c"].as_f64()
+            .or_else(|| snap["lastTrade"]["p"].as_f64())
+            .unwrap_or(0.0);
+        let open = day["o"].as_f64().unwrap_or(price);
+        let change = snap["todaysChange"].as_f64().unwrap_or(price - open);
+        let pct = snap["todaysChangePerc"].as_f64()
+            .unwrap_or(if open > 0.0 { (change / open) * 100.0 } else { 0.0 });
+
+        let prev_day = &snap["prevDay"];
+        let prev_close = prev_day["c"].as_f64();
+
+        // 盤前盤後 — Polygon snapshot 的 session 欄位
+        let pre_mkt = &snap["session"]["preMarket"];
+        let post_mkt = &snap["session"]["afterHours"];
+        let has_pre = !pre_mkt.is_null() && pre_mkt["close"].as_f64().is_some();
+        let has_post = !post_mkt.is_null() && post_mkt["close"].as_f64().is_some();
+
+        let mut builder = AssetDataBuilder::new(symbol, "polygon")
+            .price(price)
+            .change_24h(Some(change))
+            .change_percent_24h(Some(pct))
+            .high_24h(day["h"].as_f64())
+            .low_24h(day["l"].as_f64())
+            .volume(day["v"].as_f64())
+            .extra_f64("open_price", day["o"].as_f64())
+            .extra_f64("weighted_avg_price", day["vw"].as_f64())
+            .extra_f64("prev_close", prev_close);
+
+        // 市場狀態
+        if has_pre {
+            builder = builder.extra_str("market_session", Some("PRE"));
+            let pre_price = pre_mkt["close"].as_f64().unwrap_or(0.0);
+            builder = builder.extra_f64("pre_market_price", Some(pre_price));
+            if let Some(pc) = prev_close {
+                let pre_change = pre_price - pc;
+                let pre_pct = if pc > 0.0 { (pre_change / pc) * 100.0 } else { 0.0 };
+                builder = builder.extra_f64("pre_market_change", Some(pre_change));
+                builder = builder.extra_f64("pre_market_change_pct", Some(pre_pct));
+            }
+        } else if has_post {
+            builder = builder.extra_str("market_session", Some("POST"));
+            let post_price = post_mkt["close"].as_f64().unwrap_or(0.0);
+            builder = builder.extra_f64("post_market_price", Some(post_price));
+            let post_change = post_price - price;
+            let post_pct = if price > 0.0 { (post_change / price) * 100.0 } else { 0.0 };
+            builder = builder.extra_f64("post_market_change", Some(post_change));
+            builder = builder.extra_f64("post_market_change_pct", Some(post_pct));
+        } else {
+            builder = builder.extra_str("market_session", Some("REGULAR"));
+        }
+
+        builder.build()
+    }
 }
 
 #[async_trait::async_trait]
@@ -57,6 +114,23 @@ impl DataProvider for PolygonProvider {
         let api_key = self.api_key.as_ref().ok_or("Polygon.io 需要 API Key")?;
         let api_symbol = Self::to_polygon_symbol(symbol);
 
+        // 股票類: 先嘗試 snapshot（含盤前盤後），失敗再 fallback 到 aggs/prev
+        if !api_symbol.starts_with("X:") {
+            let snap_url = format!(
+                "https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/{}?apiKey={}",
+                api_symbol, api_key
+            );
+            if let Ok(resp) = self.client.get(&snap_url).send().await {
+                if let Ok(data) = resp.json::<serde_json::Value>().await {
+                    let snap = &data["ticker"];
+                    if !snap.is_null() && !snap["day"].is_null() {
+                        return Ok(Self::parse_snapshot(symbol, snap));
+                    }
+                }
+            }
+        }
+
+        // Crypto 或 snapshot 失敗: 用 aggs/prev
         let data: serde_json::Value = self.client
             .get(format!("https://api.polygon.io/v2/aggs/ticker/{}/prev?apiKey={}", api_symbol, api_key))
             .send().await.map_err(|e| format!("Polygon 連接失敗: {}", e))?
@@ -108,9 +182,8 @@ impl DataProvider for PolygonProvider {
                                 .collect();
                             for (original, ps) in &stock_syms {
                                 if let Some(snap) = snap_map.get(&ps.to_uppercase()) {
-                                    let day = &snap["day"];
-                                    if !day.is_null() {
-                                        results.push(Self::parse_agg(original, day));
+                                    if !snap["day"].is_null() {
+                                        results.push(Self::parse_snapshot(original, snap));
                                     }
                                 }
                             }

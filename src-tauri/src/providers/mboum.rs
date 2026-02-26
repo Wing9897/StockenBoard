@@ -12,8 +12,13 @@ impl MboumProvider {
     }
 
     fn parse_quote(symbol: &str, q: &serde_json::Value) -> AssetData {
-        AssetDataBuilder::new(symbol, "mboum")
-            .price(q["regularMarketPrice"].as_f64().unwrap_or(0.0))
+        let price = q["regularMarketPrice"].as_f64().unwrap_or(0.0);
+        let market_state = q["marketState"].as_str();
+        let pre_price = q["preMarketPrice"].as_f64();
+        let post_price = q["postMarketPrice"].as_f64();
+
+        let mut builder = AssetDataBuilder::new(symbol, "mboum")
+            .price(price)
             .currency(q["currency"].as_str().unwrap_or("USD"))
             .change_24h(q["regularMarketChange"].as_f64())
             .change_percent_24h(q["regularMarketChangePercent"].as_f64())
@@ -26,7 +31,27 @@ impl MboumProvider {
             .extra_f64("52w_high", q["fiftyTwoWeekHigh"].as_f64())
             .extra_f64("52w_low", q["fiftyTwoWeekLow"].as_f64())
             .extra_str("name", q["shortName"].as_str())
-            .build()
+            .extra_str("market_session", market_state);
+
+        // 盤前數據
+        if let Some(pp) = pre_price {
+            builder = builder.extra_f64("pre_market_price", Some(pp));
+            let pre_change = pp - price;
+            let pre_pct = if price > 0.0 { (pre_change / price) * 100.0 } else { 0.0 };
+            builder = builder.extra_f64("pre_market_change", Some(pre_change));
+            builder = builder.extra_f64("pre_market_change_pct", Some(pre_pct));
+        }
+
+        // 盤後數據
+        if let Some(pp) = post_price {
+            builder = builder.extra_f64("post_market_price", Some(pp));
+            let post_change = pp - price;
+            let post_pct = if price > 0.0 { (post_change / price) * 100.0 } else { 0.0 };
+            builder = builder.extra_f64("post_market_change", Some(post_change));
+            builder = builder.extra_f64("post_market_change_pct", Some(post_pct));
+        }
+
+        builder.build()
     }
 }
 

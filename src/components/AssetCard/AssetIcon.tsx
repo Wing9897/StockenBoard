@@ -1,12 +1,12 @@
 import { useState, useEffect, memo } from 'react';
-import { invoke, convertFileSrc } from '@tauri-apps/api/core';
+import { invoke } from '@tauri-apps/api/core';
 import { t } from '../../lib/i18n';
 
 /**
- * 全域 icon blob 快取 — 同一個 iconName 只讀取一次檔案，
- * 轉成 blob URL 後所有卡片共用，不再重複走 asset:// 協議。
+ * 全域 icon data URL 快取 — 同一個 iconName 只讀取一次檔案，
+ * 透過 invoke 取得 base64 data URL，所有卡片共用。
  */
-const _blobCache = new Map<string, string>();        // iconName → blob URL
+const _dataUrlCache = new Map<string, string>();     // iconName → data URL
 const _pendingLoads = new Map<string, Promise<string | null>>(); // 防止重複載入
 const _failedIcons = new Set<string>();              // 確認不存在的 icon
 
@@ -24,12 +24,11 @@ function getIconsDir(): Promise<string> {
   return _iconsDirPromise;
 }
 
-/** 載入 icon 並轉成 blob URL，全域只執行一次 */
-async function loadIconBlob(iconName: string): Promise<string | null> {
-  if (_blobCache.has(iconName)) return _blobCache.get(iconName)!;
+/** 載入 icon 並取得 data URL，全域只執行一次 */
+async function loadIconDataUrl(iconName: string): Promise<string | null> {
+  if (_dataUrlCache.has(iconName)) return _dataUrlCache.get(iconName)!;
   if (_failedIcons.has(iconName)) return null;
 
-  // 防止多張同 icon 的卡片同時觸發重複載入
   const pending = _pendingLoads.get(iconName);
   if (pending) return pending;
 
@@ -37,15 +36,10 @@ async function loadIconBlob(iconName: string): Promise<string | null> {
     try {
       const dir = await getIconsDir();
       const sep = dir.endsWith('\\') || dir.endsWith('/') ? '' : '/';
-      const assetUrl = convertFileSrc(`${dir}${sep}${iconName}.png`);
-
-      const resp = await fetch(assetUrl);
-      if (!resp.ok) throw new Error(`${resp.status}`);
-
-      const blob = await resp.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      _blobCache.set(iconName, blobUrl);
-      return blobUrl;
+      const filePath = `${dir}${sep}${iconName}.png`;
+      const dataUrl = await invoke<string>('read_local_file_base64', { path: filePath });
+      _dataUrlCache.set(iconName, dataUrl);
+      return dataUrl;
     } catch {
       _failedIcons.add(iconName);
       return null;
@@ -60,10 +54,15 @@ async function loadIconBlob(iconName: string): Promise<string | null> {
 
 /** 清除特定 icon 的快取（set_icon 後呼叫） */
 export function invalidateIcon(iconName: string) {
-  const old = _blobCache.get(iconName);
-  if (old) URL.revokeObjectURL(old);
-  _blobCache.delete(iconName);
+  _dataUrlCache.delete(iconName);
   _failedIcons.delete(iconName);
+}
+
+/** 清除所有 icon 快取 */
+export function clearAllIcons() {
+  _dataUrlCache.clear();
+  _failedIcons.clear();
+  _pendingLoads.clear();
 }
 
 // ── 預載 icons dir ──
@@ -85,15 +84,14 @@ export const AssetIcon = memo(function AssetIcon({ symbol, className, onClick }:
   const iconName = getIconName(symbol);
   const fallbackText = iconName.slice(0, 3).toUpperCase();
 
-  // 三態：null = 載入中/失敗, string = blob URL
-  const [blobUrl, setBlobUrl] = useState<string | null>(() => _blobCache.get(iconName) ?? null);
-  const [loaded, setLoaded] = useState(() => _blobCache.has(iconName));
+  // 三態：null = 載入中/失敗, string = data URL
+  const [dataUrl, setDataUrl] = useState<string | null>(() => _dataUrlCache.get(iconName) ?? null);
+  const [loaded, setLoaded] = useState(() => _dataUrlCache.has(iconName));
   const [failed, setFailed] = useState(() => _failedIcons.has(iconName));
 
   useEffect(() => {
-    // 已有快取 → 直接用
-    if (_blobCache.has(iconName)) {
-      setBlobUrl(_blobCache.get(iconName)!);
+    if (_dataUrlCache.has(iconName)) {
+      setDataUrl(_dataUrlCache.get(iconName)!);
       setLoaded(true);
       setFailed(false);
       return;
@@ -108,10 +106,10 @@ export const AssetIcon = memo(function AssetIcon({ symbol, className, onClick }:
     setLoaded(false);
     setFailed(false);
 
-    loadIconBlob(iconName).then(url => {
+    loadIconDataUrl(iconName).then(url => {
       if (cancelled) return;
       if (url) {
-        setBlobUrl(url);
+        setDataUrl(url);
         setLoaded(true);
       } else {
         setFailed(true);
@@ -124,8 +122,8 @@ export const AssetIcon = memo(function AssetIcon({ symbol, className, onClick }:
 
   return (
     <div className={`${className} clickable`} onClick={onClick} title={t.asset.clickSetIcon}>
-      {loaded && blobUrl && !failed ? (
-        <img src={blobUrl} alt={symbol} />
+      {loaded && dataUrl && !failed ? (
+        <img src={dataUrl} alt={symbol} />
       ) : (
         <span className="asset-icon-fallback">{fallbackText}</span>
       )}

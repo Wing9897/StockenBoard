@@ -13,9 +13,14 @@ interface BatchResult {
 
 interface SubscriptionManagerProps {
   onBatchAdd: (symbol: string, providerId?: string, assetType?: 'crypto' | 'stock') => Promise<void>;
+  onBatchAddMultiple?: (
+    items: { symbol: string; providerId?: string; assetType?: string }[],
+    onProgress?: (done: number, total: number) => void,
+  ) => Promise<{ succeeded: string[]; failed: string[]; dbDuplicates: string[] }>;
   subscriptions: Subscription[];
   providers: ProviderInfo[];
   onToast?: (type: 'success' | 'error' | 'info', title: string, message?: string) => void;
+  onDone?: () => void;
 }
 
 async function hasApiKey(providerId: string): Promise<boolean> {
@@ -32,9 +37,9 @@ async function hasApiKey(providerId: string): Promise<boolean> {
 async function saveApiKey(providerId: string, apiKey: string, apiSecret?: string) {
   const db = await getDb();
   await db.execute(
-    `INSERT INTO provider_settings (provider_id, api_key, api_secret, connection_type, enabled)
-     VALUES ($1, $2, $3, 'rest', 1)
-     ON CONFLICT(provider_id) DO UPDATE SET api_key = $2, api_secret = $3, enabled = 1`,
+    `INSERT INTO provider_settings (provider_id, api_key, api_secret, connection_type)
+     VALUES ($1, $2, $3, 'rest')
+     ON CONFLICT(provider_id) DO UPDATE SET api_key = $2, api_secret = $3`,
     [providerId, apiKey || null, apiSecret || null]
   );
   await invoke('enable_provider', {
@@ -44,7 +49,7 @@ async function saveApiKey(providerId: string, apiKey: string, apiSecret?: string
   });
 }
 
-export function SubscriptionManager({ onBatchAdd, subscriptions, providers: providerInfoList, onToast }: SubscriptionManagerProps) {
+export function SubscriptionManager({ onBatchAdd, onBatchAddMultiple, subscriptions, providers: providerInfoList, onToast, onDone }: SubscriptionManagerProps) {
   const [symbolInput, setSymbolInput] = useState('');
   const [assetType, setAssetType] = useState<'crypto' | 'stock'>('crypto');
   const [provider, setProvider] = useState('binance');
@@ -129,8 +134,10 @@ export function SubscriptionManager({ onBatchAdd, subscriptions, providers: prov
         await onBatchAdd(unique[0], provider, assetType);
         onToast?.('success', t.subForm.added, t.subForm.addedMsg(isDex ? unique[0] : unique[0].toUpperCase()));
         setSymbolInput('');
-      } catch {
-        onToast?.('error', t.subForm.addFailed, t.subForm.addFailedMsg(unique[0]));
+        onDone?.();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        onToast?.('error', t.subForm.addFailed, `${t.subForm.addFailedMsg(unique[0])}\n${msg}`);
       }
       setImporting(false);
       setImportStatus(null);
@@ -142,21 +149,39 @@ export function SubscriptionManager({ onBatchAdd, subscriptions, providers: prov
     const failed: string[] = [];
     setImportStatus({ done: 0, total: unique.length });
 
-    for (const sym of unique) {
+    if (onBatchAddMultiple) {
+      // 並行驗證 + 批量寫入，只 reload 一次
+      const items = unique.map(sym => ({ symbol: sym, providerId: provider, assetType }));
       try {
-        await onBatchAdd(sym, provider, assetType);
-        succeeded.push(sym);
+        const result = await onBatchAddMultiple(items, (done, total) => {
+          setImportStatus({ done, total });
+        });
+        succeeded.push(...result.succeeded);
+        failed.push(...result.failed);
+        duplicates.push(...(result.dbDuplicates || []));
       } catch {
-        failed.push(sym);
+        failed.push(...unique);
       }
-      setImportStatus({ done: succeeded.length + failed.length, total: unique.length });
+    } else {
+      for (const sym of unique) {
+        try {
+          await onBatchAdd(sym, provider, assetType);
+          succeeded.push(sym);
+        } catch {
+          failed.push(sym);
+        }
+        setImportStatus({ done: succeeded.length + failed.length, total: unique.length });
+      }
     }
 
     setImporting(false);
     setImportStatus(null);
 
     setBatchResult({ succeeded, failed, duplicates });
-    if (failed.length === 0) setSymbolInput('');
+    if (failed.length === 0) {
+      setSymbolInput('');
+      onDone?.();
+    }
   };
 
   return (
@@ -214,7 +239,7 @@ export function SubscriptionManager({ onBatchAdd, subscriptions, providers: prov
                     onChange={(e) => setApiSecretInput(e.target.value)}
                     placeholder={t.apiKey.secretPlaceholder}
                     disabled={importing || keySaving}
-                    style={{ marginTop: '4px' }}
+                    className="api-secret-input"
                   />
                 )}
                 {apiKeyInput.trim() && (
@@ -268,10 +293,10 @@ export function SubscriptionManager({ onBatchAdd, subscriptions, providers: prov
 
       {batchResult && (
         <div className="modal-backdrop batch-result-backdrop" onClick={() => setBatchResult(null)}>
-          <div className="modal-container batch-result-modal" onClick={e => e.stopPropagation()}>
+          <div className="modal-container batch-result-modal" role="dialog" aria-modal="true" aria-label={t.batchResult.title} onClick={e => e.stopPropagation()}>
             <div className="batch-result-header">
               <h4 className="batch-result-title">{t.batchResult.title}</h4>
-              <button className="vsm-close" onClick={() => setBatchResult(null)}>✕</button>
+              <button className="vsm-close" onClick={() => setBatchResult(null)} aria-label={t.common.close}>✕</button>
             </div>
             <div className="batch-result-body">
               {batchResult.succeeded.length > 0 && (

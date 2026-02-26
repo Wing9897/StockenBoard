@@ -93,14 +93,16 @@ else:
 # ── 4. App.tsx 驗證 ──
 print("\n[4] App.tsx 驗證")
 app_content = Path("src/App.tsx").read_text(encoding="utf-8")
+toolbar_content = Path("src/components/DashboardToolbar/DashboardToolbar.tsx").read_text(encoding="utf-8")
 if "useLocale()" in app_content:
     ok("App.tsx: useLocale() 存在")
 else:
     err("App.tsx: 缺少 useLocale()")
-if "t.providers.all" in app_content:
-    ok("App.tsx: default view 使用 t.providers.all")
+# t.providers.all 已移至 DashboardToolbar 共用組件
+if "t.providers.all" in app_content or "t.providers.all" in toolbar_content:
+    ok("App.tsx/DashboardToolbar: default view 使用 t.providers.all")
 else:
-    err("App.tsx: default view 未使用 t.providers.all")
+    err("App.tsx/DashboardToolbar: default view 未使用 t.providers.all")
 
 # ── 5. AssetCard.tsx 驗證 ──
 print("\n[5] AssetCard.tsx 驗證")

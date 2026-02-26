@@ -28,7 +28,9 @@ impl TwelveDataProvider {
             return Err(format!("TwelveData: {}", msg));
         }
         let parse = |key: &str| data[key].as_str().and_then(|s| s.parse::<f64>().ok());
-        Ok(AssetDataBuilder::new(symbol, "twelvedata")
+        let is_extended = data["is_extended_hours"].as_bool().unwrap_or(false);
+
+        let mut builder = AssetDataBuilder::new(symbol, "twelvedata")
             .price(parse("close").unwrap_or(0.0))
             .currency(data["currency"].as_str().unwrap_or("USD"))
             .change_24h(parse("change"))
@@ -39,8 +41,19 @@ impl TwelveDataProvider {
             .extra_f64("open_price", parse("open"))
             .extra_f64("prev_close", parse("previous_close"))
             .extra_f64("52w_high", data["fifty_two_week"]["high"].as_str().and_then(|s| s.parse().ok()))
-            .extra_f64("52w_low", data["fifty_two_week"]["low"].as_str().and_then(|s| s.parse().ok()))
-            .build())
+            .extra_f64("52w_low", data["fifty_two_week"]["low"].as_str().and_then(|s| s.parse().ok()));
+
+        // 市場狀態 — 根據 is_extended_hours 判斷
+        if data.get("is_extended_hours").is_some() {
+            if is_extended {
+                // Extended hours — 無法區分盤前盤後，統一標記
+                builder = builder.extra_str("market_session", Some("POST"));
+            } else {
+                builder = builder.extra_str("market_session", Some("REGULAR"));
+            }
+        }
+
+        Ok(builder.build())
     }
 }
 
@@ -55,7 +68,7 @@ impl DataProvider for TwelveDataProvider {
         let api_symbol = Self::to_td_symbol(symbol);
 
         let data: serde_json::Value = self.client
-            .get(format!("https://api.twelvedata.com/quote?symbol={}&apikey={}", api_symbol, api_key))
+            .get(format!("https://api.twelvedata.com/quote?symbol={}&prepost=true&apikey={}", api_symbol, api_key))
             .send().await.map_err(|e| format!("TwelveData 連接失敗: {}", e))?
             .error_for_status().map_err(|e| format!("TwelveData API 錯誤: {}", e))?
             .json().await.map_err(|e| format!("TwelveData 解析失敗: {}", e))?;
@@ -76,7 +89,7 @@ impl DataProvider for TwelveDataProvider {
         let syms_str = td_syms.join(",");
 
         let data: serde_json::Value = self.client
-            .get(format!("https://api.twelvedata.com/quote?symbol={}&apikey={}", syms_str, api_key))
+            .get(format!("https://api.twelvedata.com/quote?symbol={}&prepost=true&apikey={}", syms_str, api_key))
             .send().await.map_err(|e| format!("TwelveData 批量連接失敗: {}", e))?
             .error_for_status().map_err(|e| format!("TwelveData API 錯誤: {}", e))?
             .json().await.map_err(|e| format!("TwelveData 批量解析失敗: {}", e))?;

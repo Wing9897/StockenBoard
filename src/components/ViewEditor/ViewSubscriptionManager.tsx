@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Subscription } from '../../types';
 import { t } from '../../lib/i18n';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
 import './ViewEditor.css';
 
 interface ViewSubscriptionManagerProps {
@@ -17,6 +18,7 @@ export function ViewSubscriptionManager({
   onClose,
 }: ViewSubscriptionManagerProps) {
   const [search, setSearch] = useState('');
+  useEscapeKey(onClose);
 
   const searchTerms = search
     .split(/[,\s\n]+/)
@@ -63,6 +65,7 @@ export function ViewSubscriptionManager({
           placeholder={t.subs.searchPlaceholder}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          aria-label={t.subs.searchPlaceholder}
           autoFocus
         />
         <div className="vsm-bulk-actions">

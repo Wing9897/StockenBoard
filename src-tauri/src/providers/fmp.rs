@@ -25,8 +25,10 @@ impl FMPProvider {
     }
 
     fn parse_quote(symbol: &str, q: &serde_json::Value) -> AssetData {
-        AssetDataBuilder::new(symbol, "fmp")
-            .price(q["price"].as_f64().unwrap_or(0.0))
+        let price = q["price"].as_f64().unwrap_or(0.0);
+
+        let mut builder = AssetDataBuilder::new(symbol, "fmp")
+            .price(price)
             .change_24h(q["change"].as_f64())
             .change_percent_24h(q["changesPercentage"].as_f64())
             .high_24h(q["dayHigh"].as_f64())
@@ -40,7 +42,44 @@ impl FMPProvider {
             .extra_f64("pe_ratio", q["pe"].as_f64())
             .extra_f64("eps", q["eps"].as_f64())
             .extra_str("name", q["name"].as_str())
-            .build()
+            .extra_str("exchange", q["exchange"].as_str());
+
+        // 市場狀態 — FMP 沒有 marketState 欄位，根據有無盤前盤後數據推斷
+        let pre_price = q["preMarketPrice"].as_f64().filter(|&v| v > 0.0);
+        let post_price = q["afterHoursPrice"].as_f64().filter(|&v| v > 0.0);
+
+        if pre_price.is_some() || post_price.is_some() {
+            // 有盤前或盤後數據 → 非交易時段
+            if pre_price.is_some() {
+                builder = builder.extra_str("market_session", Some("PRE"));
+            } else {
+                builder = builder.extra_str("market_session", Some("POST"));
+            }
+        } else {
+            builder = builder.extra_str("market_session", Some("REGULAR"));
+        }
+
+        // 盤前數據
+        if let Some(pp) = pre_price {
+            builder = builder.extra_f64("pre_market_price", Some(pp));
+            let pre_change = pp - price;
+            let pre_pct = if price > 0.0 { (pre_change / price) * 100.0 } else { 0.0 };
+            builder = builder.extra_f64("pre_market_change", Some(pre_change));
+            builder = builder.extra_f64("pre_market_change_pct",
+                q["preMarketChangePercent"].as_f64().or(Some(pre_pct)));
+        }
+
+        // 盤後數據
+        if let Some(pp) = post_price {
+            builder = builder.extra_f64("post_market_price", Some(pp));
+            let post_change = pp - price;
+            let post_pct = if price > 0.0 { (post_change / price) * 100.0 } else { 0.0 };
+            builder = builder.extra_f64("post_market_change", Some(post_change));
+            builder = builder.extra_f64("post_market_change_pct",
+                q["afterHoursChangePercent"].as_f64().or(Some(post_pct)));
+        }
+
+        builder.build()
     }
 }
 

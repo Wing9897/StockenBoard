@@ -4,18 +4,19 @@ mod polling;
 mod providers;
 
 use commands::{
-    disable_provider, enable_provider, export_file, fetch_asset_price, fetch_multiple_prices,
-    get_all_providers, get_cached_prices, get_icons_dir, get_poll_ticks, import_file,
-    lookup_dex_pool, reload_polling, remove_icon, set_icon, set_visible_subscriptions,
+    enable_provider, export_file, fetch_asset_price, fetch_multiple_prices,
+    get_all_providers, get_cached_prices, get_icons_dir, get_poll_ticks,
+    get_theme_bg_path, get_unattended_polling, import_file, lookup_dex_pool,
+    read_local_file_base64, reload_polling, remove_icon, remove_theme_bg,
+    save_theme_bg, set_icon, set_unattended_polling, set_visible_subscriptions,
     start_ws_stream, stop_ws_stream, AppState,
 };
 use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
 
-/// 刪除舊版 DB（migration checksum 不兼容時自動重建）
+/// 確保 DB schema 一致 — 版本不同就刪除重建
 fn ensure_clean_db(app_dir: &std::path::Path) {
     let db_path = app_dir.join("stockenboard.db");
-    // 標記檔：記錄目前 schema 版本，版本不同就刪 DB 重建
     let marker = app_dir.join(".schema_v");
     const SCHEMA_VER: &str = "2";
     let current = std::fs::read_to_string(&marker).unwrap_or_default();
@@ -32,7 +33,7 @@ fn ensure_clean_db(app_dir: &std::path::Path) {
 pub fn run() {
     let migrations = vec![Migration {
         version: 2,
-        description: "unified_schema_v2",
+        description: "initial_schema",
         sql: db::SCHEMA,
         kind: MigrationKind::Up,
     }];
@@ -50,7 +51,6 @@ pub fn run() {
             fetch_multiple_prices,
             get_all_providers,
             enable_provider,
-            disable_provider,
             start_ws_stream,
             stop_ws_stream,
             export_file,
@@ -58,11 +58,17 @@ pub fn run() {
             set_icon,
             remove_icon,
             get_icons_dir,
+            read_local_file_base64,
             reload_polling,
             lookup_dex_pool,
             get_cached_prices,
             get_poll_ticks,
             set_visible_subscriptions,
+            save_theme_bg,
+            remove_theme_bg,
+            get_theme_bg_path,
+            set_unattended_polling,
+            get_unattended_polling,
         ])
         .setup(|app| {
             if let Ok(app_dir) = app.path().app_data_dir() {

@@ -39,6 +39,14 @@
   --teal-bg: rgba(148, 226, 213, 0.15);
   --mauve-bg: rgba(203, 166, 247, 0.15);
   --overlay-bg: rgba(108, 112, 134, 0.15);
+
+  /* Layout tokens */
+  --radius-card: 10px;
+  --radius-sm: 6px;
+  --radius-pill: 20px;
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.2s ease;
+  --card-padding: 10px;
 }
 
 [data-theme="macchiato"] {
@@ -197,6 +205,123 @@
   --overlay-bg: rgba(85, 85, 85, 0.15);
 }
 
+[data-theme="nord"] {
+  --base: #2e3440;
+  --mantle: #272c36;
+  --crust: #222730;
+  --surface0: #3b4252;
+  --surface1: #434c5e;
+  --surface2: #4c566a;
+  --overlay0: #616e88;
+  --overlay1: #7b88a1;
+  --subtext0: #9aa5b8;
+  --subtext1: #b4bece;
+  --text: #eceff4;
+  --blue: #88c0d0;
+  --green: #a3be8c;
+  --red: #bf616a;
+  --yellow: #ebcb8b;
+  --peach: #d08770;
+  --teal: #8fbcbb;
+  --mauve: #b48ead;
+  --pink: #c78dab;
+  --sky: #81a1c1;
+  --rosewater: #d8bab5;
+  --flamingo: #c9908a;
+  --lavender: #a3b1d6;
+  --sapphire: #5e81ac;
+  --maroon: #c97078;
+
+  --shadow: rgba(0, 0, 0, 0.3);
+  --backdrop: rgba(0, 0, 0, 0.55);
+  --positive-bg: rgba(163, 190, 140, 0.1);
+  --negative-bg: rgba(191, 97, 106, 0.1);
+  --blue-bg: rgba(136, 192, 208, 0.15);
+  --yellow-bg: rgba(235, 203, 139, 0.15);
+  --peach-bg: rgba(208, 135, 112, 0.15);
+  --teal-bg: rgba(143, 188, 187, 0.15);
+  --mauve-bg: rgba(180, 142, 173, 0.15);
+  --overlay-bg: rgba(97, 110, 136, 0.15);
+}
+
+[data-theme="dracula"] {
+  --base: #282a36;
+  --mantle: #21222c;
+  --crust: #191a21;
+  --surface0: #44475a;
+  --surface1: #515470;
+  --surface2: #606387;
+  --overlay0: #6272a4;
+  --overlay1: #7a8abb;
+  --subtext0: #a0aad0;
+  --subtext1: #c0c8e4;
+  --text: #f8f8f2;
+  --blue: #8be9fd;
+  --green: #50fa7b;
+  --red: #ff5555;
+  --yellow: #f1fa8c;
+  --peach: #ffb86c;
+  --teal: #66e0cc;
+  --mauve: #bd93f9;
+  --pink: #ff79c6;
+  --sky: #8be9fd;
+  --rosewater: #ffc0b0;
+  --flamingo: #ff9580;
+  --lavender: #caa9fa;
+  --sapphire: #62d6e8;
+  --maroon: #ff6e6e;
+
+  --shadow: rgba(0, 0, 0, 0.35);
+  --backdrop: rgba(0, 0, 0, 0.6);
+  --positive-bg: rgba(80, 250, 123, 0.1);
+  --negative-bg: rgba(255, 85, 85, 0.1);
+  --blue-bg: rgba(139, 233, 253, 0.12);
+  --yellow-bg: rgba(241, 250, 140, 0.12);
+  --peach-bg: rgba(255, 184, 108, 0.12);
+  --teal-bg: rgba(102, 224, 204, 0.12);
+  --mauve-bg: rgba(189, 147, 249, 0.12);
+  --overlay-bg: rgba(98, 114, 164, 0.15);
+}
+
+[data-theme="gruvbox"] {
+  --base: #282828;
+  --mantle: #1d2021;
+  --crust: #141617;
+  --surface0: #3c3836;
+  --surface1: #504945;
+  --surface2: #665c54;
+  --overlay0: #7c6f64;
+  --overlay1: #928374;
+  --subtext0: #a89984;
+  --subtext1: #bdae93;
+  --text: #ebdbb2;
+  --blue: #83a598;
+  --green: #b8bb26;
+  --red: #fb4934;
+  --yellow: #fabd2f;
+  --peach: #fe8019;
+  --teal: #8ec07c;
+  --mauve: #d3869b;
+  --pink: #d3869b;
+  --sky: #83a598;
+  --rosewater: #d5c4a1;
+  --flamingo: #cc8c6e;
+  --lavender: #b8a0c8;
+  --sapphire: #689d6a;
+  --maroon: #cc241d;
+
+  --shadow: rgba(0, 0, 0, 0.35);
+  --backdrop: rgba(0, 0, 0, 0.6);
+  --positive-bg: rgba(184, 187, 38, 0.1);
+  --negative-bg: rgba(251, 73, 52, 0.1);
+  --blue-bg: rgba(131, 165, 152, 0.15);
+  --yellow-bg: rgba(250, 189, 47, 0.15);
+  --peach-bg: rgba(254, 128, 25, 0.15);
+  --teal-bg: rgba(142, 192, 124, 0.15);
+  --mauve-bg: rgba(211, 134, 155, 0.15);
+  --overlay-bg: rgba(124, 111, 100, 0.15);
+}
+
 /* ===== Anime-style Themes ===== */
 
 [data-theme="sakura"] {
@@ -340,6 +465,147 @@
   --glass-blur: 12px;
 }
 
+[data-theme="evangelion"] {
+  --base: rgba(18, 5, 30, 0.88);
+  --mantle: rgba(12, 3, 22, 0.92);
+  --crust: #0a0018;
+  --surface0: rgba(40, 15, 60, 0.65);
+  --surface1: rgba(55, 22, 80, 0.65);
+  --surface2: rgba(70, 30, 100, 0.65);
+  --overlay0: #7a5090;
+  --overlay1: #9068a8;
+  --subtext0: #b088c8;
+  --subtext1: #c8a0e0;
+  --text: #e0d0ff;
+  --blue: #7b68ee;
+  --green: #2ecc71;
+  --red: #e74c3c;
+  --yellow: #f39c12;
+  --peach: #e67e22;
+  --teal: #1abc9c;
+  --mauve: #9b59b6;
+  --pink: #c060a0;
+  --sky: #8e7cc3;
+  --rosewater: #d8b0d0;
+  --flamingo: #c080a0;
+  --lavender: #a888d0;
+  --sapphire: #6c5ce7;
+  --maroon: #d04050;
+
+  --shadow: rgba(0, 0, 0, 0.5);
+  --backdrop: rgba(10, 0, 24, 0.8);
+  --positive-bg: rgba(46, 204, 113, 0.1);
+  --negative-bg: rgba(231, 76, 60, 0.1);
+  --blue-bg: rgba(123, 104, 238, 0.1);
+  --yellow-bg: rgba(243, 156, 18, 0.1);
+  --peach-bg: rgba(230, 126, 34, 0.1);
+  --teal-bg: rgba(26, 188, 156, 0.1);
+  --mauve-bg: rgba(155, 89, 182, 0.1);
+  --overlay-bg: rgba(122, 80, 144, 0.15);
+
+  --theme-bg: linear-gradient(145deg, #0a0018 0%, #1a0030 30%, #0d0020 60%, #150028 100%);
+  --theme-glow: radial-gradient(ellipse at 20% 70%, rgba(155, 89, 182, 0.08) 0%, transparent 55%),
+                radial-gradient(ellipse at 80% 30%, rgba(46, 204, 113, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(230, 126, 34, 0.05) 0%, transparent 40%);
+  --glass-bg: rgba(18, 5, 30, 0.65);
+  --glass-border: rgba(155, 89, 182, 0.15);
+  --glass-blur: 13px;
+}
+
+[data-theme="miku"] {
+  --base: rgba(12, 28, 35, 0.88);
+  --mantle: rgba(8, 22, 28, 0.92);
+  --crust: #0a1820;
+  --surface0: rgba(20, 50, 58, 0.65);
+  --surface1: rgba(28, 65, 72, 0.65);
+  --surface2: rgba(38, 80, 88, 0.65);
+  --overlay0: #508890;
+  --overlay1: #68a0a8;
+  --subtext0: #88c0c8;
+  --subtext1: #a8d8dc;
+  --text: #e0f7f6;
+  --blue: #39c5bb;
+  --green: #66e0b8;
+  --red: #e12885;
+  --yellow: #ffe066;
+  --peach: #ffb088;
+  --teal: #86cecb;
+  --mauve: #a080d0;
+  --pink: #e12885;
+  --sky: #5cd8d0;
+  --rosewater: #f0d0d8;
+  --flamingo: #e88098;
+  --lavender: #b0a8e0;
+  --sapphire: #30b0b0;
+  --maroon: #d03070;
+
+  --shadow: rgba(0, 0, 0, 0.45);
+  --backdrop: rgba(10, 24, 32, 0.8);
+  --positive-bg: rgba(102, 224, 184, 0.1);
+  --negative-bg: rgba(225, 40, 133, 0.1);
+  --blue-bg: rgba(57, 197, 187, 0.1);
+  --yellow-bg: rgba(255, 224, 102, 0.1);
+  --peach-bg: rgba(255, 176, 136, 0.1);
+  --teal-bg: rgba(134, 206, 203, 0.1);
+  --mauve-bg: rgba(160, 128, 208, 0.1);
+  --overlay-bg: rgba(80, 136, 144, 0.15);
+
+  --theme-bg: linear-gradient(140deg, #0a1820 0%, #0d2028 30%, #081a22 60%, #0c2230 100%);
+  --theme-glow: radial-gradient(ellipse at 25% 60%, rgba(57, 197, 187, 0.08) 0%, transparent 55%),
+                radial-gradient(ellipse at 75% 25%, rgba(225, 40, 133, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 90%, rgba(134, 206, 203, 0.05) 0%, transparent 40%);
+  --glass-bg: rgba(12, 28, 35, 0.65);
+  --glass-border: rgba(57, 197, 187, 0.15);
+  --glass-blur: 12px;
+}
+
+[data-theme="sunset"] {
+  --base: rgba(30, 12, 20, 0.88);
+  --mantle: rgba(22, 8, 15, 0.92);
+  --crust: #1a0a10;
+  --surface0: rgba(60, 25, 35, 0.65);
+  --surface1: rgba(78, 32, 45, 0.65);
+  --surface2: rgba(95, 40, 55, 0.65);
+  --overlay0: #a06070;
+  --overlay1: #b87888;
+  --subtext0: #d098a0;
+  --subtext1: #e0b0b8;
+  --text: #ffe0d0;
+  --blue: #7eb8da;
+  --green: #a8d080;
+  --red: #ff5050;
+  --yellow: #ffd700;
+  --peach: #ff6b35;
+  --teal: #70c0a8;
+  --mauve: #9b59b6;
+  --pink: #ff7088;
+  --sky: #88b8e0;
+  --rosewater: #ffc8b8;
+  --flamingo: #ff8870;
+  --lavender: #b898d8;
+  --sapphire: #6098c0;
+  --maroon: #e04848;
+
+  --shadow: rgba(0, 0, 0, 0.5);
+  --backdrop: rgba(26, 10, 16, 0.8);
+  --positive-bg: rgba(168, 208, 128, 0.1);
+  --negative-bg: rgba(255, 80, 80, 0.1);
+  --blue-bg: rgba(126, 184, 218, 0.1);
+  --yellow-bg: rgba(255, 215, 0, 0.12);
+  --peach-bg: rgba(255, 107, 53, 0.1);
+  --teal-bg: rgba(112, 192, 168, 0.1);
+  --mauve-bg: rgba(155, 89, 182, 0.1);
+  --overlay-bg: rgba(160, 96, 112, 0.15);
+
+  --theme-bg: linear-gradient(155deg, #1a0a10 0%, #2a1018 25%, #1a0820 50%, #281020 75%, #1a0a10 100%);
+  --theme-glow: radial-gradient(ellipse at 30% 80%, rgba(255, 107, 53, 0.08) 0%, transparent 55%),
+                radial-gradient(ellipse at 70% 20%, rgba(155, 89, 182, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(255, 215, 0, 0.05) 0%, transparent 40%);
+  --glass-bg: rgba(30, 12, 20, 0.65);
+  --glass-border: rgba(255, 107, 53, 0.15);
+  --glass-blur: 13px;
+}
+
 
 /* ===== Glass / Anime Theme Effects ===== */
 
@@ -350,14 +616,20 @@ body {
 
 [data-theme="sakura"] body,
 [data-theme="cyberpunk"] body,
-[data-theme="ghibli"] body {
+[data-theme="ghibli"] body,
+[data-theme="evangelion"] body,
+[data-theme="miku"] body,
+[data-theme="sunset"] body {
   background: var(--theme-bg);
 }
 
 /* Glow overlay — only visible on anime themes */
 [data-theme="sakura"] body::before,
 [data-theme="cyberpunk"] body::before,
-[data-theme="ghibli"] body::before {
+[data-theme="ghibli"] body::before,
+[data-theme="evangelion"] body::before,
+[data-theme="miku"] body::before,
+[data-theme="sunset"] body::before {
   content: '';
   position: fixed;
   inset: 0;
@@ -366,40 +638,56 @@ body {
   z-index: 0;
 }
 
-/* Glass card mixin — applied via .glass class */
-.glass {
-  background: var(--glass-bg) !important;
-  border-color: var(--glass-border) !important;
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  backdrop-filter: blur(var(--glass-blur));
-}
-
 
 /* ===== Auto-glass for anime themes ===== */
 [data-theme="sakura"] .app-header,
 [data-theme="cyberpunk"] .app-header,
 [data-theme="ghibli"] .app-header,
+[data-theme="evangelion"] .app-header,
+[data-theme="miku"] .app-header,
+[data-theme="sunset"] .app-header,
 [data-theme="sakura"] .settings-section,
 [data-theme="cyberpunk"] .settings-section,
 [data-theme="ghibli"] .settings-section,
+[data-theme="evangelion"] .settings-section,
+[data-theme="miku"] .settings-section,
+[data-theme="sunset"] .settings-section,
 [data-theme="sakura"] .asset-card,
 [data-theme="cyberpunk"] .asset-card,
 [data-theme="ghibli"] .asset-card,
+[data-theme="evangelion"] .asset-card,
+[data-theme="miku"] .asset-card,
+[data-theme="sunset"] .asset-card,
 [data-theme="sakura"] .dex-card,
 [data-theme="cyberpunk"] .dex-card,
 [data-theme="ghibli"] .dex-card,
+[data-theme="evangelion"] .dex-card,
+[data-theme="miku"] .dex-card,
+[data-theme="sunset"] .dex-card,
 [data-theme="sakura"] .ps-card,
 [data-theme="cyberpunk"] .ps-card,
 [data-theme="ghibli"] .ps-card,
+[data-theme="evangelion"] .ps-card,
+[data-theme="miku"] .ps-card,
+[data-theme="sunset"] .ps-card,
 [data-theme="sakura"] .ps-table,
 [data-theme="cyberpunk"] .ps-table,
 [data-theme="ghibli"] .ps-table,
+[data-theme="evangelion"] .ps-table,
+[data-theme="miku"] .ps-table,
+[data-theme="sunset"] .ps-table,
 [data-theme="sakura"] .modal-container,
 [data-theme="cyberpunk"] .modal-container,
 [data-theme="ghibli"] .modal-container,
+[data-theme="evangelion"] .modal-container,
+[data-theme="miku"] .modal-container,
+[data-theme="sunset"] .modal-container,
 [data-theme="sakura"] .ps-modal,
 [data-theme="cyberpunk"] .ps-modal,
-[data-theme="ghibli"] .ps-modal {
+[data-theme="ghibli"] .ps-modal,
+[data-theme="evangelion"] .ps-modal,
+[data-theme="miku"] .ps-modal,
+[data-theme="sunset"] .ps-modal {
   background: var(--glass-bg);
   border-color: var(--glass-border);
   -webkit-backdrop-filter: blur(var(--glass-blur));
@@ -428,6 +716,21 @@ body {
   box-shadow: 0 4px 20px rgba(165, 214, 167, 0.15);
 }
 
+[data-theme="evangelion"] .asset-card:hover,
+[data-theme="evangelion"] .dex-card:hover {
+  box-shadow: 0 4px 20px rgba(155, 89, 182, 0.15);
+}
+
+[data-theme="miku"] .asset-card:hover,
+[data-theme="miku"] .dex-card:hover {
+  box-shadow: 0 4px 20px rgba(57, 197, 187, 0.15);
+}
+
+[data-theme="sunset"] .asset-card:hover,
+[data-theme="sunset"] .dex-card:hover {
+  box-shadow: 0 4px 20px rgba(255, 107, 53, 0.15);
+}
+
 /* Cyberpunk neon text glow on header */
 [data-theme="cyberpunk"] .app-header h1 {
   text-shadow: 0 0 10px rgba(0, 212, 255, 0.3), 0 0 30px rgba(0, 212, 255, 0.1);
@@ -443,8 +746,26 @@ body {
   text-shadow: 0 0 10px rgba(165, 214, 167, 0.2);
 }
 
+/* Evangelion purple glow on header */
+[data-theme="evangelion"] .app-header h1 {
+  text-shadow: 0 0 10px rgba(155, 89, 182, 0.3), 0 0 25px rgba(46, 204, 113, 0.1);
+}
+
+/* Miku teal glow on header */
+[data-theme="miku"] .app-header h1 {
+  text-shadow: 0 0 10px rgba(57, 197, 187, 0.3);
+}
+
+/* Sunset warm glow on header */
+[data-theme="sunset"] .app-header h1 {
+  text-shadow: 0 0 10px rgba(255, 107, 53, 0.25), 0 0 25px rgba(255, 215, 0, 0.1);
+}
+
 
 /* Anime theme card badge colors */
 [data-theme="sakura"] .theme-card.anime::after { color: #f48fb1; }
 [data-theme="cyberpunk"] .theme-card.anime::after { color: #00d4ff; }
 [data-theme="ghibli"] .theme-card.anime::after { color: #a5d6a7; }
+[data-theme="evangelion"] .theme-card.anime::after { color: #9b59b6; }
+[data-theme="miku"] .theme-card.anime::after { color: #39c5bb; }
+[data-theme="sunset"] .theme-card.anime::after { color: #ff6b35; }

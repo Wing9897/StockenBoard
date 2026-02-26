@@ -173,7 +173,7 @@ pub fn get_all_provider_info() -> Vec<ProviderInfo> {
     PROVIDER_INFO_CACHE.clone()
 }
 
-/// O(1) 查找單個 provider info
+/// O(1) 查找單個 provider info — 各 provider module 透過 `use super::traits::*` 使用
 #[allow(dead_code)]
 pub fn get_provider_info(id: &str) -> Option<ProviderInfo> {
     PROVIDER_INFO_MAP.get(id).cloned()
