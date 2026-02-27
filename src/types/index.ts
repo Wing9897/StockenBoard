@@ -48,6 +48,7 @@ export interface Subscription {
   token_from_address?: string;
   token_to_address?: string;
   sort_order: number;
+  record_enabled: number;
 }
 
 export interface View {
@@ -64,3 +65,22 @@ export interface WsTickerUpdate {
 }
 
 export type ViewMode = 'grid' | 'list' | 'compact';
+
+export interface PriceHistoryRecord {
+  id: number;
+  subscription_id: number;
+  provider_id: string;
+  price: number;
+  change_pct: number | null;
+  volume: number | null;
+  pre_price: number | null;
+  post_price: number | null;
+  recorded_at: number;
+}
+
+export interface HistoryStats {
+  subscription_id: number;
+  total_records: number;
+  earliest: number | null;
+  latest: number | null;
+}

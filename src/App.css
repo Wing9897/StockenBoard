@@ -91,6 +91,7 @@ body {
   max-width: 1400px;
   margin: 0 auto;
   width: 100%;
+  font-size: var(--ui-font-size, 14px);
 }
 
 .dashboard {
@@ -100,13 +101,13 @@ body {
 
 .asset-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 260px));
-  gap: 12px;
+  grid-template-columns: var(--ui-card-cols, repeat(auto-fill, minmax(200px, 260px)));
+  gap: var(--ui-card-gap, 12px);
 }
 
 .asset-grid.compact {
   grid-template-columns: repeat(auto-fill, minmax(130px, 160px));
-  gap: 8px;
+  gap: var(--ui-card-gap, 8px);
 }
 
 .loading {

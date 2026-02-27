@@ -410,3 +410,164 @@ pub async fn import_file() -> Result<String, String> {
         .ok_or_else(|| "已取消".to_string())?;
     String::from_utf8(file.read().await).map_err(|e| format!("讀取失敗: {}", e))
 }
+
+
+// ── Price History ────────────────────────────────────────────────
+
+#[derive(serde::Serialize)]
+pub struct PriceHistoryRecord {
+    pub id: i64,
+    pub subscription_id: i64,
+    pub provider_id: String,
+    pub price: f64,
+    pub change_pct: Option<f64>,
+    pub volume: Option<f64>,
+    pub pre_price: Option<f64>,
+    pub post_price: Option<f64>,
+    pub recorded_at: i64,
+}
+
+#[derive(serde::Serialize)]
+pub struct HistoryStats {
+    pub subscription_id: i64,
+    pub total_records: i64,
+    pub earliest: Option<i64>,
+    pub latest: Option<i64>,
+}
+
+#[tauri::command]
+pub async fn toggle_record(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+    subscription_id: i64,
+    enabled: bool,
+) -> Result<(), String> {
+    let db_path = app.path().app_data_dir()
+        .map_err(|e| format!("無法取得 app 目錄: {}", e))?
+        .join("stockenboard.db");
+    tokio::task::spawn_blocking(move || -> Result<(), String> {
+        let conn = rusqlite::Connection::open(&db_path)
+            .map_err(|e| format!("開啟 DB 失敗: {}", e))?;
+        conn.execute(
+            "UPDATE subscriptions SET record_enabled = ?1 WHERE id = ?2",
+            rusqlite::params![if enabled { 1 } else { 0 }, subscription_id],
+        ).map_err(|e| format!("更新失敗: {}", e))?;
+        Ok(())
+    }).await.map_err(|e| format!("spawn 失敗: {}", e))?;
+    // 通知 polling 重新載入，以更新 record_symbols
+    state.polling.reload();
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_price_history(
+    app: tauri::AppHandle,
+    subscription_id: i64,
+    from_ts: i64,
+    to_ts: i64,
+    limit: Option<i64>,
+) -> Result<Vec<PriceHistoryRecord>, String> {
+    let db_path = app.path().app_data_dir()
+        .map_err(|e| format!("無法取得 app 目錄: {}", e))?
+        .join("stockenboard.db");
+    tokio::task::spawn_blocking(move || {
+        let conn = rusqlite::Connection::open_with_flags(&db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .map_err(|e| format!("開啟 DB 失敗: {}", e))?;
+        let lim = limit.unwrap_or(10000);
+        let mut stmt = conn.prepare(
+            "SELECT id, subscription_id, provider_id, price, change_pct, volume, pre_price, post_price, recorded_at \
+             FROM price_history WHERE subscription_id = ?1 AND recorded_at >= ?2 AND recorded_at <= ?3 \
+             ORDER BY recorded_at ASC LIMIT ?4"
+        ).map_err(|e| format!("查詢失敗: {}", e))?;
+        let rows = stmt.query_map(rusqlite::params![subscription_id, from_ts, to_ts, lim], |row| {
+            Ok(PriceHistoryRecord {
+                id: row.get(0)?,
+                subscription_id: row.get(1)?,
+                provider_id: row.get(2)?,
+                price: row.get(3)?,
+                change_pct: row.get(4)?,
+                volume: row.get(5)?,
+                pre_price: row.get(6)?,
+                post_price: row.get(7)?,
+                recorded_at: row.get(8)?,
+            })
+        }).map_err(|e| format!("讀取失敗: {}", e))?;
+        Ok(rows.filter_map(|r| r.ok()).collect())
+    }).await.map_err(|e| format!("spawn 失敗: {}", e))?
+}
+
+#[tauri::command]
+pub async fn get_history_stats(
+    app: tauri::AppHandle,
+    subscription_ids: Vec<i64>,
+) -> Result<Vec<HistoryStats>, String> {
+    let db_path = app.path().app_data_dir()
+        .map_err(|e| format!("無法取得 app 目錄: {}", e))?
+        .join("stockenboard.db");
+    tokio::task::spawn_blocking(move || {
+        let conn = rusqlite::Connection::open_with_flags(&db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .map_err(|e| format!("開啟 DB 失敗: {}", e))?;
+        let mut results = Vec::new();
+        for sid in &subscription_ids {
+            let mut stmt = conn.prepare_cached(
+                "SELECT COUNT(*), MIN(recorded_at), MAX(recorded_at) FROM price_history WHERE subscription_id = ?1"
+            ).map_err(|e| format!("查詢失敗: {}", e))?;
+            let stat = stmt.query_row([sid], |row| {
+                Ok(HistoryStats {
+                    subscription_id: *sid,
+                    total_records: row.get(0)?,
+                    earliest: row.get(1)?,
+                    latest: row.get(2)?,
+                })
+            }).map_err(|e| format!("讀取失敗: {}", e))?;
+            results.push(stat);
+        }
+        Ok(results)
+    }).await.map_err(|e| format!("spawn 失敗: {}", e))?
+}
+
+#[tauri::command]
+pub async fn cleanup_history(
+    app: tauri::AppHandle,
+    retention_days: Option<i64>,
+) -> Result<i64, String> {
+    let db_path = app.path().app_data_dir()
+        .map_err(|e| format!("無法取得 app 目錄: {}", e))?
+        .join("stockenboard.db");
+    let days = retention_days.unwrap_or(90);
+    tokio::task::spawn_blocking(move || {
+        let conn = rusqlite::Connection::open(&db_path)
+            .map_err(|e| format!("開啟 DB 失敗: {}", e))?;
+        let cutoff = chrono::Utc::now().timestamp() - (days * 86400);
+        let deleted = conn.execute(
+            "DELETE FROM price_history WHERE recorded_at < ?1",
+            rusqlite::params![cutoff],
+        ).map_err(|e| format!("清理失敗: {}", e))?;
+        Ok(deleted as i64)
+    }).await.map_err(|e| format!("spawn 失敗: {}", e))?
+}
+
+#[tauri::command]
+pub async fn purge_all_history(
+    app: tauri::AppHandle,
+) -> Result<i64, String> {
+    let db_path = app.path().app_data_dir()
+        .map_err(|e| format!("無法取得 app 目錄: {}", e))?
+        .join("stockenboard.db");
+    tokio::task::spawn_blocking(move || {
+        let conn = rusqlite::Connection::open(&db_path)
+            .map_err(|e| format!("開啟 DB 失敗: {}", e))?;
+        let deleted = conn.execute("DELETE FROM price_history", [])
+            .map_err(|e| format!("清除失敗: {}", e))?;
+        Ok(deleted as i64)
+    }).await.map_err(|e| format!("spawn 失敗: {}", e))?
+}
+
+#[tauri::command]
+pub async fn get_data_dir(
+    app: tauri::AppHandle,
+) -> Result<String, String> {
+    let dir = app.path().app_data_dir()
+        .map_err(|e| format!("無法取得 app 目錄: {}", e))?;
+    Ok(dir.to_string_lossy().to_string())
+}

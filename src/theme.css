@@ -40,6 +40,10 @@
   --mauve-bg: rgba(203, 166, 247, 0.15);
   --overlay-bg: rgba(108, 112, 134, 0.15);
 
+  /* Pre/Post market chart colors */
+  --pre-market-color: #f59e0b;
+  --post-market-color: #a78bfa;
+
   /* Layout tokens */
   --radius-card: 10px;
   --radius-sm: 6px;

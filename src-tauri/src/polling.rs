@@ -29,6 +29,7 @@ struct SubRecord {
     id: i64,
     symbol: String,
     provider_id: String,
+    record_enabled: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -42,6 +43,7 @@ struct ProviderConfig {
 #[derive(Debug)]
 struct PollingGroup {
     symbols: Vec<String>,
+    record_symbols: Vec<String>,
     interval_ms: u64,
 }
 
@@ -174,6 +176,8 @@ impl PollingManager {
                     let ticks = ticks.clone();
                     let app = app_handle.clone();
                     let mut gen_stop = gen_stop_tx.subscribe();
+                    let record_enabled_ids: HashSet<String> = group.record_symbols.iter().cloned().collect();
+                    let db_for_history = db_path.clone();
 
                     handles.push(tokio::spawn(async move {
                         loop {
@@ -186,6 +190,16 @@ impl PollingManager {
                                         }
                                     }
                                     let _ = app.emit("price-update", &results);
+                                    // 寫入 price_history（record_enabled 的訂閱）
+                                    if !record_enabled_ids.is_empty() {
+                                        let db_p = db_for_history.clone();
+                                        let pid_c = pid.clone();
+                                        let data = results.clone();
+                                        let rids = record_enabled_ids.clone();
+                                        let _ = tokio::task::spawn_blocking(move || {
+                                            write_price_history(&db_p, &pid_c, &data, &rids);
+                                        }).await;
+                                    }
                                 }
                                 Err(e) => {
                                     eprintln!("[Polling] {} fetch 失敗: {}", pid, e);
@@ -238,7 +252,7 @@ fn load_config(
 
     let subs: Vec<SubRecord> = {
         let mut stmt = conn
-            .prepare("SELECT id, sub_type, symbol, selected_provider_id, pool_address, token_from_address, token_to_address FROM subscriptions")
+            .prepare("SELECT id, sub_type, symbol, selected_provider_id, pool_address, token_from_address, token_to_address, record_enabled FROM subscriptions")
             .map_err(|e| format!("查詢 subscriptions 失敗: {}", e))?;
         let rows = stmt.query_map([], |row| {
             let id: i64 = row.get(0)?;
@@ -248,6 +262,7 @@ fn load_config(
             let pool_address: Option<String> = row.get(4)?;
             let token_from: Option<String> = row.get(5)?;
             let token_to: Option<String> = row.get(6)?;
+            let record_enabled: i64 = row.get(7)?;
 
             let final_symbol = if sub_type == "dex" {
                 let pool = pool_address.unwrap_or_default();
@@ -258,7 +273,7 @@ fn load_config(
                 symbol
             };
 
-            Ok(SubRecord { id, symbol: final_symbol, provider_id })
+            Ok(SubRecord { id, symbol: final_symbol, provider_id, record_enabled: record_enabled != 0 })
         })
         .map_err(|e| format!("讀取 subscriptions 失敗: {}", e))?;
         let all: Vec<SubRecord> = rows.filter_map(|r| r.ok()).collect();
@@ -311,10 +326,14 @@ fn load_config(
 
         let group = groups.entry(pid.clone()).or_insert_with(|| PollingGroup {
             symbols: Vec::new(),
+            record_symbols: Vec::new(),
             interval_ms,
         });
         if !group.symbols.contains(&sub.symbol) {
             group.symbols.push(sub.symbol.clone());
+        }
+        if sub.record_enabled && !group.record_symbols.contains(&sub.symbol) {
+            group.record_symbols.push(sub.symbol.clone());
         }
 
         if !provider_instances.contains_key(pid) {
@@ -328,4 +347,56 @@ fn load_config(
     }
 
     Ok((groups, provider_instances))
+}
+
+
+/// 寫入 price_history，5 秒去重
+fn write_price_history(
+    db_path: &PathBuf,
+    provider_id: &str,
+    data: &[AssetData],
+    record_symbols: &HashSet<String>,
+) {
+    let conn = match Connection::open(db_path) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("[History] 開啟 DB 失敗: {}", e);
+            return;
+        }
+    };
+    let now = chrono::Utc::now().timestamp();
+    for d in data {
+        if !record_symbols.contains(&d.symbol) {
+            continue;
+        }
+        // 查找 subscription_id
+        let sub_id: Option<i64> = conn
+            .prepare_cached("SELECT id FROM subscriptions WHERE symbol = ?1 AND selected_provider_id = ?2")
+            .ok()
+            .and_then(|mut stmt| stmt.query_row([&d.symbol, provider_id], |row| row.get(0)).ok());
+        let sub_id = match sub_id {
+            Some(id) => id,
+            None => continue,
+        };
+        // 5 秒去重
+        let recent: bool = conn
+            .prepare_cached("SELECT 1 FROM price_history WHERE subscription_id = ?1 AND recorded_at > ?2 LIMIT 1")
+            .ok()
+            .and_then(|mut stmt| stmt.query_row(rusqlite::params![sub_id, now - 5], |_| Ok(true)).ok())
+            .unwrap_or(false);
+        if recent {
+            continue;
+        }
+        // 從 extra 提取盤前/盤後價格
+        let pre_price = d.extra.as_ref()
+            .and_then(|e| e.get("pre_market_price"))
+            .and_then(|v| v.as_f64());
+        let post_price = d.extra.as_ref()
+            .and_then(|e| e.get("post_market_price"))
+            .and_then(|v| v.as_f64());
+        let _ = conn.execute(
+            "INSERT INTO price_history (subscription_id, provider_id, price, change_pct, volume, pre_price, post_price, recorded_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            rusqlite::params![sub_id, provider_id, d.price, d.change_percent_24h, d.volume, pre_price, post_price, now],
+        );
+    }
 }

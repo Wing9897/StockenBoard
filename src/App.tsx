@@ -18,23 +18,25 @@ import { SubscriptionManager } from './components/Settings/SubscriptionManager';
 import { DataManager } from './components/Settings/DataManager';
 import { ThemePicker } from './components/Settings/ThemePicker';
 import { LanguagePicker } from './components/Settings/LanguagePicker';
+import { UICustomizer } from './components/Settings/UICustomizer';
 import { ConfirmDialog } from './components/ConfirmDialog/ConfirmDialog';
 import { DashboardToolbar } from './components/DashboardToolbar/DashboardToolbar';
 import { ToastContainer } from './components/Toast/Toast';
 import { DexPage } from './components/DexPage/DexPage';
+import { HistoryPage } from './components/HistoryPage/HistoryPage';
 import { t } from './lib/i18n';
 import { useLocale } from './hooks/useLocale';
 import { getGridClass } from './lib/viewUtils';
 import type { ViewMode } from './types';
 import './App.css';
 
-type Tab = 'dashboard' | 'dex' | 'providers' | 'settings';
+type Tab = 'dashboard' | 'dex' | 'history' | 'providers' | 'settings';
 
 function App() {
   useLocale(); // 訂閱語言變更，觸發整個 App 重新渲染
   const [activeTab, setActiveTabRaw] = useState<Tab>(() => {
     const saved = localStorage.getItem('sb_active_tab') as Tab | null;
-    if (saved === 'dashboard' || saved === 'dex' || saved === 'providers' || saved === 'settings') return saved;
+    if (saved === 'dashboard' || saved === 'dex' || saved === 'history' || saved === 'providers' || saved === 'settings') return saved;
     return 'dashboard';
   });
   const setActiveTab = useCallback((tab: Tab) => {
@@ -158,6 +160,7 @@ function App() {
         <nav className="app-nav">
           <button className={`nav-btn ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>{t.nav.dashboard}</button>
           <button className={`nav-btn ${activeTab === 'dex' ? 'active' : ''}`} onClick={() => setActiveTab('dex')}>{t.nav.dex}</button>
+          <button className={`nav-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>{t.nav.history}</button>
           <button className={`nav-btn ${activeTab === 'providers' ? 'active' : ''}`} onClick={() => setActiveTab('providers')}>{t.nav.providers}</button>
           <button className={`nav-btn ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>{t.nav.settings}</button>
         </nav>
@@ -225,6 +228,10 @@ function App() {
           <DexPage onToast={toast} />
         )}
 
+        {activeTab === 'history' && (
+          <HistoryPage onToast={toast} />
+        )}
+
         {activeTab === 'providers' && (
           <div className="providers-page">
             <ProviderSettings onSaved={() => toast.success(t.providers.settingsSaved)} />
@@ -235,6 +242,7 @@ function App() {
           <div className="settings">
             <ThemePicker />
             <LanguagePicker />
+            <UICustomizer />
             <DataManager
               views={views}
               onRefresh={() => { refreshAssets(); refreshViews(); }}

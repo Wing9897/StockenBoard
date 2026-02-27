@@ -9,7 +9,8 @@ use commands::{
     get_theme_bg_path, get_unattended_polling, import_file, lookup_dex_pool,
     read_local_file_base64, reload_polling, remove_icon, remove_theme_bg,
     save_theme_bg, set_icon, set_unattended_polling, set_visible_subscriptions,
-    start_ws_stream, stop_ws_stream, AppState,
+    start_ws_stream, stop_ws_stream, toggle_record, get_price_history,
+    get_history_stats, cleanup_history, purge_all_history, get_data_dir, AppState,
 };
 use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
@@ -18,7 +19,7 @@ use tauri_plugin_sql::{Migration, MigrationKind};
 fn ensure_clean_db(app_dir: &std::path::Path) {
     let db_path = app_dir.join("stockenboard.db");
     let marker = app_dir.join(".schema_v");
-    const SCHEMA_VER: &str = "2";
+    const SCHEMA_VER: &str = "4";
     let current = std::fs::read_to_string(&marker).unwrap_or_default();
     if current.trim() != SCHEMA_VER {
         let _ = std::fs::remove_file(&db_path);
@@ -32,7 +33,7 @@ fn ensure_clean_db(app_dir: &std::path::Path) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let migrations = vec![Migration {
-        version: 2,
+        version: 4,
         description: "initial_schema",
         sql: db::SCHEMA,
         kind: MigrationKind::Up,
@@ -69,6 +70,12 @@ pub fn run() {
             get_theme_bg_path,
             set_unattended_polling,
             get_unattended_polling,
+            toggle_record,
+            get_price_history,
+            get_history_stats,
+            cleanup_history,
+            purge_all_history,
+            get_data_dir,
         ])
         .setup(|app| {
             if let Ok(app_dir) = app.path().app_data_dir() {

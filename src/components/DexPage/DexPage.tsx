@@ -115,6 +115,7 @@ export function DexPage({ onToast }: DexPageProps) {
       selected_provider_id: s.selected_provider_id,
       asset_type: s.asset_type,
       sort_order: s.sort_order,
+      record_enabled: s.record_enabled ?? 0,
     })),
     [subscriptions]
   );

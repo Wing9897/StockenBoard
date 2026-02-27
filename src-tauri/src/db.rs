@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     token_from_address   TEXT,
     token_to_address     TEXT,
     sort_order           INTEGER NOT NULL DEFAULT 0,
+    record_enabled       INTEGER NOT NULL DEFAULT 0,
     UNIQUE(symbol, selected_provider_id)
 );
 
@@ -38,6 +39,22 @@ CREATE TABLE IF NOT EXISTS view_subscriptions (
     FOREIGN KEY (view_id) REFERENCES views(id) ON DELETE CASCADE,
     FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS price_history (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    subscription_id INTEGER NOT NULL,
+    provider_id     TEXT NOT NULL,
+    price           REAL NOT NULL,
+    change_pct      REAL,
+    volume          REAL,
+    pre_price       REAL,
+    post_price      REAL,
+    recorded_at     INTEGER NOT NULL,
+    FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_price_history_sub_time
+    ON price_history (subscription_id, recorded_at);
 
 INSERT OR IGNORE INTO views (id, name, view_type, is_default) VALUES (1, 'All', 'asset', 1);
 INSERT OR IGNORE INTO views (id, name, view_type, is_default) VALUES (2, 'All', 'dex', 1);
