@@ -1,6 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { t } from '../../lib/i18n';
-import { useLocale } from '../../hooks/useLocale';
 import './Settings.css';
 
 const DEFAULTS = { fontSize: 14, cardGap: 10, cardColumns: 0 };
@@ -27,7 +26,6 @@ function apply(v: typeof DEFAULTS) {
 apply(load());
 
 export function UICustomizer() {
-  useLocale();
   const [vals, setVals] = useState(load);
 
   const update = useCallback((key: keyof typeof DEFAULTS, raw: number) => {
@@ -44,8 +42,6 @@ export function UICustomizer() {
     setVals({ ...DEFAULTS });
     apply(DEFAULTS);
   }, []);
-
-  useEffect(() => { apply(vals); }, []);
 
   return (
     <div className="settings-section">

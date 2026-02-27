@@ -4,7 +4,6 @@ import { openPath } from '@tauri-apps/plugin-opener';
 import { createChart, LineSeries, type IChartApi, type ISeriesApi, type Time } from 'lightweight-charts';
 import { getDb } from '../../lib/db';
 import { t } from '../../lib/i18n';
-import { useLocale } from '../../hooks/useLocale';
 import { formatNumber, parsePairFromName } from '../../lib/format';
 import { AssetIcon } from '../AssetCard/AssetIcon';
 import type { Subscription, PriceHistoryRecord } from '../../types';
@@ -29,12 +28,22 @@ const RANGE_LABELS: { key: RangePreset; label: () => string }[] = [
   { key: 'custom', label: () => t.history.custom },
 ];
 
+/** 本地時區偏移（秒），用於修正 chart 時間軸 */
+const TZ_OFFSET_SEC = -new Date().getTimezoneOffset() * 60;
+
+/** 本地時區縮寫，例如 "UTC+8" / "UTC-5" */
+const TZ_LABEL = (() => {
+  const off = -new Date().getTimezoneOffset();
+  const h = Math.floor(Math.abs(off) / 60);
+  const m = Math.abs(off) % 60;
+  return `UTC${off >= 0 ? '+' : '-'}${h}${m ? ':' + String(m).padStart(2, '0') : ''}`;
+})();
+
 function fmtTime(ts: number) { return new Date(ts * 1000).toLocaleString(); }
 function label(s: Subscription) { return s.display_name || s.symbol; }
 const noop = () => {};
 
 export function HistoryPage({ onToast }: Props) {
-  useLocale();
   const [subs, setSubs] = useState<Subscription[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [view, setView] = useState<ViewType>('chart');
@@ -57,7 +66,7 @@ export function HistoryPage({ onToast }: Props) {
   const loadSubs = useCallback(async () => {
     const db = await getDb();
     setSubs(await db.select<Subscription[]>(
-      'SELECT id, sub_type, symbol, display_name, selected_provider_id, asset_type, pool_address, token_from_address, token_to_address, sort_order, record_enabled FROM subscriptions ORDER BY sort_order, id'
+      'SELECT id, sub_type, symbol, display_name, selected_provider_id, asset_type, pool_address, token_from_address, token_to_address, sort_order, record_enabled, record_from_hour, record_to_hour FROM subscriptions ORDER BY sort_order, id'
     ));
   }, []);
   useEffect(() => { loadSubs(); }, [loadSubs]);
@@ -97,6 +106,13 @@ export function HistoryPage({ onToast }: Props) {
     onToast.success(t.history.batchDone(targets.length, on));
   }, [filtered, onToast]);
 
+  // ── 紀錄時段 ──
+  const saveRecordHours = useCallback(async (id: number, from: number | null, to: number | null) => {
+    await invoke('set_record_hours', { subscriptionId: id, fromHour: from, toHour: to });
+    setSubs(p => p.map(s => s.id === id ? { ...s, record_from_hour: from, record_to_hour: to } : s));
+    onToast.success(t.history.recordHoursSaved);
+  }, [onToast]);
+
   // ── 載入歷史 ──
   const loadHistory = useCallback(async () => {
     if (!selectedId) return;
@@ -131,7 +147,7 @@ export function HistoryPage({ onToast }: Props) {
   }, [session]);
 
   const chartData = useMemo(() =>
-    records.map(r => ({ time: r.recorded_at as Time, value: getPrice(r) })),
+    records.map(r => ({ time: (r.recorded_at + TZ_OFFSET_SEC) as Time, value: getPrice(r) })),
   [records, getPrice]);
 
   const chartColor = useCallback(() => {
@@ -257,28 +273,64 @@ export function HistoryPage({ onToast }: Props) {
             {filtered.map(s => {
               const isDex = s.sub_type === 'dex';
               const [from, to] = isDex ? parsePairFromName(s.display_name || s.symbol) : ['', ''];
+              const isSelected = selectedId === s.id;
+              const hasCustomHours = s.record_from_hour != null && s.record_to_hour != null;
               return (
-                <div key={s.id} className={`history-sub-item ${selectedId === s.id ? 'selected' : ''}`} onClick={() => setSelectedId(s.id)}>
-                  {isDex ? (
-                    <div className="history-dex-icons">
-                      {from ? <AssetIcon symbol={from} className="asset-icon history-icon" onClick={noop} /> : <div className="asset-icon history-icon"><span className="asset-icon-fallback">?</span></div>}
-                      {to ? <AssetIcon symbol={to} className="asset-icon history-icon" onClick={noop} /> : <div className="asset-icon history-icon"><span className="asset-icon-fallback">?</span></div>}
+                <div key={s.id}>
+                  <div className={`history-sub-item ${isSelected ? 'selected' : ''}`} onClick={() => setSelectedId(s.id)}>
+                    {isDex ? (
+                      <div className="history-dex-icons">
+                        {from ? <AssetIcon symbol={from} className="asset-icon history-icon" onClick={noop} /> : <div className="asset-icon history-icon"><span className="asset-icon-fallback">?</span></div>}
+                        {to ? <AssetIcon symbol={to} className="asset-icon history-icon" onClick={noop} /> : <div className="asset-icon history-icon"><span className="asset-icon-fallback">?</span></div>}
+                      </div>
+                    ) : (
+                      <AssetIcon symbol={s.symbol} className="asset-icon history-icon" onClick={noop} />
+                    )}
+                    <div className="history-sub-info">
+                      <span className="history-sub-symbol">{label(s)}</span>
+                      <span className="history-sub-meta">
+                        {s.selected_provider_id}
+                        {s.record_enabled ? <span className="history-rec-dot">●</span> : null}
+                        {hasCustomHours && <span className="history-hours-badge">{s.record_from_hour}–{s.record_to_hour}h</span>}
+                      </span>
                     </div>
-                  ) : (
-                    <AssetIcon symbol={s.symbol} className="asset-icon history-icon" onClick={noop} />
-                  )}
-                  <div className="history-sub-info">
-                    <span className="history-sub-symbol">{label(s)}</span>
-                    <span className="history-sub-meta">
-                      {s.selected_provider_id}
-                      {s.record_enabled ? <span className="history-rec-dot">●</span> : null}
-                    </span>
+                    <button
+                      className={`history-record-toggle ${s.record_enabled ? 'recording' : ''}`}
+                      title={s.record_enabled ? t.history.disableRecord : t.history.enableRecord}
+                      onClick={e => { e.stopPropagation(); toggle(s.id, !s.record_enabled); }}
+                    >{s.record_enabled ? '●' : ''}</button>
                   </div>
-                  <button
-                    className={`history-record-toggle ${s.record_enabled ? 'recording' : ''}`}
-                    title={s.record_enabled ? t.history.disableRecord : t.history.enableRecord}
-                    onClick={e => { e.stopPropagation(); toggle(s.id, !s.record_enabled); }}
-                  >{s.record_enabled ? '●' : ''}</button>
+                  {isSelected && s.record_enabled ? (
+                    <div className="history-hours-editor">
+                      <div className="history-hours-row">
+                        <span className="history-hours-label">{t.history.recordHours}</span>
+                        <select
+                          className="history-hours-select"
+                          value={hasCustomHours ? 'custom' : 'all'}
+                          onChange={e => {
+                          if (e.target.value === 'all') saveRecordHours(s.id, null, null);
+                            else saveRecordHours(s.id, 16, 9);
+                          }}
+                          onClick={e => e.stopPropagation()}
+                        >
+                          <option value="all">{t.history.recordHoursAll}</option>
+                          <option value="custom">{t.history.recordHoursCustom}</option>
+                        </select>
+                      </div>
+                      {hasCustomHours && (
+                        <div className="history-hours-row">
+                          <select className="history-hours-select" value={s.record_from_hour!} onChange={e => { e.stopPropagation(); saveRecordHours(s.id, Number(e.target.value), s.record_to_hour!); }} onClick={e => e.stopPropagation()}>
+                            {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{String(i).padStart(2, '0')}:00</option>)}
+                          </select>
+                          <span>–</span>
+                          <select className="history-hours-select" value={s.record_to_hour!} onChange={e => { e.stopPropagation(); saveRecordHours(s.id, s.record_from_hour!, Number(e.target.value)); }} onClick={e => e.stopPropagation()}>
+                            {Array.from({ length: 25 }, (_, i) => <option key={i} value={i}>{i === 24 ? '24:00' : `${String(i).padStart(2, '0')}:00`}</option>)}
+                          </select>
+                        </div>
+                      )}
+                      <span className="history-hours-hint priority">{t.history.recordHoursOverride} · {t.history.recordHoursHint} ({TZ_LABEL})</span>
+                    </div>
+                  ) : null}
                 </div>
               );
             })}
@@ -343,7 +395,7 @@ export function HistoryPage({ onToast }: Props) {
               </>
             )}
             <div className="history-spacer" />
-            {showBar && <span className="history-stats">{t.history.records(records.length)}</span>}
+            {showBar && <span className="history-stats">{t.history.records(records.length)} · {TZ_LABEL}</span>}
             {showBar && <button className="history-icon-btn" onClick={cleanupSelected} title={t.history.cleanup}>🗑️</button>}
             <div className="history-menu-wrap" ref={menuRef}>
               <button className="history-icon-btn" onClick={() => setMenuOpen(v => !v)} title={t.nav.settings}>⚙️</button>
@@ -380,7 +432,7 @@ export function HistoryPage({ onToast }: Props) {
             <table className="history-table">
               <thead>
                 <tr>
-                  <th>{t.history.time}</th>
+                  <th>{t.history.time} ({TZ_LABEL})</th>
                   <th>{t.history.price}</th>
                   <th>{t.history.changePct}</th>
                   <th>{t.history.volume}</th>

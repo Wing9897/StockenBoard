@@ -10,7 +10,7 @@ import { getDb } from './db';
 export async function loadSubscriptions(subType: 'asset' | 'dex'): Promise<Subscription[]> {
   const db = await getDb();
   return db.select<Subscription[]>(
-    'SELECT id, sub_type, symbol, display_name, selected_provider_id, asset_type, pool_address, token_from_address, token_to_address, sort_order, record_enabled FROM subscriptions WHERE sub_type = $1 ORDER BY sort_order, id',
+    'SELECT id, sub_type, symbol, display_name, selected_provider_id, asset_type, pool_address, token_from_address, token_to_address, sort_order, record_enabled, record_from_hour, record_to_hour FROM subscriptions WHERE sub_type = $1 ORDER BY sort_order, id',
     [subType]
   );
 }

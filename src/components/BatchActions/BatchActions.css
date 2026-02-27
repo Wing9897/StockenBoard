@@ -1,73 +1,10 @@
-.ba-modal {
-  width: 320px;
-}
-
-.ba-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px 10px;
-  border-bottom: 1px solid var(--surface0);
-}
-
-.ba-title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.ba-body {
-  padding: 12px 20px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.ba-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  cursor: pointer;
-  padding: 6px 0;
-}
-
-.ba-label {
-  font-size: 13px;
-  color: var(--text);
-  user-select: none;
-}
-
-/* Toggle switch */
-.ba-switch {
-  position: relative;
-  width: 40px;
-  height: 22px;
-  border-radius: 11px;
-  border: none;
-  background: var(--surface1);
-  cursor: pointer;
-  padding: 0;
-  transition: background var(--transition-normal);
-  flex-shrink: 0;
-}
-
-.ba-switch.on {
-  background: var(--blue);
-}
-
-.ba-switch-thumb {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--base);
-  transition: transform var(--transition-normal);
-  pointer-events: none;
-}
-
-.ba-switch.on .ba-switch-thumb {
-  transform: translateX(18px);
-}
+.ba-modal { width: 320px; }
+.ba-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px 10px; border-bottom: 1px solid var(--surface0); }
+.ba-title { margin: 0; font-size: 15px; font-weight: 600; color: var(--text); }
+.ba-body { padding: 12px 20px 18px; display: flex; flex-direction: column; gap: 12px; }
+.ba-row { display: flex; align-items: center; justify-content: space-between; cursor: pointer; padding: 6px 0; }
+.ba-label { font-size: 13px; color: var(--text); user-select: none; }
+.ba-switch { position: relative; width: 40px; height: 22px; border-radius: 11px; border: none; background: var(--surface1); cursor: pointer; padding: 0; transition: background var(--transition-normal); flex-shrink: 0; }
+.ba-switch.on { background: var(--blue); }
+.ba-switch-thumb { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--base); transition: transform var(--transition-normal); pointer-events: none; }
+.ba-switch.on .ba-switch-thumb { transform: translateX(18px); }

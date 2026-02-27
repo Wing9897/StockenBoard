@@ -1,168 +1,49 @@
-.asset-card {
-  background: var(--base);
-  border-radius: var(--radius-card);
-  padding: var(--card-padding);
-  border: 1px solid var(--surface0);
-  transition: all var(--transition-normal);
-  position: relative;
-}
-
-.asset-card:hover {
-  border-color: var(--surface1);
-  box-shadow: 0 4px 12px var(--shadow);
-}
-
+/* ===== AssetCard — Grid ===== */
+.asset-card { background: var(--base); border-radius: var(--radius-card); padding: var(--card-padding); border: 1px solid var(--surface0); transition: all var(--transition-normal); position: relative; }
+.asset-card:hover { border-color: var(--surface1); box-shadow: 0 4px 12px var(--shadow); }
 .asset-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 
-.asset-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--surface0);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
+.asset-icon { width: 32px; height: 32px; border-radius: 50%; background: var(--surface0); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
 .asset-icon img { width: 100%; height: 100%; object-fit: cover; }
-
-.asset-icon.clickable,
-.asset-list-icon.clickable { cursor: pointer; transition: all var(--transition-fast); }
-
-.asset-icon.clickable:hover,
-.asset-list-icon.clickable:hover { opacity: 0.7; box-shadow: 0 0 0 2px var(--blue); }
-
+.asset-icon.clickable, .asset-list-icon.clickable { cursor: pointer; transition: all var(--transition-fast); }
+.asset-icon.clickable:hover, .asset-list-icon.clickable:hover { opacity: 0.7; box-shadow: 0 0 0 2px var(--blue); }
 .asset-icon-fallback { font-weight: bold; font-size: 10px; color: var(--text); text-transform: uppercase; }
 
 .asset-info { flex: 1; min-width: 0; }
-
-.asset-symbol {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  max-width: 100%;
-  overflow: hidden;
-}
-
+.asset-symbol { font-size: 13px; font-weight: 600; color: var(--text); margin: 0; display: flex; align-items: center; gap: 5px; max-width: 100%; overflow: hidden; }
 .asset-symbol-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .asset-name { font-size: 11px; color: var(--overlay0); margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .asset-card-body { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .asset-price { font-size: 18px; font-weight: 700; color: var(--text); margin: 0; }
-
 .asset-change { font-size: 12px; font-weight: 600; padding: 2px 6px; border-radius: 4px; }
 .asset-change.positive { color: var(--green); background: var(--positive-bg); }
 .asset-change.negative { color: var(--red); background: var(--negative-bg); }
 
-.asset-card-stats {
-  display: flex;
-  gap: 12px;
-  padding-top: 8px;
-  border-top: 1px solid var(--surface0);
-  font-size: 11px;
-  color: var(--overlay0);
-  flex-wrap: wrap;
-}
-
+.asset-card-stats { display: flex; gap: 12px; padding-top: 8px; border-top: 1px solid var(--surface0); font-size: 11px; color: var(--overlay0); flex-wrap: wrap; }
 .asset-stat { display: flex; flex-direction: column; gap: 1px; min-width: 50px; }
 .asset-stat-label { color: var(--overlay0); font-size: 10px; }
 .asset-stat-value { color: var(--text); font-weight: 500; font-size: 11px; }
 
 .asset-card-expanded { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--surface0); }
 .asset-card-footer { display: flex; align-items: center; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--surface0); }
-
-.asset-card-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 4px;
-  margin-top: 4px;
-  background: transparent;
-  border: none;
-  color: var(--overlay0);
-  cursor: pointer;
-  font-size: 11px;
-  width: 100%;
-  transition: color var(--transition-normal);
-}
-
+.asset-card-toggle { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 4px; margin-top: 4px; background: transparent; border: none; color: var(--overlay0); cursor: pointer; font-size: 11px; width: 100%; transition: color var(--transition-normal); }
 .asset-card-toggle:hover { color: var(--text); }
 .asset-card-extra { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
 .asset-error { color: var(--red); font-size: 14px; }
 
-.asset-type-tag {
-  font-size: 9px;
-  font-weight: 600;
-  padding: 1px 6px;
-  border-radius: 3px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  flex-shrink: 0;
-}
-
+.asset-type-tag { font-size: 9px; font-weight: 600; padding: 1px 6px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.5px; flex-shrink: 0; }
 .asset-type-tag.crypto { background: var(--peach-bg); color: var(--peach); }
 .asset-type-tag.stock { background: var(--blue-bg); color: var(--blue); }
 
-.asset-error-detail {
-  color: var(--red);
-  font-size: 11px;
-  padding: 8px;
-  background: var(--negative-bg);
-  border-radius: var(--radius-sm);
-  margin-bottom: 8px;
-  cursor: pointer;
-  user-select: none;
-}
-
+.asset-error-detail { color: var(--red); font-size: 11px; padding: 8px; background: var(--negative-bg); border-radius: var(--radius-sm); margin-bottom: 8px; cursor: pointer; user-select: none; }
 .asset-error-summary { display: block; }
+.asset-error-full { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--negative-bg); font-size: 10px; white-space: pre-wrap; word-break: break-word; max-height: 120px; overflow-y: auto; user-select: text; cursor: text; }
 
-.asset-error-full {
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid var(--negative-bg);
-  font-size: 10px;
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 120px;
-  overflow-y: auto;
-  user-select: text;
-  cursor: text;
-}
-
-/* List View */
-.asset-card-list {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: var(--base);
-  border-radius: var(--radius-sm);
-  padding: 12px 16px;
-  border: 1px solid var(--surface0);
-  transition: all var(--transition-normal);
-  position: relative;
-}
-
+/* ===== List View ===== */
+.asset-card-list { display: flex; align-items: center; gap: 12px; background: var(--base); border-radius: var(--radius-sm); padding: 12px 16px; border: 1px solid var(--surface0); transition: all var(--transition-normal); position: relative; }
 .asset-card-list:hover { border-color: var(--surface1); }
-
-.asset-list-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--surface0);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
+.asset-list-icon { width: 32px; height: 32px; border-radius: 50%; background: var(--surface0); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
 .asset-list-icon img { width: 100%; height: 100%; object-fit: cover; }
 .asset-list-symbol { flex: 1; min-width: 100px; }
 .asset-list-symbol .symbol { display: block; font-weight: 600; color: var(--text); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -176,84 +57,28 @@
 .countdown-progress { transition: stroke-dashoffset 1s linear; }
 .asset-card-list .countdown-circle { margin-left: 4px; }
 
-.asset-card-edit-btn {
-  background: transparent;
-  border: none;
-  color: var(--overlay0);
-  font-size: 13px;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: var(--radius-sm);
-  transition: all var(--transition-normal);
-  flex-shrink: 0;
-  opacity: 0;
-}
-
-.asset-card:hover .asset-card-edit-btn,
-.asset-card-list:hover .asset-card-edit-btn { opacity: 1; }
+/* Edit button — hover visibility */
+.asset-card-edit-btn { background: transparent; border: none; color: var(--overlay0); font-size: 13px; cursor: pointer; padding: 4px 8px; border-radius: var(--radius-sm); transition: all var(--transition-normal); flex-shrink: 0; opacity: 0; }
+.asset-card:hover .asset-card-edit-btn, .asset-card-list:hover .asset-card-edit-btn { opacity: 1; }
 .asset-card-edit-btn:hover { background: var(--blue-bg); color: var(--blue); }
-
 .asset-footer-provider { font-size: 10px; color: var(--overlay0); }
 .asset-list-provider-label { font-size: 11px; color: var(--overlay0); min-width: 80px; }
 
-/* Edit Panel (modal) */
-.asset-edit-panel {
-  width: 360px;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.asset-card-list .asset-edit-panel,
-.asset-card-compact .asset-edit-panel { /* no special positioning needed for modal */ }
-
+/* ===== Edit Panel (shared by AssetCard + DexCard) ===== */
+.asset-edit-panel { width: 360px; padding: 20px; display: flex; flex-direction: column; gap: 8px; }
 .edit-row { display: flex; flex-direction: column; gap: 3px; }
 .edit-row label { font-size: 11px; color: var(--overlay0); }
-
-.edit-row input,
-.edit-row select {
-  padding: 6px 10px;
-  border: 1px solid var(--surface1);
-  border-radius: 6px;
-  background: var(--surface0);
-  color: var(--text);
-  font-size: 13px;
-  outline: none;
-  transition: border-color 0.15s;
-}
-
-.edit-row input:focus,
-.edit-row select:focus { border-color: var(--blue); }
+.edit-row input, .edit-row select { padding: 6px 10px; border: 1px solid var(--surface1); border-radius: 6px; background: var(--surface0); color: var(--text); font-size: 13px; outline: none; transition: border-color 0.15s; }
+.edit-row input:focus, .edit-row select:focus { border-color: var(--blue); }
 .edit-hint { font-size: 10px; color: var(--overlay0); margin-top: 2px; }
 .edit-hint.warning { color: var(--yellow); }
-
-.dex-address-input {
-  font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace !important;
-  font-size: 12px !important;
-  letter-spacing: 0.3px;
-}
-
+.dex-address-input { font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace !important; font-size: 12px !important; letter-spacing: 0.3px; }
 .edit-type-toggle { display: flex; gap: 4px; }
-
-.edit-type-toggle button {
-  flex: 1;
-  padding: 4px 0;
-  border: 1px solid var(--surface1);
-  background: var(--surface0);
-  color: var(--overlay0);
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 12px;
-  transition: all var(--transition-fast);
-}
-
+.edit-type-toggle button { flex: 1; padding: 4px 0; border: 1px solid var(--surface1); background: var(--surface0); color: var(--overlay0); border-radius: 5px; cursor: pointer; font-size: 12px; transition: all var(--transition-fast); }
 .edit-type-toggle button.active { background: var(--blue); border-color: var(--blue); color: var(--base); }
-
 .edit-error { color: var(--red); font-size: 11px; padding: 6px 8px; background: var(--negative-bg); border-radius: 5px; }
 .edit-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
 .edit-actions-right { display: flex; gap: 6px; }
-
 .edit-btn { padding: 5px 12px; border: none; border-radius: var(--radius-sm); font-size: 12px; cursor: pointer; transition: all var(--transition-fast); }
 .edit-btn.delete { background: transparent; color: var(--red); border: 1px solid var(--red); }
 .edit-btn.delete:hover { background: var(--red); color: var(--base); }
@@ -263,22 +88,10 @@
 .edit-btn.save:hover { opacity: 0.9; }
 .edit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-/* Compact View */
-.asset-card-compact {
-  background: var(--base);
-  border-radius: var(--radius-sm);
-  padding: 8px 10px;
-  border: 1px solid var(--surface0);
-  transition: all var(--transition-normal);
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
+/* ===== Compact View ===== */
+.asset-card-compact { background: var(--base); border-radius: var(--radius-sm); padding: 8px 10px; border: 1px solid var(--surface0); transition: all var(--transition-normal); position: relative; display: flex; flex-direction: column; gap: 4px; }
 .asset-card-compact:hover { border-color: var(--surface1); }
 .asset-card-compact:hover .asset-card-edit-btn { opacity: 1; }
-
 .compact-top { display: flex; align-items: center; gap: 6px; }
 .compact-icon { width: 22px; height: 22px; font-size: 8px; }
 .compact-symbol { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
@@ -288,56 +101,23 @@
 .compact-change { font-size: 10px; font-weight: 500; }
 .compact-change.positive { color: var(--green); }
 .compact-change.negative { color: var(--red); }
-.asset-card-compact .asset-edit-panel { border-radius: var(--radius-sm); }
 .asset-card-compact .countdown-circle { margin-left: auto; }
 
-/* Market Session Badge */
-.market-session-badge {
-  font-size: 9px;
-  font-weight: 600;
-  padding: 1px 5px;
-  border-radius: 3px;
-  letter-spacing: 0.3px;
-  flex-shrink: 0;
-}
-
+/* ===== Market Session Badge ===== */
+.market-session-badge { font-size: 9px; font-weight: 600; padding: 1px 5px; border-radius: 3px; letter-spacing: 0.3px; flex-shrink: 0; }
 .market-session-badge.pre { background: var(--blue-bg); color: var(--blue); }
 .market-session-badge.post { background: var(--yellow-bg); color: var(--yellow); }
 .market-session-badge.regular { background: var(--positive-bg); color: var(--green); }
 .market-session-badge.closed { background: var(--surface0); color: var(--overlay0); }
 
-/* Pre/Post Market Price Row */
-.prepost-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  margin-top: 2px;
-}
-
+/* ===== Pre/Post Market Price Row ===== */
+.prepost-row { display: flex; align-items: center; gap: 6px; font-size: 11px; margin-top: 2px; }
 .prepost-price { color: var(--subtext0, var(--overlay0)); font-weight: 500; }
-
 .prepost-change { font-size: 10px; font-weight: 500; }
 .prepost-change.positive { color: var(--green); }
 .prepost-change.negative { color: var(--red); }
-
-/* Compact prepost */
-.compact-prepost {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 9px;
-}
-
+.compact-prepost { display: flex; align-items: center; gap: 4px; font-size: 9px; }
 .compact-prepost .market-session-badge { font-size: 8px; padding: 0 3px; }
 .compact-prepost .prepost-price { font-size: 10px; }
 .compact-prepost .prepost-change { font-size: 9px; }
-
-/* List prepost */
-.list-prepost {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 10px;
-  min-width: 120px;
-}
+.list-prepost { display: flex; align-items: center; gap: 4px; font-size: 10px; min-width: 120px; }

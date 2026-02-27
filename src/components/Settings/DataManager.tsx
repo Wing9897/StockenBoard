@@ -74,7 +74,7 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
     const db = await getDb();
 
     const allSubs = await db.select<Subscription[]>(
-      'SELECT id, sub_type, symbol, display_name, selected_provider_id, asset_type, pool_address, token_from_address, token_to_address, sort_order, record_enabled FROM subscriptions ORDER BY sort_order, id'
+      'SELECT id, sub_type, symbol, display_name, selected_provider_id, asset_type, pool_address, token_from_address, token_to_address, sort_order, record_enabled, record_from_hour, record_to_hour FROM subscriptions ORDER BY sort_order, id'
     );
 
     const viewsToExport = customViews.filter(v => selectedViewIds.has(v.id));

@@ -40,10 +40,7 @@ export function SubscriptionManager({ onBatchAdd, onBatchAddMultiple, subscripti
       ? (p.provider_type === 'crypto' || p.provider_type === 'both' || p.provider_type === 'dex')
       : (p.provider_type === 'stock' || p.provider_type === 'both')
   );
-
-  useEffect(() => {
-    setProvider(assetType === 'crypto' ? 'binance' : 'yahoo');
-  }, [assetType]);
+  useEffect(() => { setProvider(assetType === 'crypto' ? 'binance' : 'yahoo'); }, [assetType]);
 
   const selectedProviderInfo = providerInfoList.find(p => p.id === provider);
   const isDex = selectedProviderInfo?.provider_type === 'dex';
@@ -53,12 +50,8 @@ export function SubscriptionManager({ onBatchAdd, onBatchAddMultiple, subscripti
   const showKeyInput = needsKey || optionalKey;
 
   useEffect(() => {
-    setApiKeyInput('');
-    setApiSecretInput('');
-    setKeySaved(false);
-    if (showKeyInput) {
-      api.hasApiKey(provider).then(setKeySaved);
-    }
+    setApiKeyInput(''); setApiSecretInput(''); setKeySaved(false);
+    if (showKeyInput) api.hasApiKey(provider).then(setKeySaved);
   }, [provider, showKeyInput]);
 
   const examples = selectedProviderInfo
@@ -74,17 +67,12 @@ export function SubscriptionManager({ onBatchAdd, onBatchAddMultiple, subscripti
       onToast?.('success', t.apiKey.keySaved, t.apiKey.keySavedMsg(selectedProviderInfo?.name || ''));
     } catch (err) {
       onToast?.('error', t.apiKey.saveFailed, err instanceof Error ? err.message : String(err));
-    } finally {
-      setKeySaving(false);
-    }
+    } finally { setKeySaving(false); }
   };
 
   const handleImport = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (needsKey && !keySaved && apiKeyInput.trim()) {
-      await handleSaveKey();
-    }
+    if (needsKey && !keySaved && apiKeyInput.trim()) await handleSaveKey();
 
     const symbols = symbolInput
       .split(/[,\n\r;]+/)
@@ -123,7 +111,6 @@ export function SubscriptionManager({ onBatchAdd, onBatchAddMultiple, subscripti
     setImportStatus({ done: 0, total: unique.length });
 
     if (onBatchAddMultiple) {
-      // 並行驗證 + 批量寫入，只 reload 一次
       const items = unique.map(sym => ({ symbol: sym, providerId: provider, assetType }));
       try {
         const result = await onBatchAddMultiple(items, (done, total) => {
@@ -149,7 +136,6 @@ export function SubscriptionManager({ onBatchAdd, onBatchAddMultiple, subscripti
 
     setImporting(false);
     setImportStatus(null);
-
     setBatchResult({ succeeded, failed, duplicates });
     if (failed.length === 0) {
       setSymbolInput('');
@@ -256,7 +242,7 @@ export function SubscriptionManager({ onBatchAdd, onBatchAddMultiple, subscripti
         </div>
         {importStatus && (
           <div className="batch-status">
-            <span>{t.subForm.importProgress(importStatus.done, importStatus.total)}</span>
+            <span>{t.subForm.importing} {importStatus.done} / {importStatus.total}</span>
           </div>
         )}
         <button type="submit" className="btn-add" disabled={!symbolInput.trim() || importing || (needsKey && !keySaved && !apiKeyInput.trim())}>

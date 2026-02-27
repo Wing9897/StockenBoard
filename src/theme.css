@@ -373,6 +373,9 @@
   --glass-bg: rgba(45, 20, 35, 0.65);
   --glass-border: rgba(244, 143, 177, 0.15);
   --glass-blur: 12px;
+  --card-glow: rgba(244, 143, 177, 0.15);
+  --header-glow: 0 0 10px rgba(244, 143, 177, 0.25);
+  --badge-color: #f48fb1;
 }
 
 [data-theme="cyberpunk"] {
@@ -420,6 +423,9 @@
   --glass-bg: rgba(10, 10, 30, 0.6);
   --glass-border: rgba(0, 212, 255, 0.12);
   --glass-blur: 14px;
+  --card-glow: rgba(0, 212, 255, 0.15);
+  --header-glow: 0 0 10px rgba(0, 212, 255, 0.3), 0 0 30px rgba(0, 212, 255, 0.1);
+  --badge-color: #00d4ff;
 }
 
 [data-theme="ghibli"] {
@@ -467,6 +473,9 @@
   --glass-bg: rgba(20, 35, 25, 0.6);
   --glass-border: rgba(165, 214, 167, 0.15);
   --glass-blur: 12px;
+  --card-glow: rgba(165, 214, 167, 0.15);
+  --header-glow: 0 0 10px rgba(165, 214, 167, 0.2);
+  --badge-color: #a5d6a7;
 }
 
 [data-theme="evangelion"] {
@@ -514,6 +523,9 @@
   --glass-bg: rgba(18, 5, 30, 0.65);
   --glass-border: rgba(155, 89, 182, 0.15);
   --glass-blur: 13px;
+  --card-glow: rgba(155, 89, 182, 0.15);
+  --header-glow: 0 0 10px rgba(155, 89, 182, 0.3), 0 0 25px rgba(46, 204, 113, 0.1);
+  --badge-color: #9b59b6;
 }
 
 [data-theme="miku"] {
@@ -561,6 +573,9 @@
   --glass-bg: rgba(12, 28, 35, 0.65);
   --glass-border: rgba(57, 197, 187, 0.15);
   --glass-blur: 12px;
+  --card-glow: rgba(57, 197, 187, 0.15);
+  --header-glow: 0 0 10px rgba(57, 197, 187, 0.3);
+  --badge-color: #39c5bb;
 }
 
 [data-theme="sunset"] {
@@ -608,94 +623,28 @@
   --glass-bg: rgba(30, 12, 20, 0.65);
   --glass-border: rgba(255, 107, 53, 0.15);
   --glass-blur: 13px;
+  --card-glow: rgba(255, 107, 53, 0.15);
+  --header-glow: 0 0 10px rgba(255, 107, 53, 0.25), 0 0 25px rgba(255, 215, 0, 0.1);
+  --badge-color: #ff6b35;
 }
 
 
 /* ===== Glass / Anime Theme Effects ===== */
 
 /* Body background — solid for normal themes, gradient for anime */
-body {
-  background: var(--crust);
-}
-
-[data-theme="sakura"] body,
-[data-theme="cyberpunk"] body,
-[data-theme="ghibli"] body,
-[data-theme="evangelion"] body,
-[data-theme="miku"] body,
-[data-theme="sunset"] body {
-  background: var(--theme-bg);
-}
+body { background: var(--crust); }
+:is([data-theme="sakura"], [data-theme="cyberpunk"], [data-theme="ghibli"], [data-theme="evangelion"], [data-theme="miku"], [data-theme="sunset"]) body { background: var(--theme-bg); }
 
 /* Glow overlay — only visible on anime themes */
-[data-theme="sakura"] body::before,
-[data-theme="cyberpunk"] body::before,
-[data-theme="ghibli"] body::before,
-[data-theme="evangelion"] body::before,
-[data-theme="miku"] body::before,
-[data-theme="sunset"] body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background: var(--theme-glow);
-  pointer-events: none;
-  z-index: 0;
+:is([data-theme="sakura"], [data-theme="cyberpunk"], [data-theme="ghibli"], [data-theme="evangelion"], [data-theme="miku"], [data-theme="sunset"]) body::before {
+  content: ''; position: fixed; inset: 0; background: var(--theme-glow); pointer-events: none; z-index: 0;
 }
 
-
-/* ===== Auto-glass for anime themes ===== */
-[data-theme="sakura"] .app-header,
-[data-theme="cyberpunk"] .app-header,
-[data-theme="ghibli"] .app-header,
-[data-theme="evangelion"] .app-header,
-[data-theme="miku"] .app-header,
-[data-theme="sunset"] .app-header,
-[data-theme="sakura"] .settings-section,
-[data-theme="cyberpunk"] .settings-section,
-[data-theme="ghibli"] .settings-section,
-[data-theme="evangelion"] .settings-section,
-[data-theme="miku"] .settings-section,
-[data-theme="sunset"] .settings-section,
-[data-theme="sakura"] .asset-card,
-[data-theme="cyberpunk"] .asset-card,
-[data-theme="ghibli"] .asset-card,
-[data-theme="evangelion"] .asset-card,
-[data-theme="miku"] .asset-card,
-[data-theme="sunset"] .asset-card,
-[data-theme="sakura"] .dex-card,
-[data-theme="cyberpunk"] .dex-card,
-[data-theme="ghibli"] .dex-card,
-[data-theme="evangelion"] .dex-card,
-[data-theme="miku"] .dex-card,
-[data-theme="sunset"] .dex-card,
-[data-theme="sakura"] .ps-card,
-[data-theme="cyberpunk"] .ps-card,
-[data-theme="ghibli"] .ps-card,
-[data-theme="evangelion"] .ps-card,
-[data-theme="miku"] .ps-card,
-[data-theme="sunset"] .ps-card,
-[data-theme="sakura"] .ps-table,
-[data-theme="cyberpunk"] .ps-table,
-[data-theme="ghibli"] .ps-table,
-[data-theme="evangelion"] .ps-table,
-[data-theme="miku"] .ps-table,
-[data-theme="sunset"] .ps-table,
-[data-theme="sakura"] .modal-container,
-[data-theme="cyberpunk"] .modal-container,
-[data-theme="ghibli"] .modal-container,
-[data-theme="evangelion"] .modal-container,
-[data-theme="miku"] .modal-container,
-[data-theme="sunset"] .modal-container,
-[data-theme="sakura"] .ps-modal,
-[data-theme="cyberpunk"] .ps-modal,
-[data-theme="ghibli"] .ps-modal,
-[data-theme="evangelion"] .ps-modal,
-[data-theme="miku"] .ps-modal,
-[data-theme="sunset"] .ps-modal {
-  background: var(--glass-bg);
-  border-color: var(--glass-border);
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  backdrop-filter: blur(var(--glass-blur));
+/* Auto-glass for anime themes */
+:is([data-theme="sakura"], [data-theme="cyberpunk"], [data-theme="ghibli"], [data-theme="evangelion"], [data-theme="miku"], [data-theme="sunset"])
+  :is(.app-header, .settings-section, .asset-card, .dex-card, .ps-card, .ps-table, .modal-container, .ps-modal) {
+  background: var(--glass-bg); border-color: var(--glass-border);
+  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
 }
 
 /* Ensure app content sits above the glow layer */
@@ -704,72 +653,14 @@ body {
   z-index: 1;
 }
 
-/* Anime theme accent glow on cards */
-[data-theme="sakura"] .asset-card:hover,
-[data-theme="sakura"] .dex-card:hover {
-  box-shadow: 0 4px 20px rgba(244, 143, 177, 0.15);
-}
+/* Anime theme card hover glow */
+:is([data-theme="sakura"], [data-theme="cyberpunk"], [data-theme="ghibli"], [data-theme="evangelion"], [data-theme="miku"], [data-theme="sunset"])
+  :is(.asset-card, .dex-card):hover { box-shadow: 0 4px 20px var(--card-glow); }
 
-[data-theme="cyberpunk"] .asset-card:hover,
-[data-theme="cyberpunk"] .dex-card:hover {
-  box-shadow: 0 4px 20px rgba(0, 212, 255, 0.15);
-}
-
-[data-theme="ghibli"] .asset-card:hover,
-[data-theme="ghibli"] .dex-card:hover {
-  box-shadow: 0 4px 20px rgba(165, 214, 167, 0.15);
-}
-
-[data-theme="evangelion"] .asset-card:hover,
-[data-theme="evangelion"] .dex-card:hover {
-  box-shadow: 0 4px 20px rgba(155, 89, 182, 0.15);
-}
-
-[data-theme="miku"] .asset-card:hover,
-[data-theme="miku"] .dex-card:hover {
-  box-shadow: 0 4px 20px rgba(57, 197, 187, 0.15);
-}
-
-[data-theme="sunset"] .asset-card:hover,
-[data-theme="sunset"] .dex-card:hover {
-  box-shadow: 0 4px 20px rgba(255, 107, 53, 0.15);
-}
-
-/* Cyberpunk neon text glow on header */
-[data-theme="cyberpunk"] .app-header h1 {
-  text-shadow: 0 0 10px rgba(0, 212, 255, 0.3), 0 0 30px rgba(0, 212, 255, 0.1);
-}
-
-/* Sakura soft glow on header */
-[data-theme="sakura"] .app-header h1 {
-  text-shadow: 0 0 10px rgba(244, 143, 177, 0.25);
-}
-
-/* Ghibli warm glow on header */
-[data-theme="ghibli"] .app-header h1 {
-  text-shadow: 0 0 10px rgba(165, 214, 167, 0.2);
-}
-
-/* Evangelion purple glow on header */
-[data-theme="evangelion"] .app-header h1 {
-  text-shadow: 0 0 10px rgba(155, 89, 182, 0.3), 0 0 25px rgba(46, 204, 113, 0.1);
-}
-
-/* Miku teal glow on header */
-[data-theme="miku"] .app-header h1 {
-  text-shadow: 0 0 10px rgba(57, 197, 187, 0.3);
-}
-
-/* Sunset warm glow on header */
-[data-theme="sunset"] .app-header h1 {
-  text-shadow: 0 0 10px rgba(255, 107, 53, 0.25), 0 0 25px rgba(255, 215, 0, 0.1);
-}
-
+/* Anime theme header text glow */
+:is([data-theme="sakura"], [data-theme="cyberpunk"], [data-theme="ghibli"], [data-theme="evangelion"], [data-theme="miku"], [data-theme="sunset"])
+  .app-header h1 { text-shadow: var(--header-glow); }
 
 /* Anime theme card badge colors */
-[data-theme="sakura"] .theme-card.anime::after { color: #f48fb1; }
-[data-theme="cyberpunk"] .theme-card.anime::after { color: #00d4ff; }
-[data-theme="ghibli"] .theme-card.anime::after { color: #a5d6a7; }
-[data-theme="evangelion"] .theme-card.anime::after { color: #9b59b6; }
-[data-theme="miku"] .theme-card.anime::after { color: #39c5bb; }
-[data-theme="sunset"] .theme-card.anime::after { color: #ff6b35; }
+:is([data-theme="sakura"], [data-theme="cyberpunk"], [data-theme="ghibli"], [data-theme="evangelion"], [data-theme="miku"], [data-theme="sunset"])
+  .theme-card.anime::after { color: var(--badge-color); }

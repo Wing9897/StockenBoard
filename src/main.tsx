@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { invoke } from '@tauri-apps/api/core';
-import { ANIME_IDS, loadBgForTheme } from './components/Settings/ThemePicker';
+import { ANIME_IDS, loadBgForTheme } from './lib/themeData';
 import App from "./App";
 import "./theme.css";
 

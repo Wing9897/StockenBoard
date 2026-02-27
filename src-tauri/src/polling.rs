@@ -1,5 +1,6 @@
 use crate::providers::{create_provider_with_url, AssetData, DataProvider};
 use crate::providers::traits::PROVIDER_INFO_MAP;
+use chrono::Timelike;
 use rusqlite::Connection;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -365,19 +366,43 @@ fn write_price_history(
         }
     };
     let now = chrono::Utc::now().timestamp();
+    let local_hour = chrono::Local::now().hour();
     for d in data {
         if !record_symbols.contains(&d.symbol) {
             continue;
         }
-        // 查找 subscription_id
-        let sub_id: Option<i64> = conn
-            .prepare_cached("SELECT id FROM subscriptions WHERE symbol = ?1 AND selected_provider_id = ?2")
+        // 查找 subscription_id + 紀錄時段
+        let sub_row: Option<(i64, Option<i64>, Option<i64>)> = conn
+            .prepare_cached("SELECT id, record_from_hour, record_to_hour FROM subscriptions WHERE symbol = ?1 AND selected_provider_id = ?2")
             .ok()
-            .and_then(|mut stmt| stmt.query_row([&d.symbol, provider_id], |row| row.get(0)).ok());
-        let sub_id = match sub_id {
-            Some(id) => id,
+            .and_then(|mut stmt| stmt.query_row([&d.symbol, provider_id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?))).ok());
+        let (sub_id, sub_from, sub_to) = match sub_row {
+            Some(r) => r,
             None => continue,
         };
+        // 紀錄時段檢查：訂閱設定優先 > provider 設定 > 全天
+        let (from_h, to_h) = if sub_from.is_some() && sub_to.is_some() {
+            (sub_from.unwrap() as u32, sub_to.unwrap() as u32)
+        } else {
+            // 查 provider 層級時段
+            let prov_hours: Option<(Option<i64>, Option<i64>)> = conn
+                .prepare_cached("SELECT record_from_hour, record_to_hour FROM provider_settings WHERE provider_id = ?1")
+                .ok()
+                .and_then(|mut stmt| stmt.query_row([provider_id], |row| Ok((row.get(0)?, row.get(1)?))).ok());
+            match prov_hours {
+                Some((Some(pf), Some(pt))) => (pf as u32, pt as u32),
+                _ => (0, 24), // 全天
+            }
+        };
+        // 判斷本地時間是否在時段內（支援跨午夜，如 22-06）
+        if from_h != 0 || to_h != 24 {
+            let in_window = if from_h <= to_h {
+                local_hour >= from_h && local_hour < to_h
+            } else {
+                local_hour >= from_h || local_hour < to_h
+            };
+            if !in_window { continue; }
+        }
         // 5 秒去重
         let recent: bool = conn
             .prepare_cached("SELECT 1 FROM price_history WHERE subscription_id = ?1 AND recorded_at > ?2 LIMIT 1")

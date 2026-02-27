@@ -17,7 +17,7 @@ export function useProviders() {
     try {
       const db = await getDb();
       const rows = await db.select<ProviderSettings[]>(
-        'SELECT provider_id, api_key, api_secret, refresh_interval, connection_type, api_url FROM provider_settings'
+        'SELECT provider_id, api_key, api_secret, refresh_interval, connection_type, api_url, record_from_hour, record_to_hour FROM provider_settings'
       );
       const map = new Map<string, ProviderSettings>();
       for (const row of rows) map.set(row.provider_id, row);
@@ -43,15 +43,17 @@ export function useProviders() {
     api_url?: string | null;
     refresh_interval?: number;
     connection_type?: string;
+    record_from_hour?: number | null;
+    record_to_hour?: number | null;
   }) {
     try {
       const db = await getDb();
 
       await db.execute(
-        `INSERT INTO provider_settings (provider_id, api_key, api_secret, refresh_interval, connection_type, api_url)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO provider_settings (provider_id, api_key, api_secret, refresh_interval, connection_type, api_url, record_from_hour, record_to_hour)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          ON CONFLICT(provider_id) DO UPDATE SET
-           api_key = $2, api_secret = $3, refresh_interval = $4, connection_type = $5, api_url = $6`,
+           api_key = $2, api_secret = $3, refresh_interval = $4, connection_type = $5, api_url = $6, record_from_hour = $7, record_to_hour = $8`,
         [
           providerId,
           updates.api_key || null,
@@ -59,6 +61,8 @@ export function useProviders() {
           updates.refresh_interval ?? null,
           updates.connection_type || 'rest',
           updates.api_url || null,
+          updates.record_from_hour ?? null,
+          updates.record_to_hour ?? null,
         ]
       );
       // 同步 Rust 端 provider instance + 觸發 polling reload
@@ -89,6 +93,8 @@ export function useProviders() {
       refresh_interval: s?.refresh_interval ?? (s?.api_key ? info.key_interval : info.free_interval),
       connection_type: s?.connection_type || (info.supports_websocket ? 'websocket' : 'rest'),
       supports_websocket: info.supports_websocket ? 1 : 0,
+      record_from_hour: s?.record_from_hour ?? null,
+      record_to_hour: s?.record_to_hour ?? null,
     };
   }), [providerInfos, settings]);
 

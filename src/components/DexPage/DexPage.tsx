@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useAssetData } from '../../hooks/useAssetData';
 import { useViews } from '../../hooks/useViews';
 import { useViewToolbar } from '../../hooks/useViewToolbar';
@@ -6,7 +6,6 @@ import { useVisibleSubscriptions } from '../../hooks/useVisibleSubscriptions';
 import { useBulkDelete } from '../../hooks/useBulkDelete';
 import { t } from '../../lib/i18n';
 import { getGridClass } from '../../lib/viewUtils';
-import { useLocale } from '../../hooks/useLocale';
 import { useConfirm } from '../../hooks/useConfirm';
 import { DexCard } from './DexCard';
 import { DexSubscriptionManager } from './DexSubscriptionManager';
@@ -30,7 +29,6 @@ interface DexPageProps {
 }
 
 export function DexPage({ onToast }: DexPageProps) {
-  useLocale();
   const { confirmState, requestConfirm, handleConfirm, handleCancel } = useConfirm();
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem('sb_dex_view_mode');
@@ -106,20 +104,6 @@ export function DexPage({ onToast }: DexPageProps) {
     });
   };
 
-  const subsForViewManager = useMemo(() =>
-    subscriptions.map(s => ({
-      id: s.id,
-      sub_type: s.sub_type,
-      symbol: s.display_name || `${(s.token_from_address || '').slice(0, 8)}→${(s.token_to_address || '').slice(0, 8)}`,
-      display_name: s.display_name,
-      selected_provider_id: s.selected_provider_id,
-      asset_type: s.asset_type,
-      sort_order: s.sort_order,
-      record_enabled: s.record_enabled ?? 0,
-    })),
-    [subscriptions]
-  );
-
   if (loading) return <div className="loading">{t.common.loading}</div>;
 
   return (
@@ -185,7 +169,7 @@ export function DexPage({ onToast }: DexPageProps) {
 
       {showSubManager && activeViewSubscriptionIds !== null && (
         <ViewSubscriptionManager
-          allSubscriptions={subsForViewManager}
+          allSubscriptions={subscriptions}
           viewSubscriptionIds={activeViewSubscriptionIds}
           onToggleSubscription={(subId, add) => {
             if (add) addSubscriptionToView(activeViewId, subId);

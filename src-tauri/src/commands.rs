@@ -445,7 +445,7 @@ pub async fn toggle_record(
     let db_path = app.path().app_data_dir()
         .map_err(|e| format!("無法取得 app 目錄: {}", e))?
         .join("stockenboard.db");
-    tokio::task::spawn_blocking(move || -> Result<(), String> {
+    let _ = tokio::task::spawn_blocking(move || -> Result<(), String> {
         let conn = rusqlite::Connection::open(&db_path)
             .map_err(|e| format!("開啟 DB 失敗: {}", e))?;
         conn.execute(
@@ -457,6 +457,48 @@ pub async fn toggle_record(
     // 通知 polling 重新載入，以更新 record_symbols
     state.polling.reload();
     Ok(())
+}
+
+#[tauri::command]
+pub async fn set_record_hours(
+    app: tauri::AppHandle,
+    subscription_id: i64,
+    from_hour: Option<i64>,
+    to_hour: Option<i64>,
+) -> Result<(), String> {
+    let db_path = app.path().app_data_dir()
+        .map_err(|e| format!("無法取得 app 目錄: {}", e))?
+        .join("stockenboard.db");
+    tokio::task::spawn_blocking(move || -> Result<(), String> {
+        let conn = rusqlite::Connection::open(&db_path)
+            .map_err(|e| format!("開啟 DB 失敗: {}", e))?;
+        conn.execute(
+            "UPDATE subscriptions SET record_from_hour = ?1, record_to_hour = ?2 WHERE id = ?3",
+            rusqlite::params![from_hour, to_hour, subscription_id],
+        ).map_err(|e| format!("更新失敗: {}", e))?;
+        Ok(())
+    }).await.map_err(|e| format!("spawn 失敗: {}", e))?
+}
+
+#[tauri::command]
+pub async fn set_provider_record_hours(
+    app: tauri::AppHandle,
+    provider_id: String,
+    from_hour: Option<i64>,
+    to_hour: Option<i64>,
+) -> Result<(), String> {
+    let db_path = app.path().app_data_dir()
+        .map_err(|e| format!("無法取得 app 目錄: {}", e))?
+        .join("stockenboard.db");
+    tokio::task::spawn_blocking(move || -> Result<(), String> {
+        let conn = rusqlite::Connection::open(&db_path)
+            .map_err(|e| format!("開啟 DB 失敗: {}", e))?;
+        conn.execute(
+            "UPDATE provider_settings SET record_from_hour = ?1, record_to_hour = ?2 WHERE provider_id = ?3",
+            rusqlite::params![from_hour, to_hour, provider_id],
+        ).map_err(|e| format!("更新失敗: {}", e))?;
+        Ok(())
+    }).await.map_err(|e| format!("spawn 失敗: {}", e))?
 }
 
 #[tauri::command]

@@ -35,6 +35,8 @@ export interface ProviderSettings {
   api_url?: string;
   refresh_interval?: number;
   connection_type: string;
+  record_from_hour?: number | null;
+  record_to_hour?: number | null;
 }
 
 export interface Subscription {
@@ -49,6 +51,8 @@ export interface Subscription {
   token_to_address?: string;
   sort_order: number;
   record_enabled: number;
+  record_from_hour?: number | null;
+  record_to_hour?: number | null;
 }
 
 export interface View {

@@ -6,7 +6,9 @@ CREATE TABLE IF NOT EXISTS provider_settings (
     api_secret       TEXT,
     api_url          TEXT,
     refresh_interval INTEGER,
-    connection_type  TEXT NOT NULL DEFAULT 'rest'
+    connection_type  TEXT NOT NULL DEFAULT 'rest',
+    record_from_hour INTEGER,
+    record_to_hour   INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS subscriptions (
@@ -21,6 +23,8 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     token_to_address     TEXT,
     sort_order           INTEGER NOT NULL DEFAULT 0,
     record_enabled       INTEGER NOT NULL DEFAULT 0,
+    record_from_hour     INTEGER,
+    record_to_hour       INTEGER,
     UNIQUE(symbol, selected_provider_id)
 );
 

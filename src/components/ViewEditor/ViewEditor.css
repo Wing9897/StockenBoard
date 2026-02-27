@@ -1,111 +1,34 @@
-.view-editor-backdrop {
-  /* extends .modal-backdrop */
-}
-
-.view-editor-modal {
-  width: 360px;
-  padding: 24px;
-}
-
+.view-editor-modal { width: 360px; padding: 24px; }
 .view-editor-title { margin: 0 0 16px; font-size: 16px; font-weight: 600; color: var(--text); }
-
-.view-editor-input {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--surface1);
-  border-radius: var(--radius-sm);
-  background: var(--surface0);
-  color: var(--text);
-  font-size: 14px;
-  outline: none;
-  transition: border-color var(--transition-fast);
-  box-sizing: border-box;
-}
-
+.view-editor-input { width: 100%; padding: 10px 12px; border: 1px solid var(--surface1); border-radius: var(--radius-sm); background: var(--surface0); color: var(--text); font-size: 14px; outline: none; transition: border-color var(--transition-fast); box-sizing: border-box; }
 .view-editor-input::placeholder { color: var(--overlay0); }
 .view-editor-input:focus { border-color: var(--blue); }
 .view-editor-input.has-error { border-color: var(--red); }
 .view-editor-error { margin: 6px 0 0; font-size: 12px; color: var(--red); }
 .view-editor-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
-
-.view-editor-btn {
-  padding: 8px 18px;
-  border: none;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
+.view-editor-btn { padding: 8px 18px; border: none; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; cursor: pointer; transition: all var(--transition-fast); }
 .view-editor-btn.cancel { background: var(--surface0); color: var(--text); }
 .view-editor-btn.cancel:hover { background: var(--surface1); }
 .view-editor-btn.confirm { background: var(--blue); color: var(--crust); }
 .view-editor-btn.confirm:hover { opacity: 0.9; }
 
 /* ViewSubscriptionManager */
-.vsm-backdrop {
-  /* extends .modal-backdrop */
-}
-
-.vsm-modal {
-  width: 400px;
-  max-height: 70vh;
-}
-
+.vsm-modal { width: 400px; max-height: 70vh; }
 .vsm-header { display: flex; justify-content: space-between; align-items: center; padding: 18px 20px 0; }
 .vsm-title { margin: 0; font-size: 16px; font-weight: 600; color: var(--text); }
-
-.vsm-close {
-  background: none;
-  border: none;
-  color: var(--overlay0);
-  font-size: 14px;
-  cursor: pointer;
-  padding: 4px 6px;
-  border-radius: var(--radius-sm);
-  transition: all var(--transition-fast);
-}
-
+.vsm-close { background: none; border: none; color: var(--overlay0); font-size: 14px; cursor: pointer; padding: 4px 6px; border-radius: var(--radius-sm); transition: all var(--transition-fast); }
 .vsm-close:hover { background: var(--surface0); color: var(--text); }
-
-.vsm-search {
-  margin: 12px 20px 0;
-  padding: 8px 12px;
-  border: 1px solid var(--surface1);
-  border-radius: var(--radius-sm);
-  background: var(--surface0);
-  color: var(--text);
-  font-size: 13px;
-  outline: none;
-  transition: border-color var(--transition-fast);
-}
-
+.vsm-search { margin: 12px 20px 0; padding: 8px 12px; border: 1px solid var(--surface1); border-radius: var(--radius-sm); background: var(--surface0); color: var(--text); font-size: 13px; outline: none; transition: border-color var(--transition-fast); }
 .vsm-search::placeholder { color: var(--overlay0); }
 .vsm-search:focus { border-color: var(--blue); }
-
 .vsm-bulk-actions { display: flex; gap: 8px; padding: 8px 20px 0; }
-
-.vsm-bulk-btn {
-  background: var(--surface0);
-  border: none;
-  color: var(--overlay0);
-  padding: 4px 12px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-size: 12px;
-  transition: all var(--transition-fast);
-}
-
+.vsm-bulk-btn { background: var(--surface0); border: none; color: var(--overlay0); padding: 4px 12px; border-radius: var(--radius-sm); cursor: pointer; font-size: 12px; transition: all var(--transition-fast); }
 .vsm-bulk-btn:hover:not(:disabled) { background: var(--surface1); color: var(--text); }
 .vsm-bulk-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
 .vsm-empty { color: var(--overlay0); font-size: 13px; text-align: center; padding: 24px 20px; }
-
 .vsm-list { list-style: none; margin: 0; padding: 8px 12px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .vsm-item { border-radius: var(--radius-sm); transition: background 0.12s; }
 .vsm-item:hover { background: var(--surface0); }
-
 .vsm-label { display: flex; align-items: center; gap: 10px; padding: 8px 10px; cursor: pointer; font-size: 13px; color: var(--text); }
 .vsm-checkbox { accent-color: var(--blue); width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; }
 .vsm-symbol { font-weight: 500; color: var(--text); }

@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useProviders } from '../../hooks/useProviders';
 import { t } from '../../lib/i18n';
-import { useLocale } from '../../hooks/useLocale';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
 import './Settings.css';
 
@@ -24,7 +23,6 @@ const TYPE_BG: Record<string, string> = {
 };
 
 export function ProviderSettings({ onSaved }: { onSaved?: () => void }) {
-  useLocale();
   const TYPE_LABELS: Record<string, string> = {
     crypto: t.providers.crypto,
     stock: t.providers.stock,
@@ -51,6 +49,7 @@ export function ProviderSettings({ onSaved }: { onSaved?: () => void }) {
   const [formData, setFormData] = useState({
     api_key: '', api_secret: '', api_url: '',
     refresh_interval: 30000, connection_type: 'rest',
+    record_from_hour: null as number | null, record_to_hour: null as number | null,
   });
   const [useKeyMode, setUseKeyMode] = useState(false);
 
@@ -84,6 +83,7 @@ export function ProviderSettings({ onSaved }: { onSaved?: () => void }) {
     setFormData({
       api_key: p.api_key || '', api_secret: p.api_secret || '', api_url: p.api_url || '',
       refresh_interval: p.refresh_interval, connection_type: p.connection_type || 'rest',
+      record_from_hour: p.record_from_hour ?? null, record_to_hour: p.record_to_hour ?? null,
     });
   };
 
@@ -103,6 +103,7 @@ export function ProviderSettings({ onSaved }: { onSaved?: () => void }) {
       api_key: formData.api_key || null, api_secret: formData.api_secret || null,
       api_url: formData.api_url || null, refresh_interval: formData.refresh_interval,
       connection_type: formData.connection_type,
+      record_from_hour: formData.record_from_hour, record_to_hour: formData.record_to_hour,
     });
     setEditingId(null);
     onSaved?.();
@@ -286,6 +287,34 @@ export function ProviderSettings({ onSaved }: { onSaved?: () => void }) {
                   </select>
                 </div>
               )}
+              <div className="form-group">
+                <label>{t.history.recordHours}</label>
+                <div className="record-hours-row">
+                  <select
+                    value={formData.record_from_hour != null && formData.record_to_hour != null ? 'custom' : 'all'}
+                    onChange={e => {
+                      if (e.target.value === 'all') setFormData({ ...formData, record_from_hour: null, record_to_hour: null });
+                      else setFormData({ ...formData, record_from_hour: 16, record_to_hour: 9 });
+                    }}
+                  >
+                    <option value="all">{t.history.recordHoursAll}</option>
+                    <option value="custom">{t.history.recordHoursCustom}</option>
+                  </select>
+                  {formData.record_from_hour != null && formData.record_to_hour != null && (
+                    <div className="record-hours-pickers">
+                      <span>{t.history.recordHoursFrom}</span>
+                      <select value={formData.record_from_hour} onChange={e => setFormData({ ...formData, record_from_hour: Number(e.target.value) })}>
+                        {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{String(i).padStart(2, '0')}:00</option>)}
+                      </select>
+                      <span>{t.history.recordHoursTo}</span>
+                      <select value={formData.record_to_hour} onChange={e => setFormData({ ...formData, record_to_hour: Number(e.target.value) })}>
+                        {Array.from({ length: 25 }, (_, i) => <option key={i} value={i}>{i === 24 ? '24:00' : `${String(i).padStart(2, '0')}:00`}</option>)}
+                      </select>
+                    </div>
+                  )}
+                </div>
+                <span className="form-hint priority">{t.history.recordHoursProviderHint} · {t.history.recordHoursPriority} · {t.history.recordHoursHint} ({(() => { const o = -new Date().getTimezoneOffset(), h = Math.floor(Math.abs(o)/60), m = Math.abs(o)%60; return `UTC${o>=0?'+':'-'}${h}${m?':'+String(m).padStart(2,'0'):''}`; })()})</span>
+              </div>
             </div>
             <div className="ps-modal-foot">
               <button className="btn-cancel" onClick={() => setEditingId(null)}>{t.common.cancel}</button>
