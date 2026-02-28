@@ -51,6 +51,16 @@
   --transition-fast: 0.15s ease;
   --transition-normal: 0.2s ease;
   --card-padding: 10px;
+
+  /* Spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
 }
 
 [data-theme="macchiato"] {

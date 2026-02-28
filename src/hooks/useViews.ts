@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { View } from '../types';
 import { getDb } from '../lib/db';
+import { silentLog } from '../lib/errorLog';
+import { STORAGE_KEYS } from '../lib/storageKeys';
 
 interface RawView { id: number; name: string; view_type: string; is_default: number }
 const toView = (r: RawView): View => ({ id: r.id, name: r.name, view_type: r.view_type as 'asset' | 'dex', is_default: r.is_default === 1 });
 
 export function useViews(viewType: 'asset' | 'dex' = 'asset') {
-  const storageKey = viewType === 'dex' ? 'sb_dex_active_view_id' : 'sb_active_view_id';
+  const storageKey = viewType === 'dex' ? STORAGE_KEYS.DEX_ACTIVE_VIEW_ID : STORAGE_KEYS.ACTIVE_VIEW_ID;
   const [views, setViews] = useState<View[]>([]);
   const [activeViewId, setActiveViewId] = useState<number>(() => {
     const saved = localStorage.getItem(storageKey);
@@ -28,7 +30,7 @@ export function useViews(viewType: 'asset' | 'dex' = 'asset') {
       for (const v of vl) if (!v.is_default) counts[v.id] = 0;
       for (const r of rows) counts[r.view_id] = r.cnt;
       setViewSubCounts(counts);
-    } catch { /* silent */ }
+    } catch (e) { silentLog('loadViewSubCounts', e); }
   }, []);
 
   const loadViews = useCallback(async () => {
@@ -39,7 +41,7 @@ export function useViews(viewType: 'asset' | 'dex' = 'asset') {
       setViews(loaded);
       await loadViewSubCounts(loaded);
       return loaded;
-    } catch { return []; }
+    } catch (e) { silentLog('loadViews', e); return []; }
   }, [viewType, loadViewSubCounts]);
 
   const loadActiveViewSubs = useCallback(async (viewId: number, vl: View[]) => {
@@ -49,7 +51,7 @@ export function useViews(viewType: 'asset' | 'dex' = 'asset') {
       const db = await getDb();
       const rows = await db.select<{ subscription_id: number }[]>('SELECT subscription_id FROM view_subscriptions WHERE view_id = $1', [viewId]);
       setActiveViewSubscriptionIds(rows.map(r => r.subscription_id));
-    } catch { setActiveViewSubscriptionIds(null); }
+    } catch (e) { silentLog('loadActiveViewSubs', e); setActiveViewSubscriptionIds(null); }
   }, []);
 
   const setActiveView = useCallback((viewId: number) => {
@@ -119,7 +121,7 @@ export function useViews(viewType: 'asset' | 'dex' = 'asset') {
       }
       setLoading(false);
     })();
-  }, []);
+  }, [loadViews, storageKey, loadActiveViewSubs]);
 
   return {
     views, activeViewId, activeViewSubscriptionIds, viewSubCounts, loading,

@@ -269,88 +269,82 @@ impl PollingManager {
     }
 }
 
-/// 從統一 subscriptions 表讀取配置，組合成 polling groups
-/// 對 DEX 類型 (sub_type='dex')，用 pool_address:token_from:token_to 組合 symbol
-#[allow(clippy::type_complexity)]
-fn load_config(
-    db_path: &PathBuf,
+/// 從 DB 讀取訂閱資訊並按 visible_ids 過濾
+fn read_subscriptions(
+    conn: &Connection,
     visible_ids: Option<&HashSet<i64>>,
-) -> Result<
-    (
-        HashMap<String, PollingGroup>,
-        HashMap<String, Arc<dyn DataProvider>>,
-    ),
-    String,
-> {
-    let conn = Connection::open_with_flags(db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
-        .map_err(|e| format!("開啟 DB 失敗: {}", e))?;
+) -> Result<Vec<SubRecord>, String> {
+    let mut stmt = conn
+        .prepare("SELECT id, sub_type, symbol, selected_provider_id, pool_address, token_from_address, token_to_address, record_enabled FROM subscriptions")
+        .map_err(|e| format!("查詢 subscriptions 失敗: {}", e))?;
+    let rows = stmt
+        .query_map([], |row| {
+            let id: i64 = row.get(0)?;
+            let sub_type: String = row.get(1)?;
+            let symbol: String = row.get(2)?;
+            let provider_id: String = row.get(3)?;
+            let pool_address: Option<String> = row.get(4)?;
+            let token_from: Option<String> = row.get(5)?;
+            let token_to: Option<String> = row.get(6)?;
+            let record_enabled: i64 = row.get(7)?;
 
-    let subs: Vec<SubRecord> = {
-        let mut stmt = conn
-            .prepare("SELECT id, sub_type, symbol, selected_provider_id, pool_address, token_from_address, token_to_address, record_enabled FROM subscriptions")
-            .map_err(|e| format!("查詢 subscriptions 失敗: {}", e))?;
-        let rows = stmt
-            .query_map([], |row| {
-                let id: i64 = row.get(0)?;
-                let sub_type: String = row.get(1)?;
-                let symbol: String = row.get(2)?;
-                let provider_id: String = row.get(3)?;
-                let pool_address: Option<String> = row.get(4)?;
-                let token_from: Option<String> = row.get(5)?;
-                let token_to: Option<String> = row.get(6)?;
-                let record_enabled: i64 = row.get(7)?;
+            let final_symbol = if sub_type == "dex" {
+                let pool = pool_address.unwrap_or_default();
+                let tf = token_from.unwrap_or_default();
+                let tt = token_to.unwrap_or_default();
+                format!("{}:{}:{}", pool, tf, tt)
+            } else {
+                symbol
+            };
 
-                let final_symbol = if sub_type == "dex" {
-                    let pool = pool_address.unwrap_or_default();
-                    let tf = token_from.unwrap_or_default();
-                    let tt = token_to.unwrap_or_default();
-                    format!("{}:{}:{}", pool, tf, tt)
-                } else {
-                    symbol
-                };
-
-                Ok(SubRecord {
-                    id,
-                    symbol: final_symbol,
-                    provider_id,
-                    record_enabled: record_enabled != 0,
-                })
+            Ok(SubRecord {
+                id,
+                symbol: final_symbol,
+                provider_id,
+                record_enabled: record_enabled != 0,
             })
-            .map_err(|e| format!("讀取 subscriptions 失敗: {}", e))?;
-        let all: Vec<SubRecord> = rows.filter_map(|r| r.ok()).collect();
-        match visible_ids {
-            Some(ids) => all.into_iter().filter(|s| ids.contains(&s.id)).collect(),
-            None => all,
-        }
-    };
+        })
+        .map_err(|e| format!("讀取 subscriptions 失敗: {}", e))?;
+    let all: Vec<SubRecord> = rows.filter_map(|r| r.ok()).collect();
+    Ok(match visible_ids {
+        Some(ids) => all.into_iter().filter(|s| ids.contains(&s.id)).collect(),
+        None => all,
+    })
+}
 
-    let settings: HashMap<String, ProviderConfig> = {
-        let mut stmt = conn
-            .prepare("SELECT provider_id, api_key, api_secret, refresh_interval, api_url FROM provider_settings")
-            .map_err(|e| format!("查詢 provider_settings 失敗: {}", e))?;
-        let rows = stmt
-            .query_map([], |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    ProviderConfig {
-                        api_key: row.get(1)?,
-                        api_secret: row.get(2)?,
-                        refresh_interval: row.get(3)?,
-                        api_url: row.get(4).ok().flatten(),
-                    },
-                ))
-            })
-            .map_err(|e| format!("讀取 provider_settings 失敗: {}", e))?;
-        rows.filter_map(|r| r.ok()).collect()
-    };
+/// 從 DB 讀取 provider 設定
+fn read_provider_settings_map(
+    conn: &Connection,
+) -> Result<HashMap<String, ProviderConfig>, String> {
+    let mut stmt = conn
+        .prepare("SELECT provider_id, api_key, api_secret, refresh_interval, api_url FROM provider_settings")
+        .map_err(|e| format!("查詢 provider_settings 失敗: {}", e))?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                ProviderConfig {
+                    api_key: row.get(1)?,
+                    api_secret: row.get(2)?,
+                    refresh_interval: row.get(3)?,
+                    api_url: row.get(4).ok().flatten(),
+                },
+            ))
+        })
+        .map_err(|e| format!("讀取 provider_settings 失敗: {}", e))?;
+    Ok(rows.filter_map(|r| r.ok()).collect())
+}
 
-    drop(conn);
-
+/// 將訂閱資訊和 provider 設定組裝成 polling groups 和 provider instances
+fn build_polling_groups(
+    subs: &[SubRecord],
+    settings: &HashMap<String, ProviderConfig>,
+) -> (HashMap<String, PollingGroup>, HashMap<String, Arc<dyn DataProvider>>) {
     let info_map = &*PROVIDER_INFO_MAP;
     let mut groups: HashMap<String, PollingGroup> = HashMap::new();
     let mut provider_instances: HashMap<String, Arc<dyn DataProvider>> = HashMap::new();
 
-    for sub in &subs {
+    for sub in subs {
         let pid = &sub.provider_id;
         let config = settings.get(pid);
 
@@ -394,7 +388,30 @@ fn load_config(
         }
     }
 
-    Ok((groups, provider_instances))
+    (groups, provider_instances)
+}
+
+/// 從統一 subscriptions 表讀取配置，組合成 polling groups
+/// 對 DEX 類型 (sub_type='dex')，用 pool_address:token_from:token_to 組合 symbol
+#[allow(clippy::type_complexity)]
+fn load_config(
+    db_path: &PathBuf,
+    visible_ids: Option<&HashSet<i64>>,
+) -> Result<
+    (
+        HashMap<String, PollingGroup>,
+        HashMap<String, Arc<dyn DataProvider>>,
+    ),
+    String,
+> {
+    let conn = Connection::open_with_flags(db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(|e| format!("開啟 DB 失敗: {}", e))?;
+
+    let subs = read_subscriptions(&conn, visible_ids)?;
+    let settings = read_provider_settings_map(&conn)?;
+    drop(conn);
+
+    Ok(build_polling_groups(&subs, &settings))
 }
 
 /// 寫入 price_history，5 秒去重

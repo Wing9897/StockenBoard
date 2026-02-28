@@ -1,14 +1,8 @@
 import { useState, useCallback, useMemo } from 'react';
-import { View } from '../types';
+import type { View, ToastActions } from '../types';
 import { t } from '../lib/i18n';
 
 type EditorState = null | { mode: 'create' } | { mode: 'rename'; viewId: number; currentName: string };
-
-interface ToastLike {
-  success: (title: string, msg?: string) => void;
-  error: (title: string, msg?: string) => void;
-  info: (title: string, msg?: string) => void;
-}
 
 interface UseViewToolbarOptions {
   views: View[];
@@ -16,7 +10,7 @@ interface UseViewToolbarOptions {
   createView: (name: string) => Promise<void>;
   renameView: (viewId: number, name: string) => Promise<void>;
   deleteView: (viewId: number) => Promise<void>;
-  toast: ToastLike;
+  toast: ToastActions;
   storageKey: string;
   /** 自訂確認刪除 — 回傳 true 表示確認 */
   confirmDelete?: (message: string) => Promise<boolean>;

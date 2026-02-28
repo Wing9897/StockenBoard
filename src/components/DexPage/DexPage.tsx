@@ -4,9 +4,9 @@ import { useViews } from '../../hooks/useViews';
 import { useViewToolbar } from '../../hooks/useViewToolbar';
 import { useVisibleSubscriptions } from '../../hooks/useVisibleSubscriptions';
 import { useBulkDelete } from '../../hooks/useBulkDelete';
-import { useLocale } from '../../hooks/useLocale';
 import { t } from '../../lib/i18n';
 import { getGridClass } from '../../lib/viewUtils';
+import { STORAGE_KEYS } from '../../lib/storageKeys';
 import { useConfirm } from '../../hooks/useConfirm';
 import { DexCard } from './DexCard';
 import { DexSubscriptionManager } from './DexSubscriptionManager';
@@ -18,22 +18,17 @@ import { BatchActions } from '../BatchActions/BatchActions';
 import { ConfirmDialog } from '../ConfirmDialog/ConfirmDialog';
 import { DashboardToolbar } from '../DashboardToolbar/DashboardToolbar';
 
-import type { ViewMode } from '../../types';
+import type { ViewMode, ToastActions } from '../../types';
 import './DexPage.css';
 
 interface DexPageProps {
-  onToast: {
-    success: (title: string, msg?: string) => void;
-    error: (title: string, msg?: string) => void;
-    info: (title: string, msg?: string) => void;
-  };
+  onToast: ToastActions;
 }
 
 export function DexPage({ onToast }: DexPageProps) {
-  useLocale();
   const { confirmState, requestConfirm, handleConfirm, handleCancel } = useConfirm();
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    const saved = localStorage.getItem('sb_dex_view_mode');
+    const saved = localStorage.getItem(STORAGE_KEYS.DEX_VIEW_MODE);
     if (saved === 'list' || saved === 'compact') return saved;
     return 'grid';
   });
@@ -45,7 +40,7 @@ export function DexPage({ onToast }: DexPageProps) {
 
   const handleSetViewMode = (mode: ViewMode) => {
     setViewMode(mode);
-    localStorage.setItem('sb_dex_view_mode', mode);
+    localStorage.setItem(STORAGE_KEYS.DEX_VIEW_MODE, mode);
   };
 
   const {
@@ -67,7 +62,7 @@ export function DexPage({ onToast }: DexPageProps) {
     handleDeleteView, togglePinView,
   } = useViewToolbar({
     views, activeViewId, createView, renameView, deleteView, toast: onToast,
-    storageKey: 'sb_dex_pinned_views',
+    storageKey: STORAGE_KEYS.DEX_PINNED_VIEWS,
     confirmDelete: requestConfirm,
   });
 

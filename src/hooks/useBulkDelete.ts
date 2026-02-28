@@ -1,11 +1,6 @@
 import { useCallback } from 'react';
+import type { ToastActions } from '../types';
 import { t } from '../lib/i18n';
-
-interface ToastLike {
-  success: (title: string, msg?: string) => void;
-  error: (title: string, msg?: string) => void;
-  info: (title: string, msg?: string) => void;
-}
 
 interface UseBulkDeleteOptions {
   isCustomView: boolean;
@@ -13,7 +8,7 @@ interface UseBulkDeleteOptions {
   removeSubscriptions: (ids: number[]) => Promise<void>;
   removeSubscriptionFromView: (viewId: number, subId: number) => Promise<void>;
   requestConfirm: (message: string) => Promise<boolean>;
-  toast: ToastLike;
+  toast: ToastActions;
   onDone: () => void;
 }
 

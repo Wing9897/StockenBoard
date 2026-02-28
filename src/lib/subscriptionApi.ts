@@ -5,6 +5,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { Subscription, ProviderInfo } from '../types';
 import { getDb } from './db';
+import { silentLog } from './errorLog';
 
 /** 載入指定類型的訂閱列表 */
 export async function loadSubscriptions(subType: 'asset' | 'dex'): Promise<Subscription[]> {
@@ -73,6 +74,7 @@ export async function addAssetSubscriptionBatch(
   const dbDuplicates: string[] = [];
   if (valid.length > 0) {
     const db = await getDb();
+    await db.execute('BEGIN TRANSACTION');
     for (const v of valid) {
       try {
         await db.execute(
@@ -84,6 +86,7 @@ export async function addAssetSubscriptionBatch(
         dbDuplicates.push(v.storedSymbol);
       }
     }
+    await db.execute('COMMIT');
   }
   return { succeeded, failed, dbDuplicates };
 }
@@ -142,7 +145,7 @@ export async function hasApiKey(providerId: string): Promise<boolean> {
       [providerId]
     );
     return rows.length > 0 && !!rows[0].api_key;
-  } catch { return false; }
+  } catch (e) { silentLog('hasApiKey', e); return false; }
 }
 
 /** 儲存 provider API key（含同步 Rust 端） */

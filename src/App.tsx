@@ -1,4 +1,4 @@
-﻿import { useState, useCallback, useRef } from 'react';
+﻿import { useState, useCallback, useRef, lazy, Suspense } from 'react';
 import { useAssetData } from './hooks/useAssetData';
 import { useViews } from './hooks/useViews';
 import { useViewToolbar } from './hooks/useViewToolbar';
@@ -24,36 +24,39 @@ import { ApiGuide } from './components/Settings/ApiGuide';
 import { ConfirmDialog } from './components/ConfirmDialog/ConfirmDialog';
 import { DashboardToolbar } from './components/DashboardToolbar/DashboardToolbar';
 import { ToastContainer } from './components/Toast/Toast';
-import { DexPage } from './components/DexPage/DexPage';
-import { HistoryPage } from './components/HistoryPage/HistoryPage';
 import { t } from './lib/i18n';
 import { useLocale } from './hooks/useLocale';
 import { getGridClass } from './lib/viewUtils';
+import { STORAGE_KEYS } from './lib/storageKeys';
 import type { ViewMode } from './types';
 import './App.css';
+
+// Lazy-loaded pages — 非活躍 tab 按需載入以減少初始 bundle
+const DexPage = lazy(() => import('./components/DexPage/DexPage').then(m => ({ default: m.DexPage })));
+const HistoryPage = lazy(() => import('./components/HistoryPage/HistoryPage').then(m => ({ default: m.HistoryPage })));
 
 type Tab = 'dashboard' | 'dex' | 'history' | 'providers' | 'settings';
 
 function App() {
   useLocale();
   const [activeTab, setActiveTabRaw] = useState<Tab>(() => {
-    const saved = localStorage.getItem('sb_active_tab') as Tab | null;
+    const saved = localStorage.getItem(STORAGE_KEYS.ACTIVE_TAB) as Tab | null;
     if (saved === 'dashboard' || saved === 'dex' || saved === 'history' || saved === 'providers' || saved === 'settings') return saved;
     return 'dashboard';
   });
-  const setActiveTab = useCallback((tab: Tab) => { setActiveTabRaw(tab); localStorage.setItem('sb_active_tab', tab); }, []);
+  const setActiveTab = useCallback((tab: Tab) => { setActiveTabRaw(tab); localStorage.setItem(STORAGE_KEYS.ACTIVE_TAB, tab); }, []);
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    const saved = localStorage.getItem('sb_view_mode');
+    const saved = localStorage.getItem(STORAGE_KEYS.VIEW_MODE);
     if (saved === 'list' || saved === 'compact') return saved;
     return 'grid';
   });
   const m = useAppModals();
-  const [forceExpandAll, setForceExpandAll] = useState(() => localStorage.getItem('sb_expand_all') === '1');
-  const [hidePrePost, setHidePrePost] = useState(() => localStorage.getItem('sb_hide_prepost') === '1');
+  const [forceExpandAll, setForceExpandAll] = useState(() => localStorage.getItem(STORAGE_KEYS.EXPAND_ALL) === '1');
+  const [hidePrePost, setHidePrePost] = useState(() => localStorage.getItem(STORAGE_KEYS.HIDE_PREPOST) === '1');
   const toast = useToast();
   const { confirmState, requestConfirm, handleConfirm, handleCancel } = useConfirm();
 
-  const handleSetViewMode = (mode: ViewMode) => { setViewMode(mode); localStorage.setItem('sb_view_mode', mode); };
+  const handleSetViewMode = (mode: ViewMode) => { setViewMode(mode); localStorage.setItem(STORAGE_KEYS.VIEW_MODE, mode); };
 
   const {
     views, activeViewId, activeViewSubscriptionIds, viewSubCounts,
@@ -67,7 +70,7 @@ function App() {
     handleDeleteView, togglePinView,
   } = useViewToolbar({
     views, activeViewId, createView, renameView, deleteView, toast,
-    storageKey: 'sb_pinned_views', confirmDelete: requestConfirm,
+    storageKey: STORAGE_KEYS.PINNED_VIEWS, confirmDelete: requestConfirm,
   });
 
   const {
@@ -183,8 +186,8 @@ function App() {
           </div>
         )}
 
-        {activeTab === 'dex' && <DexPage onToast={toast} />}
-        {activeTab === 'history' && <HistoryPage onToast={toast} />}
+        {activeTab === 'dex' && <Suspense fallback={<div className="loading">{t.common.loading}</div>}><DexPage onToast={toast} /></Suspense>}
+        {activeTab === 'history' && <Suspense fallback={<div className="loading">{t.common.loading}</div>}><HistoryPage onToast={toast} /></Suspense>}
         {activeTab === 'providers' && (
           <div className="providers-page">
             <ProviderSettings onSaved={() => toast.success(t.providers.settingsSaved)} />
@@ -247,8 +250,8 @@ function App() {
 
       {m.showBatchActions && (
         <BatchActions mode="spot" expandAll={forceExpandAll} showPrePost={!hidePrePost}
-          onToggleExpandAll={() => setForceExpandAll(v => { const next = !v; localStorage.setItem('sb_expand_all', next ? '1' : '0'); return next; })}
-          onTogglePrePost={() => setHidePrePost(v => { const next = !v; localStorage.setItem('sb_hide_prepost', next ? '1' : '0'); return next; })}
+          onToggleExpandAll={() => setForceExpandAll(v => { const next = !v; localStorage.setItem(STORAGE_KEYS.EXPAND_ALL, next ? '1' : '0'); return next; })}
+          onTogglePrePost={() => setHidePrePost(v => { const next = !v; localStorage.setItem(STORAGE_KEYS.HIDE_PREPOST, next ? '1' : '0'); return next; })}
           onClose={() => m.setShowBatchActions(false)} />
       )}
 

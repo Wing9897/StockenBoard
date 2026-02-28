@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { t } from '../../lib/i18n';
 import { THEMES, ANIME_IDS, applyBgImage, loadBgForTheme } from '../../lib/themeData';
+import { STORAGE_KEYS } from '../../lib/storageKeys';
 import './Settings.css';
 
 export function ThemePicker() {
-  const [current, setCurrent] = useState(() => localStorage.getItem('sb_theme') || 'mocha');
+  const [current, setCurrent] = useState(() => localStorage.getItem(STORAGE_KEYS.THEME) || 'mocha');
   const [bgUrl, setBgUrl] = useState<string | null>(null);
   const [bgOpacity, setBgOpacity] = useState(0.3);
 
@@ -14,10 +15,10 @@ export function ThemePicker() {
   useEffect(() => {
     let cancelled = false;
     const handler = async () => {
-      const url = await loadBgForTheme(localStorage.getItem('sb_theme') || 'mocha');
+      const url = await loadBgForTheme(localStorage.getItem(STORAGE_KEYS.THEME) || 'mocha');
       if (!cancelled) {
-        setCurrent(localStorage.getItem('sb_theme') || 'mocha');
-        setBgOpacity(parseFloat(localStorage.getItem(`sb_theme_bg_opacity_${localStorage.getItem('sb_theme') || 'mocha'}`) || '0.3'));
+        setCurrent(localStorage.getItem(STORAGE_KEYS.THEME) || 'mocha');
+        setBgOpacity(parseFloat(localStorage.getItem(STORAGE_KEYS.themeBgOpacity(localStorage.getItem(STORAGE_KEYS.THEME) || 'mocha')) || '0.3'));
         setBgUrl(url);
       }
     };
@@ -28,9 +29,9 @@ export function ThemePicker() {
 
   const handleSelect = async (id: string) => {
     document.documentElement.setAttribute('data-theme', id);
-    localStorage.setItem('sb_theme', id);
+    localStorage.setItem(STORAGE_KEYS.THEME, id);
     setCurrent(id);
-    setBgOpacity(parseFloat(localStorage.getItem(`sb_theme_bg_opacity_${id}`) || '0.3'));
+    setBgOpacity(parseFloat(localStorage.getItem(STORAGE_KEYS.themeBgOpacity(id)) || '0.3'));
     const url = await loadBgForTheme(id);
     setBgUrl(url);
     window.dispatchEvent(new Event('theme-change'));
@@ -53,7 +54,7 @@ export function ThemePicker() {
 
   const handleOpacityChange = (val: number) => {
     setBgOpacity(val);
-    localStorage.setItem(`sb_theme_bg_opacity_${current}`, String(val));
+    localStorage.setItem(STORAGE_KEYS.themeBgOpacity(current), String(val));
     if (bgUrl) applyBgImage(bgUrl, val);
   };
 
@@ -75,11 +76,11 @@ export function ThemePicker() {
             <div className="theme-preview" style={th.gradient ? { background: th.gradient } : undefined}>
               {th.gradient
                 ? th.colors.slice(1).map((c, i) => (
-                    <span key={i} style={{ background: c, borderRadius: '50%', width: 14, height: 14, flex: 'none', boxShadow: `0 0 6px ${c}` }} />
-                  ))
+                  <span key={i} style={{ background: c, borderRadius: '50%', width: 14, height: 14, flex: 'none', boxShadow: `0 0 6px ${c}` }} />
+                ))
                 : th.colors.map((c, i) => (
-                    <span key={i} style={{ background: c }} />
-                  ))
+                  <span key={i} style={{ background: c }} />
+                ))
               }
             </div>
             <span className="theme-label">{th.name}</span>

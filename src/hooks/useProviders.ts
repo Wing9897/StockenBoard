@@ -1,7 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { ProviderSettings, ProviderInfo } from '../types';
 import { getDb } from '../lib/db';
+import { silentLog } from '../lib/errorLog';
 
 export function useProviders() {
   const [settings, setSettings] = useState<Map<string, ProviderSettings>>(new Map());
@@ -13,7 +14,7 @@ export function useProviders() {
     loadProviderInfos();
   }, []);
 
-  async function loadSettings() {
+  const loadSettings = useCallback(async () => {
     try {
       const db = await getDb();
       const rows = await db.select<ProviderSettings[]>(
@@ -22,20 +23,20 @@ export function useProviders() {
       const map = new Map<string, ProviderSettings>();
       for (const row of rows) map.set(row.provider_id, row);
       setSettings(map);
-    } catch {
-      // silent
+    } catch (e) {
+      silentLog('loadProviderSettings', e);
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  async function loadProviderInfos() {
+  const loadProviderInfos = useCallback(async () => {
     try {
       setProviderInfos(await invoke<ProviderInfo[]>('get_all_providers'));
-    } catch {
-      // silent
+    } catch (e) {
+      silentLog('loadProviderInfos', e);
     }
-  }
+  }, []);
 
   async function updateProvider(providerId: string, updates: {
     api_key?: string | null;
@@ -72,8 +73,8 @@ export function useProviders() {
         apiSecret: updates.api_secret || null,
       });
       await loadSettings();
-    } catch {
-      // silent
+    } catch (e) {
+      silentLog('updateProvider', e);
     }
   }
 

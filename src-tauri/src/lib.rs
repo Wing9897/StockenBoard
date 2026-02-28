@@ -18,12 +18,24 @@ use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
 
 /// 確保 DB schema 一致 — 版本不同就刪除重建
+///
+/// ⚠️  WARNING: 此函式在 schema 版本不符時會【刪除整個資料庫】再重建。
+/// 這在開發階段是可接受的快速迭代策略，但正式發佈前【必須】改為增量遷移
+/// (incremental migration)。`tauri_plugin_sql` 已原生支援多版本遷移，
+/// 只需在 `run()` 的 `migrations` vec 中逐步新增 Migration 即可。
+///
+/// TODO(release): 改為增量遷移，避免使用者資料遺失。
 fn ensure_clean_db(app_dir: &std::path::Path) {
     let db_path = app_dir.join("stockenboard.db");
     let marker = app_dir.join(".schema_v");
     const SCHEMA_VER: &str = "6";
     let current = std::fs::read_to_string(&marker).unwrap_or_default();
     if current.trim() != SCHEMA_VER {
+        eprintln!(
+            "[DB] Schema 版本不符 (current={:?}, expected={}), 刪除並重建資料庫",
+            current.trim(),
+            SCHEMA_VER
+        );
         let _ = std::fs::remove_file(&db_path);
         let _ = std::fs::remove_file(db_path.with_extension("db-shm"));
         let _ = std::fs::remove_file(db_path.with_extension("db-wal"));

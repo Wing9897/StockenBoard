@@ -5,6 +5,7 @@ import type { AssetData, Subscription, ProviderInfo, WsTickerUpdate } from '../t
 import { priceStore } from '../lib/priceStore';
 import * as api from '../lib/subscriptionApi';
 import { getDb } from '../lib/db';
+import { silentLog } from '../lib/errorLog';
 
 // ── React hooks for subscribing to PriceStore ──
 
@@ -45,7 +46,7 @@ export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
       const result = await api.loadSubscriptions(subType);
       setSubscriptions(result);
       return result;
-    } catch { return []; }
+    } catch (e) { silentLog('loadSubs', e); return []; }
   }, [subType]);
 
   // ── Init ──
@@ -56,7 +57,7 @@ export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
         const info = await api.loadProviderInfo();
         setProviderInfoList(info);
         providerInfoRef.current = info;
-      } catch { /* silent */ }
+      } catch (e) { silentLog('loadProviderInfo', e); }
 
       const subs = await loadSubs();
 
@@ -77,11 +78,11 @@ export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
       try {
         const cached = await invoke<AssetData[]>('get_cached_prices');
         if (cached.length > 0) priceStore.updatePrices(cached);
-      } catch { /* silent */ }
+      } catch (e) { silentLog('getCachedPrices', e); }
       try {
         const ticks = await invoke<{ provider_id: string; fetched_at: number; interval_ms: number }[]>('get_poll_ticks');
         for (const t of ticks) priceStore.updateTick(t.provider_id, t.fetched_at, t.interval_ms);
-      } catch { /* silent */ }
+      } catch (e) { silentLog('getPollTicks', e); }
 
       // WebSocket 連線（僅 asset）
       if (subType === 'asset') {
@@ -104,13 +105,13 @@ export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
               wsActiveRef.current.add(key);
             }
           }
-        } catch { /* silent */ }
+        } catch (e) { silentLog('wsConnect', e); }
       }
 
       setLoading(false);
     })();
     return () => { for (const fn of unlistenRefs.current) fn(); };
-  }, []);
+  }, [loadSubs, subType]);
 
   // ── CRUD ──
 

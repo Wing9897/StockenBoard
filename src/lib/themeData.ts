@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { STORAGE_KEYS } from './storageKeys';
 
 export type ThemeEntry = {
   id: string;
@@ -58,7 +59,7 @@ export async function loadBgForTheme(themeId: string): Promise<string | null> {
     const filePath = await invoke<string | null>('get_theme_bg_path', { themeId });
     if (filePath) {
       const dataUrl = await invoke<string>('read_local_file_base64', { path: filePath });
-      const opacity = parseFloat(localStorage.getItem(`sb_theme_bg_opacity_${themeId}`) || '0.3');
+      const opacity = parseFloat(localStorage.getItem(STORAGE_KEYS.themeBgOpacity(themeId)) || '0.3');
       applyBgImage(dataUrl, opacity);
       return dataUrl;
     }

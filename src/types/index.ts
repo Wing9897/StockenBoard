@@ -81,3 +81,11 @@ export interface PriceHistoryRecord {
   post_price: number | null;
   recorded_at: number;
 }
+
+/** 共用 Toast 操作介面 — 消除各 hook 重複定義的 ToastLike */
+export interface ToastActions {
+  success: (title: string, msg?: string) => void;
+  error: (title: string, msg?: string) => void;
+  info: (title: string, msg?: string) => void;
+  warning?: (title: string, msg?: string) => void;
+}
