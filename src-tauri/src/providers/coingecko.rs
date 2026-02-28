@@ -7,7 +7,10 @@ pub struct CoinGeckoProvider {
 
 impl CoinGeckoProvider {
     pub fn new(api_key: Option<String>) -> Self {
-        Self { client: shared_client(), api_key }
+        Self {
+            client: shared_client(),
+            api_key,
+        }
     }
 
     fn build_request(&self, url: &str) -> reqwest::RequestBuilder {
@@ -20,9 +23,16 @@ impl CoinGeckoProvider {
         req
     }
 
-    fn parse_coin(symbol: &str, coin_id: &str, coin: &serde_json::Value) -> Result<AssetData, String> {
+    fn parse_coin(
+        symbol: &str,
+        coin_id: &str,
+        coin: &serde_json::Value,
+    ) -> Result<AssetData, String> {
         if coin.is_null() {
-            return Err(format!("CoinGecko 找不到: {} (查詢ID: {})。請使用 CoinGecko ID 如: bitcoin, ethereum", symbol, coin_id));
+            return Err(format!(
+                "CoinGecko 找不到: {} (查詢ID: {})。請使用 CoinGecko ID 如: bitcoin, ethereum",
+                symbol, coin_id
+            ));
         }
         Ok(AssetDataBuilder::new(symbol, "coingecko")
             .price(coin["usd"].as_f64().unwrap_or(0.0))
@@ -46,21 +56,37 @@ impl DataProvider for CoinGeckoProvider {
             coin_id
         );
 
-        let data: serde_json::Value = self.build_request(&url)
-            .send().await.map_err(|e| format!("CoinGecko 連接失敗: {}", e))?
-            .error_for_status().map_err(|e| format!("CoinGecko API 錯誤 (可能達到速率限制，建議設定API Key): {}", e))?
-            .json().await.map_err(|e| format!("CoinGecko 解析失敗: {}", e))?;
+        let data: serde_json::Value = self
+            .build_request(&url)
+            .send()
+            .await
+            .map_err(|e| format!("CoinGecko 連接失敗: {}", e))?
+            .error_for_status()
+            .map_err(|e| {
+                format!(
+                    "CoinGecko API 錯誤 (可能達到速率限制，建議設定API Key): {}",
+                    e
+                )
+            })?
+            .json()
+            .await
+            .map_err(|e| format!("CoinGecko 解析失敗: {}", e))?;
 
         Self::parse_coin(symbol, &coin_id, &data[&coin_id])
     }
 
     /// 批量查詢 — 一次 request 查多個幣，大幅減少 API 調用次數
     async fn fetch_prices(&self, symbols: &[String]) -> Result<Vec<AssetData>, String> {
-        if symbols.is_empty() { return Ok(vec![]); }
-        if symbols.len() == 1 { return self.fetch_price(&symbols[0]).await.map(|d| vec![d]); }
+        if symbols.is_empty() {
+            return Ok(vec![]);
+        }
+        if symbols.len() == 1 {
+            return self.fetch_price(&symbols[0]).await.map(|d| vec![d]);
+        }
 
         // 建立 symbol -> coingecko_id 映射
-        let mappings: Vec<(String, String)> = symbols.iter()
+        let mappings: Vec<(String, String)> = symbols
+            .iter()
             .map(|s| (s.clone(), to_coingecko_id(s)))
             .collect();
 
@@ -72,10 +98,16 @@ impl DataProvider for CoinGeckoProvider {
             ids_str
         );
 
-        let data: serde_json::Value = self.build_request(&url)
-            .send().await.map_err(|e| format!("CoinGecko 批量連接失敗: {}", e))?
-            .error_for_status().map_err(|e| format!("CoinGecko API 錯誤 (速率限制): {}", e))?
-            .json().await.map_err(|e| format!("CoinGecko 批量解析失敗: {}", e))?;
+        let data: serde_json::Value = self
+            .build_request(&url)
+            .send()
+            .await
+            .map_err(|e| format!("CoinGecko 批量連接失敗: {}", e))?
+            .error_for_status()
+            .map_err(|e| format!("CoinGecko API 錯誤 (速率限制): {}", e))?
+            .json()
+            .await
+            .map_err(|e| format!("CoinGecko 批量解析失敗: {}", e))?;
 
         let mut results = Vec::new();
         for (symbol, coin_id) in &mappings {

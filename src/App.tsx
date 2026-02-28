@@ -20,6 +20,7 @@ import { DataManager } from './components/Settings/DataManager';
 import { ThemePicker } from './components/Settings/ThemePicker';
 import { LanguagePicker } from './components/Settings/LanguagePicker';
 import { UICustomizer } from './components/Settings/UICustomizer';
+import { ApiGuide } from './components/Settings/ApiGuide';
 import { ConfirmDialog } from './components/ConfirmDialog/ConfirmDialog';
 import { DashboardToolbar } from './components/DashboardToolbar/DashboardToolbar';
 import { ToastContainer } from './components/Toast/Toast';
@@ -194,6 +195,7 @@ function App() {
             <ThemePicker />
             <LanguagePicker />
             <UICustomizer />
+            <ApiGuide />
             <DataManager views={views} onRefresh={() => { refreshAssets(); refreshViews(); }}
               onToast={(type, title, msg) => toast[type](title, msg)} />
             <p className="settings-disclaimer">{t.settings.disclaimer}</p>

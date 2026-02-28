@@ -8,7 +8,10 @@ pub struct PolygonProvider {
 
 impl PolygonProvider {
     pub fn new(api_key: Option<String>) -> Self {
-        Self { client: shared_client(), api_key }
+        Self {
+            client: shared_client(),
+            api_key,
+        }
     }
 
     fn to_polygon_symbol(symbol: &str) -> String {
@@ -16,8 +19,8 @@ impl PolygonProvider {
             return symbol.to_string();
         }
         let s = symbol.to_uppercase();
-        let looks_crypto = s.ends_with("USDT") || s.ends_with("USD")
-            || s.contains('-') || s.contains('/');
+        let looks_crypto =
+            s.ends_with("USDT") || s.ends_with("USD") || s.contains('-') || s.contains('/');
         if looks_crypto {
             let (base, quote) = parse_crypto_symbol(symbol);
             let q = if quote == "USDT" { "USD" } else { &quote };
@@ -31,7 +34,11 @@ impl PolygonProvider {
         let price = r["c"].as_f64().unwrap_or(0.0);
         let open = r["o"].as_f64().unwrap_or(price);
         let change = price - open;
-        let pct = if open > 0.0 { (change / open) * 100.0 } else { 0.0 };
+        let pct = if open > 0.0 {
+            (change / open) * 100.0
+        } else {
+            0.0
+        };
 
         AssetDataBuilder::new(symbol, "polygon")
             .price(price)
@@ -49,13 +56,17 @@ impl PolygonProvider {
     /// 從 snapshot 回應解析，包含盤前盤後數據
     fn parse_snapshot(symbol: &str, snap: &serde_json::Value) -> AssetData {
         let day = &snap["day"];
-        let price = day["c"].as_f64()
+        let price = day["c"]
+            .as_f64()
             .or_else(|| snap["lastTrade"]["p"].as_f64())
             .unwrap_or(0.0);
         let open = day["o"].as_f64().unwrap_or(price);
         let change = snap["todaysChange"].as_f64().unwrap_or(price - open);
-        let pct = snap["todaysChangePerc"].as_f64()
-            .unwrap_or(if open > 0.0 { (change / open) * 100.0 } else { 0.0 });
+        let pct = snap["todaysChangePerc"].as_f64().unwrap_or(if open > 0.0 {
+            (change / open) * 100.0
+        } else {
+            0.0
+        });
 
         let prev_day = &snap["prevDay"];
         let prev_close = prev_day["c"].as_f64();
@@ -84,7 +95,11 @@ impl PolygonProvider {
             builder = builder.extra_f64("pre_market_price", Some(pre_price));
             if let Some(pc) = prev_close {
                 let pre_change = pre_price - pc;
-                let pre_pct = if pc > 0.0 { (pre_change / pc) * 100.0 } else { 0.0 };
+                let pre_pct = if pc > 0.0 {
+                    (pre_change / pc) * 100.0
+                } else {
+                    0.0
+                };
                 builder = builder.extra_f64("pre_market_change", Some(pre_change));
                 builder = builder.extra_f64("pre_market_change_pct", Some(pre_pct));
             }
@@ -93,7 +108,11 @@ impl PolygonProvider {
             let post_price = post_mkt["close"].as_f64().unwrap_or(0.0);
             builder = builder.extra_f64("post_market_price", Some(post_price));
             let post_change = post_price - price;
-            let post_pct = if price > 0.0 { (post_change / price) * 100.0 } else { 0.0 };
+            let post_pct = if price > 0.0 {
+                (post_change / price) * 100.0
+            } else {
+                0.0
+            };
             builder = builder.extra_f64("post_market_change", Some(post_change));
             builder = builder.extra_f64("post_market_change_pct", Some(post_pct));
         } else {
@@ -131,23 +150,39 @@ impl DataProvider for PolygonProvider {
         }
 
         // Crypto 或 snapshot 失敗: 用 aggs/prev
-        let data: serde_json::Value = self.client
-            .get(format!("https://api.polygon.io/v2/aggs/ticker/{}/prev?apiKey={}", api_symbol, api_key))
-            .send().await.map_err(|e| format!("Polygon 連接失敗: {}", e))?
-            .error_for_status().map_err(|e| format!("Polygon API 錯誤: {}", e))?
-            .json().await.map_err(|e| format!("Polygon 解析失敗: {}", e))?;
+        let data: serde_json::Value = self
+            .client
+            .get(format!(
+                "https://api.polygon.io/v2/aggs/ticker/{}/prev?apiKey={}",
+                api_symbol, api_key
+            ))
+            .send()
+            .await
+            .map_err(|e| format!("Polygon 連接失敗: {}", e))?
+            .error_for_status()
+            .map_err(|e| format!("Polygon API 錯誤: {}", e))?
+            .json()
+            .await
+            .map_err(|e| format!("Polygon 解析失敗: {}", e))?;
 
         let r = &data["results"][0];
         if r.is_null() {
-            return Err(format!("Polygon 找不到: {}。股票用 AAPL，加密用 X:BTCUSD", symbol));
+            return Err(format!(
+                "Polygon 找不到: {}。股票用 AAPL，加密用 X:BTCUSD",
+                symbol
+            ));
         }
         Ok(Self::parse_agg(symbol, r))
     }
 
     /// 批量查詢 — 用並行 request 避免逐一串行被 rate limit
     async fn fetch_prices(&self, symbols: &[String]) -> Result<Vec<AssetData>, String> {
-        if symbols.is_empty() { return Ok(vec![]); }
-        if symbols.len() == 1 { return self.fetch_price(&symbols[0]).await.map(|d| vec![d]); }
+        if symbols.is_empty() {
+            return Ok(vec![]);
+        }
+        if symbols.len() == 1 {
+            return self.fetch_price(&symbols[0]).await.map(|d| vec![d]);
+        }
 
         let api_key = self.api_key.as_ref().ok_or("Polygon.io 需要 API Key")?;
 
@@ -177,7 +212,8 @@ impl DataProvider for PolygonProvider {
                 Ok(resp) => {
                     if let Ok(data) = resp.json::<serde_json::Value>().await {
                         if let Some(arr) = data["tickers"].as_array() {
-                            let snap_map: HashMap<String, &serde_json::Value> = arr.iter()
+                            let snap_map: HashMap<String, &serde_json::Value> = arr
+                                .iter()
                                 .filter_map(|t| t["ticker"].as_str().map(|s| (s.to_uppercase(), t)))
                                 .collect();
                             for (original, ps) in &stock_syms {
@@ -201,17 +237,24 @@ impl DataProvider for PolygonProvider {
             let client = self.client.clone();
             let crypto_results: Vec<_> = stream::iter(crypto_syms)
                 .map(|(original, ps)| {
-                    let url = format!("https://api.polygon.io/v2/aggs/ticker/{}/prev?apiKey={}", ps, api_key_owned);
+                    let url = format!(
+                        "https://api.polygon.io/v2/aggs/ticker/{}/prev?apiKey={}",
+                        ps, api_key_owned
+                    );
                     let c = client.clone();
                     async move {
                         match c.get(&url).send().await {
                             Ok(resp) => match resp.json::<serde_json::Value>().await {
                                 Ok(data) => {
                                     let r = &data["results"][0];
-                                    if !r.is_null() { Some(Self::parse_agg(&original, r)) } else { None }
+                                    if !r.is_null() {
+                                        Some(Self::parse_agg(&original, r))
+                                    } else {
+                                        None
+                                    }
                                 }
                                 Err(_) => None,
-                            }
+                            },
                             Err(_) => None,
                         }
                     }

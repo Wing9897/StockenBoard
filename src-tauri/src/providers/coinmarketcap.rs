@@ -7,13 +7,19 @@ pub struct CoinMarketCapProvider {
 
 impl CoinMarketCapProvider {
     pub fn new(api_key: Option<String>) -> Self {
-        Self { client: shared_client(), api_key }
+        Self {
+            client: shared_client(),
+            api_key,
+        }
     }
 
     fn parse_coin(symbol: &str, base: &str, data: &serde_json::Value) -> Result<AssetData, String> {
         let coin = &data["data"][base];
         if coin.is_null() {
-            return Err(format!("CMC 找不到: {} (查詢: {})。格式: BTC, ETH", symbol, base));
+            return Err(format!(
+                "CMC 找不到: {} (查詢: {})。格式: BTC, ETH",
+                symbol, base
+            ));
         }
         let quote = &coin["quote"]["USD"];
         Ok(AssetDataBuilder::new(symbol, "coinmarketcap")
@@ -43,23 +49,34 @@ impl DataProvider for CoinMarketCapProvider {
             "https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol={}",
             base
         );
-        let data: serde_json::Value = self.client
+        let data: serde_json::Value = self
+            .client
             .get(&url)
             .header("X-CMC_PRO_API_KEY", api_key)
-            .send().await.map_err(|e| format!("CMC 連接失敗: {}", e))?
-            .error_for_status().map_err(|e| format!("CMC API 錯誤: {}", e))?
-            .json().await.map_err(|e| format!("CMC 解析失敗: {}", e))?;
+            .send()
+            .await
+            .map_err(|e| format!("CMC 連接失敗: {}", e))?
+            .error_for_status()
+            .map_err(|e| format!("CMC API 錯誤: {}", e))?
+            .json()
+            .await
+            .map_err(|e| format!("CMC 解析失敗: {}", e))?;
 
         Self::parse_coin(symbol, &base, &data)
     }
 
     /// 批量查詢 — symbol=BTC,ETH 一次查多個
     async fn fetch_prices(&self, symbols: &[String]) -> Result<Vec<AssetData>, String> {
-        if symbols.is_empty() { return Ok(vec![]); }
-        if symbols.len() == 1 { return self.fetch_price(&symbols[0]).await.map(|d| vec![d]); }
+        if symbols.is_empty() {
+            return Ok(vec![]);
+        }
+        if symbols.len() == 1 {
+            return self.fetch_price(&symbols[0]).await.map(|d| vec![d]);
+        }
 
         let api_key = self.api_key.as_ref().ok_or("CoinMarketCap 需要 API Key")?;
-        let mappings: Vec<(String, String)> = symbols.iter()
+        let mappings: Vec<(String, String)> = symbols
+            .iter()
             .map(|s| (s.clone(), to_base_symbol(s)))
             .collect();
         let bases: Vec<&str> = mappings.iter().map(|(_, b)| b.as_str()).collect();
@@ -69,12 +86,18 @@ impl DataProvider for CoinMarketCapProvider {
             "https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol={}",
             syms
         );
-        let data: serde_json::Value = self.client
+        let data: serde_json::Value = self
+            .client
             .get(&url)
             .header("X-CMC_PRO_API_KEY", api_key)
-            .send().await.map_err(|e| format!("CMC 批量連接失敗: {}", e))?
-            .error_for_status().map_err(|e| format!("CMC API 錯誤: {}", e))?
-            .json().await.map_err(|e| format!("CMC 批量解析失敗: {}", e))?;
+            .send()
+            .await
+            .map_err(|e| format!("CMC 批量連接失敗: {}", e))?
+            .error_for_status()
+            .map_err(|e| format!("CMC API 錯誤: {}", e))?
+            .json()
+            .await
+            .map_err(|e| format!("CMC 批量解析失敗: {}", e))?;
 
         let mut results = Vec::new();
         for (symbol, base) in &mappings {

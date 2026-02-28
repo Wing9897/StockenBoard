@@ -8,13 +8,16 @@ pub struct FMPProvider {
 
 impl FMPProvider {
     pub fn new(api_key: Option<String>) -> Self {
-        Self { client: shared_client(), api_key }
+        Self {
+            client: shared_client(),
+            api_key,
+        }
     }
 
     fn to_fmp_symbol(symbol: &str) -> String {
         let s = symbol.to_uppercase();
-        let looks_crypto = s.ends_with("USDT") || s.ends_with("USD")
-            || s.contains('-') || s.contains('/');
+        let looks_crypto =
+            s.ends_with("USDT") || s.ends_with("USD") || s.contains('-') || s.contains('/');
         if looks_crypto {
             let (base, quote) = parse_crypto_symbol(symbol);
             let q = if quote == "USDT" { "USD" } else { &quote };
@@ -63,20 +66,32 @@ impl FMPProvider {
         if let Some(pp) = pre_price {
             builder = builder.extra_f64("pre_market_price", Some(pp));
             let pre_change = pp - price;
-            let pre_pct = if price > 0.0 { (pre_change / price) * 100.0 } else { 0.0 };
+            let pre_pct = if price > 0.0 {
+                (pre_change / price) * 100.0
+            } else {
+                0.0
+            };
             builder = builder.extra_f64("pre_market_change", Some(pre_change));
-            builder = builder.extra_f64("pre_market_change_pct",
-                q["preMarketChangePercent"].as_f64().or(Some(pre_pct)));
+            builder = builder.extra_f64(
+                "pre_market_change_pct",
+                q["preMarketChangePercent"].as_f64().or(Some(pre_pct)),
+            );
         }
 
         // 盤後數據
         if let Some(pp) = post_price {
             builder = builder.extra_f64("post_market_price", Some(pp));
             let post_change = pp - price;
-            let post_pct = if price > 0.0 { (post_change / price) * 100.0 } else { 0.0 };
+            let post_pct = if price > 0.0 {
+                (post_change / price) * 100.0
+            } else {
+                0.0
+            };
             builder = builder.extra_f64("post_market_change", Some(post_change));
-            builder = builder.extra_f64("post_market_change_pct",
-                q["afterHoursChangePercent"].as_f64().or(Some(post_pct)));
+            builder = builder.extra_f64(
+                "post_market_change_pct",
+                q["afterHoursChangePercent"].as_f64().or(Some(post_pct)),
+            );
         }
 
         builder.build()
@@ -93,11 +108,20 @@ impl DataProvider for FMPProvider {
         let api_key = self.api_key.as_ref().ok_or("FMP 需要 API Key")?;
         let api_symbol = Self::to_fmp_symbol(symbol);
 
-        let data: serde_json::Value = self.client
-            .get(format!("https://financialmodelingprep.com/api/v3/quote/{}?apikey={}", api_symbol, api_key))
-            .send().await.map_err(|e| format!("FMP 連接失敗: {}", e))?
-            .error_for_status().map_err(|e| format!("FMP API 錯誤: {}", e))?
-            .json().await.map_err(|e| format!("FMP 解析失敗: {}", e))?;
+        let data: serde_json::Value = self
+            .client
+            .get(format!(
+                "https://financialmodelingprep.com/api/v3/quote/{}?apikey={}",
+                api_symbol, api_key
+            ))
+            .send()
+            .await
+            .map_err(|e| format!("FMP 連接失敗: {}", e))?
+            .error_for_status()
+            .map_err(|e| format!("FMP API 錯誤: {}", e))?
+            .json()
+            .await
+            .map_err(|e| format!("FMP 解析失敗: {}", e))?;
 
         let q = &data[0];
         if q.is_null() {
@@ -108,24 +132,39 @@ impl DataProvider for FMPProvider {
 
     /// 批量查詢 — /quote/AAPL,MSFT,BTCUSD
     async fn fetch_prices(&self, symbols: &[String]) -> Result<Vec<AssetData>, String> {
-        if symbols.is_empty() { return Ok(vec![]); }
-        if symbols.len() == 1 { return self.fetch_price(&symbols[0]).await.map(|d| vec![d]); }
+        if symbols.is_empty() {
+            return Ok(vec![]);
+        }
+        if symbols.len() == 1 {
+            return self.fetch_price(&symbols[0]).await.map(|d| vec![d]);
+        }
 
         let api_key = self.api_key.as_ref().ok_or("FMP 需要 API Key")?;
-        let mappings: Vec<(String, String)> = symbols.iter()
+        let mappings: Vec<(String, String)> = symbols
+            .iter()
             .map(|s| (s.clone(), Self::to_fmp_symbol(s)))
             .collect();
         let fmp_syms: Vec<&str> = mappings.iter().map(|(_, f)| f.as_str()).collect();
         let syms_str = fmp_syms.join(",");
 
-        let arr: Vec<serde_json::Value> = self.client
-            .get(format!("https://financialmodelingprep.com/api/v3/quote/{}?apikey={}", syms_str, api_key))
-            .send().await.map_err(|e| format!("FMP 批量連接失敗: {}", e))?
-            .error_for_status().map_err(|e| format!("FMP API 錯誤: {}", e))?
-            .json().await.map_err(|e| format!("FMP 批量解析失敗: {}", e))?;
+        let arr: Vec<serde_json::Value> = self
+            .client
+            .get(format!(
+                "https://financialmodelingprep.com/api/v3/quote/{}?apikey={}",
+                syms_str, api_key
+            ))
+            .send()
+            .await
+            .map_err(|e| format!("FMP 批量連接失敗: {}", e))?
+            .error_for_status()
+            .map_err(|e| format!("FMP API 錯誤: {}", e))?
+            .json()
+            .await
+            .map_err(|e| format!("FMP 批量解析失敗: {}", e))?;
 
         // 建立 fmp_symbol -> response 查找表
-        let response_map: HashMap<String, &serde_json::Value> = arr.iter()
+        let response_map: HashMap<String, &serde_json::Value> = arr
+            .iter()
             .filter_map(|v| v["symbol"].as_str().map(|s| (s.to_uppercase(), v)))
             .collect();
 

@@ -22,27 +22,43 @@ fn to_coinapi_base(symbol: &str) -> String {
 
 #[async_trait::async_trait]
 impl DataProvider for CoinApiProvider {
-    fn info(&self) -> ProviderInfo { get_provider_info("coinapi").unwrap() }
+    fn info(&self) -> ProviderInfo {
+        get_provider_info("coinapi").unwrap()
+    }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {
-        if self.api_key.is_empty() { return Err("CoinAPI: 需要 API Key".into()); }
+        if self.api_key.is_empty() {
+            return Err("CoinAPI: 需要 API Key".into());
+        }
         let base = to_coinapi_base(symbol);
         let url = format!("https://rest.coinapi.io/v1/exchangerate/{}/USD", base);
-        let data: serde_json::Value = self.client.get(&url)
+        let data: serde_json::Value = self
+            .client
+            .get(&url)
             .header("X-CoinAPI-Key", &self.api_key)
-            .send().await.map_err(|e| format!("CoinAPI 連接失敗: {}", e))?
-            .error_for_status().map_err(|e| format!("CoinAPI API 錯誤: {}", e))?
-            .json().await.map_err(|e| format!("CoinAPI 解析失敗: {}", e))?;
+            .send()
+            .await
+            .map_err(|e| format!("CoinAPI 連接失敗: {}", e))?
+            .error_for_status()
+            .map_err(|e| format!("CoinAPI API 錯誤: {}", e))?
+            .json()
+            .await
+            .map_err(|e| format!("CoinAPI 解析失敗: {}", e))?;
 
         let price = data["rate"].as_f64().unwrap_or(0.0);
         Ok(AssetDataBuilder::new(symbol, "coinapi")
-            .price(price).currency("USD")
+            .price(price)
+            .currency("USD")
             .build())
     }
 
     async fn fetch_prices(&self, symbols: &[String]) -> Result<Vec<AssetData>, String> {
-        if symbols.is_empty() { return Ok(vec![]); }
-        if self.api_key.is_empty() { return Err("CoinAPI: 需要 API Key".into()); }
+        if symbols.is_empty() {
+            return Ok(vec![]);
+        }
+        if self.api_key.is_empty() {
+            return Err("CoinAPI: 需要 API Key".into());
+        }
 
         // CoinAPI supports batch via /v1/exchangerate/{base} but one at a time
         // Use concurrent requests with limit
@@ -59,10 +75,12 @@ impl DataProvider for CoinApiProvider {
                             Ok(data) => {
                                 let price = data["rate"].as_f64().unwrap_or(0.0);
                                 Ok(AssetDataBuilder::new(&sym, "coinapi")
-                                    .price(price).currency("USD").build())
+                                    .price(price)
+                                    .currency("USD")
+                                    .build())
                             }
                             Err(e) => Err(format!("CoinAPI 解析失敗: {}", e)),
-                        }
+                        },
                         Err(e) => Err(format!("CoinAPI 連接失敗: {}", e)),
                     }
                 }

@@ -1,17 +1,17 @@
+mod api_server;
 mod commands;
 mod db;
 mod polling;
 mod providers;
 
 use commands::{
-    enable_provider, export_file, fetch_asset_price, fetch_multiple_prices,
-    get_all_providers, get_cached_prices, get_icons_dir, get_poll_ticks,
-    get_theme_bg_path, get_unattended_polling, import_file, lookup_dex_pool,
-    read_local_file_base64, reload_polling, remove_icon, remove_theme_bg,
-    save_theme_bg, set_icon, set_unattended_polling, set_visible_subscriptions,
-    start_ws_stream, stop_ws_stream, toggle_record, set_record_hours,
-    set_provider_record_hours, get_price_history,
-    get_history_stats, cleanup_history, purge_all_history, get_data_dir, AppState,
+    cleanup_history, enable_provider, export_file, fetch_asset_price, fetch_multiple_prices,
+    get_all_providers, get_api_port, get_cached_prices, get_data_dir, get_history_stats,
+    get_icons_dir, get_poll_ticks, get_price_history, get_theme_bg_path, get_unattended_polling,
+    import_file, lookup_dex_pool, purge_all_history, read_local_file_base64, reload_polling,
+    remove_icon, remove_theme_bg, save_theme_bg, set_api_port, set_icon, set_provider_record_hours,
+    set_record_hours, set_unattended_polling, set_visible_subscriptions, start_ws_stream,
+    stop_ws_stream, toggle_record, AppState,
 };
 use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
@@ -20,7 +20,7 @@ use tauri_plugin_sql::{Migration, MigrationKind};
 fn ensure_clean_db(app_dir: &std::path::Path) {
     let db_path = app_dir.join("stockenboard.db");
     let marker = app_dir.join(".schema_v");
-    const SCHEMA_VER: &str = "5";
+    const SCHEMA_VER: &str = "6";
     let current = std::fs::read_to_string(&marker).unwrap_or_default();
     if current.trim() != SCHEMA_VER {
         let _ = std::fs::remove_file(&db_path);
@@ -34,7 +34,7 @@ fn ensure_clean_db(app_dir: &std::path::Path) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let migrations = vec![Migration {
-        version: 5,
+        version: 6,
         description: "initial_schema",
         sql: db::SCHEMA,
         kind: MigrationKind::Up,
@@ -80,6 +80,8 @@ pub fn run() {
             cleanup_history,
             purge_all_history,
             get_data_dir,
+            get_api_port,
+            set_api_port,
         ])
         .setup(|app| {
             if let Ok(app_dir) = app.path().app_data_dir() {
@@ -87,7 +89,32 @@ pub fn run() {
                 let db_path = app_dir.join("stockenboard.db");
                 let state = app.state::<AppState>();
                 state.set_db_path(db_path.clone());
-                state.polling.start(app.handle().clone(), db_path);
+                state.polling.start(app.handle().clone(), db_path.clone());
+
+                // 啟動 API Server（從 DB 讀取 port）
+                let app_handle = app.handle().clone();
+                let db_path_for_api = db_path.clone();
+                tauri::async_runtime::spawn(async move {
+                    // 從 DB 讀取 API port
+                    let port = match rusqlite::Connection::open(&db_path_for_api) {
+                        Ok(conn) => conn
+                            .query_row(
+                                "SELECT value FROM app_settings WHERE key = 'api_port'",
+                                [],
+                                |row| row.get::<_, String>(0),
+                            )
+                            .ok()
+                            .and_then(|s| s.parse::<u16>().ok())
+                            .unwrap_or(8080),
+                        Err(_) => 8080,
+                    };
+
+                    let state: tauri::State<AppState> = app_handle.state();
+                    let state_arc = std::sync::Arc::new(state.clone_for_api());
+                    if let Err(e) = api_server::start_api_server(state_arc, port).await {
+                        eprintln!("[API] Server 啟動失敗: {}", e);
+                    }
+                });
             }
             Ok(())
         })

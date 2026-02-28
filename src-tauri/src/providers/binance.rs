@@ -7,7 +7,9 @@ pub struct BinanceProvider {
 
 impl BinanceProvider {
     pub fn new(_api_key: Option<String>) -> Self {
-        Self { client: shared_client() }
+        Self {
+            client: shared_client(),
+        }
     }
 
     fn parse_ticker(symbol: &str, data: &serde_json::Value) -> AssetData {
@@ -37,37 +39,61 @@ impl DataProvider for BinanceProvider {
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {
         let sym = to_binance_symbol(symbol);
         let url = format!("https://api.binance.com/api/v3/ticker/24hr?symbol={}", sym);
-        let data: serde_json::Value = self.client.get(&url)
-            .send().await.map_err(|e| format!("Binance 連接失敗: {}", e))?
-            .error_for_status().map_err(|e| format!("Binance API 錯誤: {}。格式: BTCUSDT", e))?
-            .json().await.map_err(|e| format!("Binance 解析失敗: {}", e))?;
+        let data: serde_json::Value = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| format!("Binance 連接失敗: {}", e))?
+            .error_for_status()
+            .map_err(|e| format!("Binance API 錯誤: {}。格式: BTCUSDT", e))?
+            .json()
+            .await
+            .map_err(|e| format!("Binance 解析失敗: {}", e))?;
 
         Ok(Self::parse_ticker(symbol, &data))
     }
 
     /// 批量查詢 — symbols=["BTCUSDT","ETHUSDT"] 一次查多個
     async fn fetch_prices(&self, symbols: &[String]) -> Result<Vec<AssetData>, String> {
-        if symbols.is_empty() { return Ok(vec![]); }
-        if symbols.len() == 1 { return self.fetch_price(&symbols[0]).await.map(|d| vec![d]); }
+        if symbols.is_empty() {
+            return Ok(vec![]);
+        }
+        if symbols.len() == 1 {
+            return self.fetch_price(&symbols[0]).await.map(|d| vec![d]);
+        }
 
         // 建立 binance_symbol -> original_symbol 映射
-        let mappings: Vec<(String, String)> = symbols.iter()
+        let mappings: Vec<(String, String)> = symbols
+            .iter()
             .map(|s| (s.clone(), to_binance_symbol(s)))
             .collect();
 
-        let binance_syms: Vec<String> = mappings.iter()
+        let binance_syms: Vec<String> = mappings
+            .iter()
             .map(|(_, bs)| format!("\"{}\"", bs))
             .collect();
         let syms_param = format!("[{}]", binance_syms.join(","));
 
-        let url = format!("https://api.binance.com/api/v3/ticker/24hr?symbols={}", syms_param);
-        let arr: Vec<serde_json::Value> = self.client.get(&url)
-            .send().await.map_err(|e| format!("Binance 批量連接失敗: {}", e))?
-            .error_for_status().map_err(|e| format!("Binance 批量 API 錯誤: {}", e))?
-            .json().await.map_err(|e| format!("Binance 批量解析失敗: {}", e))?;
+        let url = format!(
+            "https://api.binance.com/api/v3/ticker/24hr?symbols={}",
+            syms_param
+        );
+        let arr: Vec<serde_json::Value> = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| format!("Binance 批量連接失敗: {}", e))?
+            .error_for_status()
+            .map_err(|e| format!("Binance 批量 API 錯誤: {}", e))?
+            .json()
+            .await
+            .map_err(|e| format!("Binance 批量解析失敗: {}", e))?;
 
         // 建立 binance_symbol -> response data 的查找表
-        let response_map: HashMap<String, &serde_json::Value> = arr.iter()
+        let response_map: HashMap<String, &serde_json::Value> = arr
+            .iter()
             .filter_map(|v| v["symbol"].as_str().map(|s| (s.to_string(), v)))
             .collect();
 

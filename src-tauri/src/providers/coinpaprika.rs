@@ -6,7 +6,9 @@ pub struct CoinPaprikaProvider {
 
 impl CoinPaprikaProvider {
     pub fn new() -> Self {
-        Self { client: shared_client() }
+        Self {
+            client: shared_client(),
+        }
     }
 }
 
@@ -40,7 +42,8 @@ fn to_coinpaprika_id(symbol: &str) -> String {
         "AAVE" => "aave-new",
         "MKR" => "mkr-maker",
         _ => return format!("{}-{}", base.to_lowercase(), base.to_lowercase()),
-    }.to_string()
+    }
+    .to_string()
 }
 
 fn parse_paprika_ticker(symbol: &str, data: &serde_json::Value) -> AssetData {
@@ -66,32 +69,53 @@ fn parse_paprika_ticker(symbol: &str, data: &serde_json::Value) -> AssetData {
 
 #[async_trait::async_trait]
 impl DataProvider for CoinPaprikaProvider {
-    fn info(&self) -> ProviderInfo { get_provider_info("coinpaprika").unwrap() }
+    fn info(&self) -> ProviderInfo {
+        get_provider_info("coinpaprika").unwrap()
+    }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {
         let id = to_coinpaprika_id(symbol);
         let url = format!("https://api.coinpaprika.com/v1/tickers/{}", id);
-        let data: serde_json::Value = self.client.get(&url)
-            .send().await.map_err(|e| format!("CoinPaprika 連接失敗: {}", e))?
-            .error_for_status().map_err(|e| format!("CoinPaprika API 錯誤: {}", e))?
-            .json().await.map_err(|e| format!("CoinPaprika 解析失敗: {}", e))?;
+        let data: serde_json::Value = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| format!("CoinPaprika 連接失敗: {}", e))?
+            .error_for_status()
+            .map_err(|e| format!("CoinPaprika API 錯誤: {}", e))?
+            .json()
+            .await
+            .map_err(|e| format!("CoinPaprika 解析失敗: {}", e))?;
 
         Ok(parse_paprika_ticker(symbol, &data))
     }
 
     async fn fetch_prices(&self, symbols: &[String]) -> Result<Vec<AssetData>, String> {
-        if symbols.is_empty() { return Ok(vec![]); }
-        if symbols.len() == 1 { return self.fetch_price(&symbols[0]).await.map(|d| vec![d]); }
+        if symbols.is_empty() {
+            return Ok(vec![]);
+        }
+        if symbols.len() == 1 {
+            return self.fetch_price(&symbols[0]).await.map(|d| vec![d]);
+        }
 
         // CoinPaprika /tickers returns all coins
         let url = "https://api.coinpaprika.com/v1/tickers";
-        let arr: Vec<serde_json::Value> = self.client.get(url)
-            .send().await.map_err(|e| format!("CoinPaprika 批量連接失敗: {}", e))?
-            .json().await.map_err(|e| format!("CoinPaprika 批量解析失敗: {}", e))?;
+        let arr: Vec<serde_json::Value> = self
+            .client
+            .get(url)
+            .send()
+            .await
+            .map_err(|e| format!("CoinPaprika 批量連接失敗: {}", e))?
+            .json()
+            .await
+            .map_err(|e| format!("CoinPaprika 批量解析失敗: {}", e))?;
 
         let mut map = std::collections::HashMap::new();
         for item in &arr {
-            if let Some(id) = item["id"].as_str() { map.insert(id.to_string(), item); }
+            if let Some(id) = item["id"].as_str() {
+                map.insert(id.to_string(), item);
+            }
         }
 
         let mut out = Vec::new();

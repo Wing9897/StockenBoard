@@ -1,5 +1,5 @@
-use crate::providers::{create_provider_with_url, AssetData, DataProvider};
 use crate::providers::traits::PROVIDER_INFO_MAP;
+use crate::providers::{create_provider_with_url, AssetData, DataProvider};
 use chrono::Timelike;
 use rusqlite::Connection;
 use serde::Serialize;
@@ -23,6 +23,19 @@ pub struct PollingManager {
     unattended: Arc<RwLock<bool>>,
     reload_tx: watch::Sender<u64>,
     stop_tx: watch::Sender<bool>,
+}
+
+impl Clone for PollingManager {
+    fn clone(&self) -> Self {
+        Self {
+            cache: self.cache.clone(),
+            ticks: self.ticks.clone(),
+            visible_ids: self.visible_ids.clone(),
+            unattended: self.unattended.clone(),
+            reload_tx: self.reload_tx.clone(),
+            stop_tx: self.stop_tx.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -86,7 +99,9 @@ impl PollingManager {
 
     pub async fn set_unattended(&self, enabled: bool) {
         let mut flag = self.unattended.write().await;
-        if *flag == enabled { return; }
+        if *flag == enabled {
+            return;
+        }
         *flag = enabled;
         drop(flag);
         self.reload_tx.send_modify(|v| *v = v.wrapping_add(1));
@@ -129,8 +144,16 @@ impl PollingManager {
                     }
                 }
                 let config = tokio::task::spawn_blocking(move || {
-                    load_config(&db_path_clone, if has_windows { Some(&vis_snapshot) } else { None })
-                }).await;
+                    load_config(
+                        &db_path_clone,
+                        if has_windows {
+                            Some(&vis_snapshot)
+                        } else {
+                            None
+                        },
+                    )
+                })
+                .await;
                 let (groups, providers) = match config {
                     Ok(Ok(v)) => v,
                     Ok(Err(e)) => {
@@ -148,7 +171,9 @@ impl PollingManager {
                 {
                     let valid: HashSet<String> = groups
                         .iter()
-                        .flat_map(|(pid, g)| g.symbols.iter().map(move |s| format!("{}:{}", pid, s)))
+                        .flat_map(|(pid, g)| {
+                            g.symbols.iter().map(move |s| format!("{}:{}", pid, s))
+                        })
                         .collect();
                     cache.write().await.retain(|k, _| valid.contains(k));
                     let active_pids: HashSet<&String> = groups.keys().collect();
@@ -177,7 +202,8 @@ impl PollingManager {
                     let ticks = ticks.clone();
                     let app = app_handle.clone();
                     let mut gen_stop = gen_stop_tx.subscribe();
-                    let record_enabled_ids: HashSet<String> = group.record_symbols.iter().cloned().collect();
+                    let record_enabled_ids: HashSet<String> =
+                        group.record_symbols.iter().cloned().collect();
                     let db_for_history = db_path.clone();
 
                     handles.push(tokio::spawn(async move {
@@ -235,19 +261,27 @@ impl PollingManager {
                     },
                 }
                 drop(gen_stop_tx);
-                for h in handles { h.abort(); }
+                for h in handles {
+                    h.abort();
+                }
             }
         });
     }
 }
 
-
 /// 從統一 subscriptions 表讀取配置，組合成 polling groups
 /// 對 DEX 類型 (sub_type='dex')，用 pool_address:token_from:token_to 組合 symbol
+#[allow(clippy::type_complexity)]
 fn load_config(
     db_path: &PathBuf,
     visible_ids: Option<&HashSet<i64>>,
-) -> Result<(HashMap<String, PollingGroup>, HashMap<String, Arc<dyn DataProvider>>), String> {
+) -> Result<
+    (
+        HashMap<String, PollingGroup>,
+        HashMap<String, Arc<dyn DataProvider>>,
+    ),
+    String,
+> {
     let conn = Connection::open_with_flags(db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
         .map_err(|e| format!("開啟 DB 失敗: {}", e))?;
 
@@ -255,28 +289,34 @@ fn load_config(
         let mut stmt = conn
             .prepare("SELECT id, sub_type, symbol, selected_provider_id, pool_address, token_from_address, token_to_address, record_enabled FROM subscriptions")
             .map_err(|e| format!("查詢 subscriptions 失敗: {}", e))?;
-        let rows = stmt.query_map([], |row| {
-            let id: i64 = row.get(0)?;
-            let sub_type: String = row.get(1)?;
-            let symbol: String = row.get(2)?;
-            let provider_id: String = row.get(3)?;
-            let pool_address: Option<String> = row.get(4)?;
-            let token_from: Option<String> = row.get(5)?;
-            let token_to: Option<String> = row.get(6)?;
-            let record_enabled: i64 = row.get(7)?;
+        let rows = stmt
+            .query_map([], |row| {
+                let id: i64 = row.get(0)?;
+                let sub_type: String = row.get(1)?;
+                let symbol: String = row.get(2)?;
+                let provider_id: String = row.get(3)?;
+                let pool_address: Option<String> = row.get(4)?;
+                let token_from: Option<String> = row.get(5)?;
+                let token_to: Option<String> = row.get(6)?;
+                let record_enabled: i64 = row.get(7)?;
 
-            let final_symbol = if sub_type == "dex" {
-                let pool = pool_address.unwrap_or_default();
-                let tf = token_from.unwrap_or_default();
-                let tt = token_to.unwrap_or_default();
-                format!("{}:{}:{}", pool, tf, tt)
-            } else {
-                symbol
-            };
+                let final_symbol = if sub_type == "dex" {
+                    let pool = pool_address.unwrap_or_default();
+                    let tf = token_from.unwrap_or_default();
+                    let tt = token_to.unwrap_or_default();
+                    format!("{}:{}:{}", pool, tf, tt)
+                } else {
+                    symbol
+                };
 
-            Ok(SubRecord { id, symbol: final_symbol, provider_id, record_enabled: record_enabled != 0 })
-        })
-        .map_err(|e| format!("讀取 subscriptions 失敗: {}", e))?;
+                Ok(SubRecord {
+                    id,
+                    symbol: final_symbol,
+                    provider_id,
+                    record_enabled: record_enabled != 0,
+                })
+            })
+            .map_err(|e| format!("讀取 subscriptions 失敗: {}", e))?;
         let all: Vec<SubRecord> = rows.filter_map(|r| r.ok()).collect();
         match visible_ids {
             Some(ids) => all.into_iter().filter(|s| ids.contains(&s.id)).collect(),
@@ -288,18 +328,19 @@ fn load_config(
         let mut stmt = conn
             .prepare("SELECT provider_id, api_key, api_secret, refresh_interval, api_url FROM provider_settings")
             .map_err(|e| format!("查詢 provider_settings 失敗: {}", e))?;
-        let rows = stmt.query_map([], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                ProviderConfig {
-                    api_key: row.get(1)?,
-                    api_secret: row.get(2)?,
-                    refresh_interval: row.get(3)?,
-                    api_url: row.get(4).ok().flatten(),
-                },
-            ))
-        })
-        .map_err(|e| format!("讀取 provider_settings 失敗: {}", e))?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    ProviderConfig {
+                        api_key: row.get(1)?,
+                        api_secret: row.get(2)?,
+                        refresh_interval: row.get(3)?,
+                        api_url: row.get(4).ok().flatten(),
+                    },
+                ))
+            })
+            .map_err(|e| format!("讀取 provider_settings 失敗: {}", e))?;
         rows.filter_map(|r| r.ok()).collect()
     };
 
@@ -319,7 +360,13 @@ fn load_config(
             .unwrap_or(false);
         let default_interval = info_map
             .get(pid)
-            .map(|i| if has_key { i.key_interval } else { i.free_interval })
+            .map(|i| {
+                if has_key {
+                    i.key_interval
+                } else {
+                    i.free_interval
+                }
+            })
             .unwrap_or(30000);
         let interval_ms = config
             .and_then(|c| c.refresh_interval)
@@ -349,7 +396,6 @@ fn load_config(
 
     Ok((groups, provider_instances))
 }
-
 
 /// 寫入 price_history，5 秒去重
 fn write_price_history(
@@ -381,8 +427,8 @@ fn write_price_history(
             None => continue,
         };
         // 紀錄時段檢查：訂閱設定優先 > provider 設定 > 全天
-        let (from_h, to_h) = if sub_from.is_some() && sub_to.is_some() {
-            (sub_from.unwrap() as u32, sub_to.unwrap() as u32)
+        let (from_h, to_h) = if let (Some(from), Some(to)) = (sub_from, sub_to) {
+            (from as u32, to as u32)
         } else {
             // 查 provider 層級時段
             let prov_hours: Option<(Option<i64>, Option<i64>)> = conn
@@ -401,7 +447,9 @@ fn write_price_history(
             } else {
                 local_hour >= from_h || local_hour < to_h
             };
-            if !in_window { continue; }
+            if !in_window {
+                continue;
+            }
         }
         // 5 秒去重
         let recent: bool = conn
@@ -413,10 +461,14 @@ fn write_price_history(
             continue;
         }
         // 從 extra 提取盤前/盤後價格
-        let pre_price = d.extra.as_ref()
+        let pre_price = d
+            .extra
+            .as_ref()
             .and_then(|e| e.get("pre_market_price"))
             .and_then(|v| v.as_f64());
-        let post_price = d.extra.as_ref()
+        let post_price = d
+            .extra
+            .as_ref()
             .and_then(|e| e.get("post_market_price"))
             .and_then(|v| v.as_f64());
         let _ = conn.execute(

@@ -1,5 +1,8 @@
-use crate::providers::traits::{shared_client, AssetData, AssetDataBuilder, DataProvider, DexPoolInfo, DexPoolLookup, ProviderInfo};
 use crate::providers::traits::PROVIDER_INFO_MAP;
+use crate::providers::traits::{
+    shared_client, AssetData, AssetDataBuilder, DataProvider, DexPoolInfo, DexPoolLookup,
+    ProviderInfo,
+};
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -11,7 +14,11 @@ pub struct SubgraphProvider {
 
 impl SubgraphProvider {
     pub fn new(api_key: Option<String>, api_url: Option<String>) -> Self {
-        Self { client: shared_client(), api_key, api_url }
+        Self {
+            client: shared_client(),
+            api_key,
+            api_url,
+        }
     }
 
     /// Parse symbol: "protocol:pool_address:token_from:token_to"
@@ -32,8 +39,9 @@ impl SubgraphProvider {
             return Ok(url.clone());
         }
 
-        let api_key = self.api_key.as_deref()
-            .ok_or_else(|| "Subgraph requires an API key from The Graph (thegraph.com)".to_string())?;
+        let api_key = self.api_key.as_deref().ok_or_else(|| {
+            "Subgraph requires an API key from The Graph (thegraph.com)".to_string()
+        })?;
 
         let subgraph_id = match protocol {
             "uniswap_v3" => "5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV",
@@ -103,7 +111,9 @@ impl DataProvider for SubgraphProvider {
         let query = Self::build_query(pool_addr);
 
         let body = serde_json::json!({ "query": query });
-        let resp = self.client.post(&url)
+        let resp = self
+            .client
+            .post(&url)
             .json(&body)
             .send()
             .await
@@ -113,39 +123,73 @@ impl DataProvider for SubgraphProvider {
             return Err(format!("Subgraph API error: HTTP {}", resp.status()));
         }
 
-        let graph_resp: GraphResponse = resp.json().await
+        let graph_resp: GraphResponse = resp
+            .json()
+            .await
             .map_err(|e| format!("Subgraph JSON parse failed: {}", e))?;
 
         if let Some(errors) = &graph_resp.errors {
-            let msg = errors.first()
+            let msg = errors
+                .first()
                 .and_then(|e| e.message.as_deref())
                 .unwrap_or("Unknown error");
             return Err(format!("Subgraph query error: {}", msg));
         }
 
-        let pool = graph_resp.data
+        let pool = graph_resp
+            .data
             .and_then(|d| d.pool)
             .ok_or_else(|| format!("Subgraph: pool {} not found", pool_addr))?;
 
-        let token0_id = pool.token0.as_ref().and_then(|t| t.id.as_deref()).unwrap_or("");
-        let token1_id = pool.token1.as_ref().and_then(|t| t.id.as_deref()).unwrap_or("");
+        let token0_id = pool
+            .token0
+            .as_ref()
+            .and_then(|t| t.id.as_deref())
+            .unwrap_or("");
+        let token1_id = pool
+            .token1
+            .as_ref()
+            .and_then(|t| t.id.as_deref())
+            .unwrap_or("");
 
         // Determine price direction
         // token0Price = how many token0 per 1 token1
         // token1Price = how many token1 per 1 token0
         let price: f64 = if token_from.eq_ignore_ascii_case(token0_id) {
             // token_from is token0, we want: 1 token0 → X token1 = token1Price
-            pool.token1_price.as_deref().unwrap_or("0").parse().unwrap_or(0.0)
+            pool.token1_price
+                .as_deref()
+                .unwrap_or("0")
+                .parse()
+                .unwrap_or(0.0)
         } else if token_from.eq_ignore_ascii_case(token1_id) {
             // token_from is token1, we want: 1 token1 → X token0 = token0Price
-            pool.token0_price.as_deref().unwrap_or("0").parse().unwrap_or(0.0)
+            pool.token0_price
+                .as_deref()
+                .unwrap_or("0")
+                .parse()
+                .unwrap_or(0.0)
         } else {
             // Fallback
-            pool.token1_price.as_deref().unwrap_or("0").parse().unwrap_or(0.0)
+            pool.token1_price
+                .as_deref()
+                .unwrap_or("0")
+                .parse()
+                .unwrap_or(0.0)
         };
 
-        let tvl: f64 = pool.total_value_locked_usd.as_deref().unwrap_or("0").parse().unwrap_or(0.0);
-        let volume: f64 = pool.volume_usd.as_deref().unwrap_or("0").parse().unwrap_or(0.0);
+        let tvl: f64 = pool
+            .total_value_locked_usd
+            .as_deref()
+            .unwrap_or("0")
+            .parse()
+            .unwrap_or(0.0);
+        let volume: f64 = pool
+            .volume_usd
+            .as_deref()
+            .unwrap_or("0")
+            .parse()
+            .unwrap_or(0.0);
 
         let protocol_name = match protocol {
             "uniswap_v3" => "Uniswap V3",
@@ -171,11 +215,14 @@ impl DataProvider for SubgraphProvider {
         let mut by_protocol: HashMap<String, Vec<String>> = HashMap::new();
         for sym in symbols {
             let (protocol, _, _, _) = Self::parse_symbol(sym)?;
-            by_protocol.entry(protocol.to_string()).or_default().push(sym.clone());
+            by_protocol
+                .entry(protocol.to_string())
+                .or_default()
+                .push(sym.clone());
         }
 
         let mut results = Vec::new();
-        for (_protocol, syms) in &by_protocol {
+        for syms in by_protocol.values() {
             // Subgraph doesn't support multi-pool queries easily, fetch individually
             for sym in syms {
                 match self.fetch_price(sym).await {
@@ -192,29 +239,61 @@ impl DataProvider for SubgraphProvider {
 impl DexPoolLookup for SubgraphProvider {
     async fn lookup_pool(&self, pool_address: &str) -> Result<DexPoolInfo, String> {
         // pool_address = "protocol:0x..." — extract protocol prefix
-        let (protocol, addr) = pool_address.split_once(':')
-            .ok_or_else(|| format!("Subgraph lookup requires 'protocol:address' format, got '{}'", pool_address))?;
+        let (protocol, addr) = pool_address.split_once(':').ok_or_else(|| {
+            format!(
+                "Subgraph lookup requires 'protocol:address' format, got '{}'",
+                pool_address
+            )
+        })?;
         let url = self.get_subgraph_url(protocol)?;
         let query = Self::build_query(addr);
         let body = serde_json::json!({ "query": query });
-        let resp = self.client.post(&url).json(&body).send().await
+        let resp = self
+            .client
+            .post(&url)
+            .json(&body)
+            .send()
+            .await
             .map_err(|e| format!("Subgraph request failed: {}", e))?;
         if !resp.status().is_success() {
             return Err(format!("Subgraph API error: HTTP {}", resp.status()));
         }
-        let graph_resp: GraphResponse = resp.json().await
+        let graph_resp: GraphResponse = resp
+            .json()
+            .await
             .map_err(|e| format!("Subgraph JSON parse failed: {}", e))?;
         if let Some(errors) = &graph_resp.errors {
-            let msg = errors.first().and_then(|e| e.message.as_deref()).unwrap_or("Unknown error");
+            let msg = errors
+                .first()
+                .and_then(|e| e.message.as_deref())
+                .unwrap_or("Unknown error");
             return Err(format!("Subgraph query error: {}", msg));
         }
-        let pool = graph_resp.data.and_then(|d| d.pool)
+        let pool = graph_resp
+            .data
+            .and_then(|d| d.pool)
             .ok_or_else(|| format!("Subgraph: pool {} not found", addr))?;
         Ok(DexPoolInfo {
-            token0_address: pool.token0.as_ref().and_then(|t| t.id.clone()).unwrap_or_default(),
-            token0_symbol: pool.token0.as_ref().and_then(|t| t.symbol.clone()).unwrap_or_else(|| "?".into()),
-            token1_address: pool.token1.as_ref().and_then(|t| t.id.clone()).unwrap_or_default(),
-            token1_symbol: pool.token1.as_ref().and_then(|t| t.symbol.clone()).unwrap_or_else(|| "?".into()),
+            token0_address: pool
+                .token0
+                .as_ref()
+                .and_then(|t| t.id.clone())
+                .unwrap_or_default(),
+            token0_symbol: pool
+                .token0
+                .as_ref()
+                .and_then(|t| t.symbol.clone())
+                .unwrap_or_else(|| "?".into()),
+            token1_address: pool
+                .token1
+                .as_ref()
+                .and_then(|t| t.id.clone())
+                .unwrap_or_default(),
+            token1_symbol: pool
+                .token1
+                .as_ref()
+                .and_then(|t| t.symbol.clone())
+                .unwrap_or_else(|| "?".into()),
         })
     }
 }

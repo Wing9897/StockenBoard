@@ -1,7 +1,7 @@
 use crate::polling::{PollTick, PollingManager};
 use crate::providers::{
-    create_dex_lookup, create_provider_with_url, create_ws_provider,
-    get_all_provider_info, AssetData, DataProvider, DexPoolInfo, ProviderInfo, WsTickerUpdate,
+    create_dex_lookup, create_provider_with_url, create_ws_provider, get_all_provider_info,
+    AssetData, DataProvider, DexPoolInfo, ProviderInfo, WsTickerUpdate,
 };
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -13,9 +13,10 @@ pub struct AppState {
     /// On-demand provider instances（用於前端驗證 symbol 等即時查詢）
     providers: RwLock<HashMap<String, Arc<dyn DataProvider>>>,
     ws_sender: broadcast::Sender<WsTickerUpdate>,
+    #[allow(clippy::type_complexity)]
     ws_tasks: RwLock<HashMap<String, (tokio::task::JoinHandle<()>, tokio::task::JoinHandle<()>)>>,
     pub polling: PollingManager,
-    db_path: std::sync::RwLock<Option<std::path::PathBuf>>,
+    pub db_path: std::sync::RwLock<Option<std::path::PathBuf>>,
 }
 
 impl AppState {
@@ -34,13 +35,32 @@ impl AppState {
         *self.db_path.write().unwrap() = Some(path);
     }
 
+    /// 創建一個用於 API server 的輕量級 clone（共享 polling 和 db_path）
+    pub fn clone_for_api(&self) -> Self {
+        Self {
+            providers: RwLock::new(HashMap::new()),
+            ws_sender: broadcast::channel(1).0,
+            ws_tasks: RwLock::new(HashMap::new()),
+            polling: self.polling.clone(),
+            db_path: std::sync::RwLock::new(self.db_path.read().unwrap().clone()),
+        }
+    }
+
     /// 從 DB 讀取 provider 的 api_key / api_secret / api_url
-    fn read_provider_settings(db_path: &std::path::Path, provider_id: &str) -> (Option<String>, Option<String>, Option<String>) {
-        let conn = match rusqlite::Connection::open_with_flags(db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY) {
+    fn read_provider_settings(
+        db_path: &std::path::Path,
+        provider_id: &str,
+    ) -> (Option<String>, Option<String>, Option<String>) {
+        let conn = match rusqlite::Connection::open_with_flags(
+            db_path,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+        ) {
             Ok(c) => c,
             Err(_) => return (None, None, None),
         };
-        let mut stmt = match conn.prepare("SELECT api_key, api_secret, api_url FROM provider_settings WHERE provider_id = ?1") {
+        let mut stmt = match conn.prepare(
+            "SELECT api_key, api_secret, api_url FROM provider_settings WHERE provider_id = ?1",
+        ) {
             Ok(s) => s,
             Err(_) => return (None, None, None),
         };
@@ -84,7 +104,10 @@ impl AppState {
             (api_key, api_secret, None)
         };
         let provider = crate::providers::create_provider_with_url(id, key, secret, url)?;
-        self.providers.write().await.insert(id.to_string(), provider.clone());
+        self.providers
+            .write()
+            .await
+            .insert(id.to_string(), provider.clone());
         Some(provider)
     }
 }
@@ -159,9 +182,7 @@ pub async fn set_unattended_polling(
 }
 
 #[tauri::command]
-pub async fn get_unattended_polling(
-    state: tauri::State<'_, AppState>,
-) -> Result<bool, String> {
+pub async fn get_unattended_polling(state: tauri::State<'_, AppState>) -> Result<bool, String> {
     Ok(state.polling.is_unattended().await)
 }
 
@@ -187,7 +208,9 @@ pub async fn lookup_dex_pool(
     provider_id: String,
     pool_address: String,
 ) -> Result<DexPoolInfo, String> {
-    let db_path = app.path().app_data_dir()
+    let db_path = app
+        .path()
+        .app_data_dir()
         .map_err(|e| format!("無法取得 app 目錄: {}", e))?
         .join("stockenboard.db");
     let (api_key, _, api_url) = AppState::read_provider_settings(&db_path, &provider_id);
@@ -204,9 +227,7 @@ pub async fn get_cached_prices(
 }
 
 #[tauri::command]
-pub async fn get_poll_ticks(
-    state: tauri::State<'_, AppState>,
-) -> Result<Vec<PollTick>, String> {
+pub async fn get_poll_ticks(state: tauri::State<'_, AppState>) -> Result<Vec<PollTick>, String> {
     Ok(state.polling.ticks.read().await.values().cloned().collect())
 }
 
@@ -226,8 +247,8 @@ pub async fn start_ws_stream(
             ws.abort();
         }
     }
-    let ws_provider =
-        create_ws_provider(&provider_id).ok_or_else(|| format!("{} 不支援 WebSocket", provider_id))?;
+    let ws_provider = create_ws_provider(&provider_id)
+        .ok_or_else(|| format!("{} 不支援 WebSocket", provider_id))?;
     let sender = Arc::new(state.ws_sender.clone());
     let mut receiver = state.ws_sender.subscribe();
     let ws_handle = ws_provider.subscribe(symbols, sender).await?;
@@ -237,7 +258,11 @@ pub async fn start_ws_stream(
             let _ = app_handle.emit("ws-ticker-update", &update);
         }
     });
-    state.ws_tasks.write().await.insert(provider_id, (forwarder, ws_handle));
+    state
+        .ws_tasks
+        .write()
+        .await
+        .insert(provider_id, (forwarder, ws_handle));
     Ok(())
 }
 
@@ -263,7 +288,10 @@ pub async fn set_icon(app: tauri::AppHandle, symbol: String) -> Result<String, S
         .pick_file()
         .await
         .ok_or_else(|| "已取消".to_string())?;
-    let icon_name = symbol.to_lowercase().replace("usdt", "").replace("-usd", "");
+    let icon_name = symbol
+        .to_lowercase()
+        .replace("usdt", "")
+        .replace("-usd", "");
     let icons_dir = app
         .path()
         .app_data_dir()
@@ -281,7 +309,10 @@ pub async fn set_icon(app: tauri::AppHandle, symbol: String) -> Result<String, S
 
 #[tauri::command]
 pub async fn remove_icon(app: tauri::AppHandle, symbol: String) -> Result<(), String> {
-    let icon_name = symbol.to_lowercase().replace("usdt", "").replace("-usd", "");
+    let icon_name = symbol
+        .to_lowercase()
+        .replace("usdt", "")
+        .replace("-usd", "");
     let dest = app
         .path()
         .app_data_dir()
@@ -309,17 +340,25 @@ pub async fn get_icons_dir(app: tauri::AppHandle) -> Result<String, String> {
 /// 讀取本地檔案並回傳 base64 data URL — 繞過 asset protocol，dev/prod 都能用
 #[tauri::command]
 pub async fn read_local_file_base64(path: String) -> Result<String, String> {
-    let bytes = tokio::fs::read(&path).await
+    let bytes = tokio::fs::read(&path)
+        .await
         .map_err(|e| format!("讀取失敗: {}", e))?;
     use base64::Engine;
     let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
     // 根據副檔名推斷 MIME type
-    let mime = if path.ends_with(".png") { "image/png" }
-        else if path.ends_with(".jpg") || path.ends_with(".jpeg") { "image/jpeg" }
-        else if path.ends_with(".webp") { "image/webp" }
-        else if path.ends_with(".svg") { "image/svg+xml" }
-        else if path.ends_with(".gif") { "image/gif" }
-        else { "application/octet-stream" };
+    let mime = if path.ends_with(".png") {
+        "image/png"
+    } else if path.ends_with(".jpg") || path.ends_with(".jpeg") {
+        "image/jpeg"
+    } else if path.ends_with(".webp") {
+        "image/webp"
+    } else if path.ends_with(".svg") {
+        "image/svg+xml"
+    } else if path.ends_with(".gif") {
+        "image/gif"
+    } else {
+        "application/octet-stream"
+    };
     Ok(format!("data:{};base64,{}", mime, b64))
 }
 
@@ -333,14 +372,18 @@ pub async fn save_theme_bg(app: tauri::AppHandle, theme_id: String) -> Result<St
         .pick_file()
         .await
         .ok_or_else(|| "已取消".to_string())?;
-    let dir = app.path().app_data_dir()
+    let dir = app
+        .path()
+        .app_data_dir()
         .map_err(|e| format!("無法取得 app 目錄: {}", e))?
         .join("theme_bg");
-    tokio::fs::create_dir_all(&dir).await
+    tokio::fs::create_dir_all(&dir)
+        .await
         .map_err(|e| format!("建立目錄失敗: {}", e))?;
 
     // 取得原始副檔名，保留正確的 MIME type 讓 asset protocol 能正確回傳
-    let ext = file.file_name()
+    let ext = file
+        .file_name()
         .rsplit('.')
         .next()
         .map(|e| e.to_lowercase())
@@ -354,14 +397,17 @@ pub async fn save_theme_bg(app: tauri::AppHandle, theme_id: String) -> Result<St
     }
 
     let dest = dir.join(format!("{}.{}", theme_id, ext));
-    tokio::fs::write(&dest, file.read().await).await
+    tokio::fs::write(&dest, file.read().await)
+        .await
         .map_err(|e| format!("寫入失敗: {}", e))?;
     Ok(dest.to_string_lossy().to_string())
 }
 
 #[tauri::command]
 pub async fn remove_theme_bg(app: tauri::AppHandle, theme_id: String) -> Result<(), String> {
-    let dir = app.path().app_data_dir()
+    let dir = app
+        .path()
+        .app_data_dir()
         .map_err(|e| format!("無法取得 app 目錄: {}", e))?
         .join("theme_bg");
     // 清除所有可能的副檔名
@@ -373,8 +419,13 @@ pub async fn remove_theme_bg(app: tauri::AppHandle, theme_id: String) -> Result<
 }
 
 #[tauri::command]
-pub async fn get_theme_bg_path(app: tauri::AppHandle, theme_id: String) -> Result<Option<String>, String> {
-    let dir = app.path().app_data_dir()
+pub async fn get_theme_bg_path(
+    app: tauri::AppHandle,
+    theme_id: String,
+) -> Result<Option<String>, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
         .map_err(|e| format!("無法取得 app 目錄: {}", e))?
         .join("theme_bg");
     // 搜尋所有支援的副檔名
@@ -412,7 +463,6 @@ pub async fn import_file() -> Result<String, String> {
     String::from_utf8(file.read().await).map_err(|e| format!("讀取失敗: {}", e))
 }
 
-
 // ── Price History ────────────────────────────────────────────────
 
 #[derive(serde::Serialize)]
@@ -443,18 +493,23 @@ pub async fn toggle_record(
     subscription_id: i64,
     enabled: bool,
 ) -> Result<(), String> {
-    let db_path = app.path().app_data_dir()
+    let db_path = app
+        .path()
+        .app_data_dir()
         .map_err(|e| format!("無法取得 app 目錄: {}", e))?
         .join("stockenboard.db");
     let _ = tokio::task::spawn_blocking(move || -> Result<(), String> {
-        let conn = rusqlite::Connection::open(&db_path)
-            .map_err(|e| format!("開啟 DB 失敗: {}", e))?;
+        let conn =
+            rusqlite::Connection::open(&db_path).map_err(|e| format!("開啟 DB 失敗: {}", e))?;
         conn.execute(
             "UPDATE subscriptions SET record_enabled = ?1 WHERE id = ?2",
             rusqlite::params![if enabled { 1 } else { 0 }, subscription_id],
-        ).map_err(|e| format!("更新失敗: {}", e))?;
+        )
+        .map_err(|e| format!("更新失敗: {}", e))?;
         Ok(())
-    }).await.map_err(|e| format!("spawn 失敗: {}", e))?;
+    })
+    .await
+    .map_err(|e| format!("spawn 失敗: {}", e))?;
     // 通知 polling 重新載入，以更新 record_symbols
     state.polling.reload();
     Ok(())
@@ -467,18 +522,23 @@ pub async fn set_record_hours(
     from_hour: Option<i64>,
     to_hour: Option<i64>,
 ) -> Result<(), String> {
-    let db_path = app.path().app_data_dir()
+    let db_path = app
+        .path()
+        .app_data_dir()
         .map_err(|e| format!("無法取得 app 目錄: {}", e))?
         .join("stockenboard.db");
     tokio::task::spawn_blocking(move || -> Result<(), String> {
-        let conn = rusqlite::Connection::open(&db_path)
-            .map_err(|e| format!("開啟 DB 失敗: {}", e))?;
+        let conn =
+            rusqlite::Connection::open(&db_path).map_err(|e| format!("開啟 DB 失敗: {}", e))?;
         conn.execute(
             "UPDATE subscriptions SET record_from_hour = ?1, record_to_hour = ?2 WHERE id = ?3",
             rusqlite::params![from_hour, to_hour, subscription_id],
-        ).map_err(|e| format!("更新失敗: {}", e))?;
+        )
+        .map_err(|e| format!("更新失敗: {}", e))?;
         Ok(())
-    }).await.map_err(|e| format!("spawn 失敗: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("spawn 失敗: {}", e))?
 }
 
 #[tauri::command]
@@ -488,7 +548,9 @@ pub async fn set_provider_record_hours(
     from_hour: Option<i64>,
     to_hour: Option<i64>,
 ) -> Result<(), String> {
-    let db_path = app.path().app_data_dir()
+    let db_path = app
+        .path()
+        .app_data_dir()
         .map_err(|e| format!("無法取得 app 目錄: {}", e))?
         .join("stockenboard.db");
     tokio::task::spawn_blocking(move || -> Result<(), String> {
@@ -510,7 +572,9 @@ pub async fn get_price_history(
     to_ts: i64,
     limit: Option<i64>,
 ) -> Result<Vec<PriceHistoryRecord>, String> {
-    let db_path = app.path().app_data_dir()
+    let db_path = app
+        .path()
+        .app_data_dir()
         .map_err(|e| format!("無法取得 app 目錄: {}", e))?
         .join("stockenboard.db");
     tokio::task::spawn_blocking(move || {
@@ -544,7 +608,9 @@ pub async fn get_history_stats(
     app: tauri::AppHandle,
     subscription_ids: Vec<i64>,
 ) -> Result<Vec<HistoryStats>, String> {
-    let db_path = app.path().app_data_dir()
+    let db_path = app
+        .path()
+        .app_data_dir()
         .map_err(|e| format!("無法取得 app 目錄: {}", e))?
         .join("stockenboard.db");
     tokio::task::spawn_blocking(move || {
@@ -574,72 +640,133 @@ pub async fn cleanup_history(
     app: tauri::AppHandle,
     retention_days: Option<i64>,
 ) -> Result<i64, String> {
-    let db_path = app.path().app_data_dir()
+    let db_path = app
+        .path()
+        .app_data_dir()
         .map_err(|e| format!("無法取得 app 目錄: {}", e))?
         .join("stockenboard.db");
     let days = retention_days.unwrap_or(90);
     tokio::task::spawn_blocking(move || {
-        let conn = rusqlite::Connection::open(&db_path)
-            .map_err(|e| format!("開啟 DB 失敗: {}", e))?;
+        let conn =
+            rusqlite::Connection::open(&db_path).map_err(|e| format!("開啟 DB 失敗: {}", e))?;
         let cutoff = chrono::Utc::now().timestamp() - (days * 86400);
-        let deleted = conn.execute(
-            "DELETE FROM price_history WHERE recorded_at < ?1",
-            rusqlite::params![cutoff],
-        ).map_err(|e| format!("清理失敗: {}", e))?;
+        let deleted = conn
+            .execute(
+                "DELETE FROM price_history WHERE recorded_at < ?1",
+                rusqlite::params![cutoff],
+            )
+            .map_err(|e| format!("清理失敗: {}", e))?;
         Ok(deleted as i64)
-    }).await.map_err(|e| format!("spawn 失敗: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("spawn 失敗: {}", e))?
 }
 
 #[tauri::command]
-pub async fn purge_all_history(
-    app: tauri::AppHandle,
-) -> Result<i64, String> {
-    let db_path = app.path().app_data_dir()
+pub async fn purge_all_history(app: tauri::AppHandle) -> Result<i64, String> {
+    let db_path = app
+        .path()
+        .app_data_dir()
         .map_err(|e| format!("無法取得 app 目錄: {}", e))?
         .join("stockenboard.db");
     tokio::task::spawn_blocking(move || {
-        let conn = rusqlite::Connection::open(&db_path)
-            .map_err(|e| format!("開啟 DB 失敗: {}", e))?;
-        let deleted = conn.execute("DELETE FROM price_history", [])
+        let conn =
+            rusqlite::Connection::open(&db_path).map_err(|e| format!("開啟 DB 失敗: {}", e))?;
+        let deleted = conn
+            .execute("DELETE FROM price_history", [])
             .map_err(|e| format!("清除失敗: {}", e))?;
         Ok(deleted as i64)
-    }).await.map_err(|e| format!("spawn 失敗: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("spawn 失敗: {}", e))?
 }
 
 #[tauri::command]
-pub async fn get_data_dir(
-    app: tauri::AppHandle,
-) -> Result<String, String> {
-    let dir = app.path().app_data_dir()
+pub async fn get_data_dir(app: tauri::AppHandle) -> Result<String, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
         .map_err(|e| format!("無法取得 app 目錄: {}", e))?;
-    
+
     // 使用 shell 插件打開資料夾
     #[cfg(target_os = "windows")]
     {
         let path_str = dir.to_string_lossy().to_string();
-        app.shell().command("explorer")
+        app.shell()
+            .command("explorer")
             .arg(&path_str)
             .spawn()
             .map_err(|e| format!("無法開啟資料夾: {}", e))?;
     }
-    
+
     #[cfg(target_os = "macos")]
     {
         let path_str = dir.to_string_lossy().to_string();
-        app.shell().command("open")
+        app.shell()
+            .command("open")
             .arg(&path_str)
             .spawn()
             .map_err(|e| format!("無法開啟資料夾: {}", e))?;
     }
-    
+
     #[cfg(target_os = "linux")]
     {
         let path_str = dir.to_string_lossy().to_string();
-        app.shell().command("xdg-open")
+        app.shell()
+            .command("xdg-open")
             .arg(&path_str)
             .spawn()
             .map_err(|e| format!("無法開啟資料夾: {}", e))?;
     }
-    
+
     Ok(dir.to_string_lossy().to_string())
+}
+
+// ── API Settings ────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn get_api_port(app: tauri::AppHandle) -> Result<u16, String> {
+    let db_path = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("無法取得 app 目錄: {}", e))?
+        .join("stockenboard.db");
+
+    let conn =
+        rusqlite::Connection::open(&db_path).map_err(|e| format!("無法開啟資料庫: {}", e))?;
+
+    let port: String = conn
+        .query_row(
+            "SELECT value FROM app_settings WHERE key = 'api_port'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or_else(|_| "8080".to_string());
+
+    port.parse::<u16>()
+        .map_err(|e| format!("無效的 port: {}", e))
+}
+
+#[tauri::command]
+pub async fn set_api_port(app: tauri::AppHandle, port: u16) -> Result<(), String> {
+    if port < 1024 {
+        return Err("Port 必須在 1024-65535 之間".to_string());
+    }
+
+    let db_path = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("無法取得 app 目錄: {}", e))?
+        .join("stockenboard.db");
+
+    let conn =
+        rusqlite::Connection::open(&db_path).map_err(|e| format!("無法開啟資料庫: {}", e))?;
+
+    conn.execute(
+        "INSERT OR REPLACE INTO app_settings (key, value) VALUES ('api_port', ?1)",
+        [port.to_string()],
+    )
+    .map_err(|e| format!("無法儲存設定: {}", e))?;
+
+    Ok(())
 }

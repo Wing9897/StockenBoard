@@ -10,11 +10,15 @@ const MAX_RECONNECT_ATTEMPTS: u32 = 10;
 const INITIAL_RECONNECT_DELAY_MS: u64 = 1000;
 
 impl BinanceWsProvider {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 
     /// 解析 miniTicker WS 訊息為 WsTickerUpdate
     fn parse_mini_ticker(d: &serde_json::Value) -> Option<WsTickerUpdate> {
-        if d.is_null() { return None; }
+        if d.is_null() {
+            return None;
+        }
         let symbol = d["s"].as_str()?.to_string();
         let parse_f64 = |key: &str| d[key].as_str().and_then(|s| s.parse::<f64>().ok());
 
@@ -47,7 +51,8 @@ impl WebSocketProvider for BinanceWsProvider {
             return Ok(tokio::spawn(async {}));
         }
 
-        let streams: Vec<String> = symbols.iter()
+        let streams: Vec<String> = symbols
+            .iter()
             .map(|s| format!("{}@miniTicker", s.to_lowercase()))
             .collect();
         let url = format!(
@@ -55,7 +60,8 @@ impl WebSocketProvider for BinanceWsProvider {
             streams.join("/")
         );
 
-        let (ws_stream, _) = connect_async(&url).await
+        let (ws_stream, _) = connect_async(&url)
+            .await
             .map_err(|e| format!("Binance WS 連接失敗: {}", e))?;
 
         let (write, read) = ws_stream.split();
@@ -72,17 +78,21 @@ impl BinanceWsProvider {
         symbols: Vec<String>,
         sender: Arc<tokio::sync::broadcast::Sender<WsTickerUpdate>>,
         mut write: futures::stream::SplitSink<
-            tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
-            Message
+            tokio_tungstenite::WebSocketStream<
+                tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+            >,
+            Message,
         >,
         mut read: futures::stream::SplitStream<
-            tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>
+            tokio_tungstenite::WebSocketStream<
+                tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+            >,
         >,
     ) {
         loop {
             match read.next().await {
                 Some(Ok(Message::Text(text))) => {
-                    if let Ok(data) = serde_json::from_str::<serde_json::Value>(&text.to_string()) {
+                    if let Ok(data) = serde_json::from_str::<serde_json::Value>(text.as_ref()) {
                         if let Some(update) = Self::parse_mini_ticker(&data["data"]) {
                             let _ = sender.send(update);
                         }
@@ -114,7 +124,10 @@ impl BinanceWsProvider {
         let mut attempt = 0u32;
         loop {
             if attempt >= MAX_RECONNECT_ATTEMPTS {
-                eprintln!("Binance WS 重連失敗次數已達上限 ({})", MAX_RECONNECT_ATTEMPTS);
+                eprintln!(
+                    "Binance WS 重連失敗次數已達上限 ({})",
+                    MAX_RECONNECT_ATTEMPTS
+                );
                 break;
             }
             let delay = INITIAL_RECONNECT_DELAY_MS * 2u64.pow(attempt.min(6));

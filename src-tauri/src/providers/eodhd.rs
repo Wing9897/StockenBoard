@@ -8,7 +8,10 @@ pub struct EODHDProvider {
 
 impl EODHDProvider {
     pub fn new(api_key: Option<String>) -> Self {
-        Self { client: shared_client(), api_key }
+        Self {
+            client: shared_client(),
+            api_key,
+        }
     }
 
     fn parse_eod(symbol: &str, data: &serde_json::Value) -> AssetData {
@@ -34,19 +37,32 @@ impl DataProvider for EODHDProvider {
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {
         let api_key = self.api_key.as_ref().ok_or("EODHD 需要 API Key")?;
 
-        let data: serde_json::Value = self.client
-            .get(format!("https://eodhd.com/api/real-time/{}?api_token={}&fmt=json", symbol, api_key))
-            .send().await.map_err(|e| format!("EODHD 連接失敗: {}", e))?
-            .error_for_status().map_err(|e| format!("EODHD API 錯誤: {}", e))?
-            .json().await.map_err(|e| format!("EODHD 解析失敗: {}", e))?;
+        let data: serde_json::Value = self
+            .client
+            .get(format!(
+                "https://eodhd.com/api/real-time/{}?api_token={}&fmt=json",
+                symbol, api_key
+            ))
+            .send()
+            .await
+            .map_err(|e| format!("EODHD 連接失敗: {}", e))?
+            .error_for_status()
+            .map_err(|e| format!("EODHD API 錯誤: {}", e))?
+            .json()
+            .await
+            .map_err(|e| format!("EODHD 解析失敗: {}", e))?;
 
         Ok(Self::parse_eod(symbol, &data))
     }
 
     /// 批量查詢 — s=AAPL.US,MSFT.US
     async fn fetch_prices(&self, symbols: &[String]) -> Result<Vec<AssetData>, String> {
-        if symbols.is_empty() { return Ok(vec![]); }
-        if symbols.len() == 1 { return self.fetch_price(&symbols[0]).await.map(|d| vec![d]); }
+        if symbols.is_empty() {
+            return Ok(vec![]);
+        }
+        if symbols.len() == 1 {
+            return self.fetch_price(&symbols[0]).await.map(|d| vec![d]);
+        }
 
         let api_key = self.api_key.as_ref().ok_or("EODHD 需要 API Key")?;
         let extra = symbols[1..].join(",");
@@ -57,13 +73,20 @@ impl DataProvider for EODHDProvider {
             symbols[0], api_key, extra
         );
 
-        let arr: Vec<serde_json::Value> = self.client
+        let arr: Vec<serde_json::Value> = self
+            .client
             .get(&url)
-            .send().await.map_err(|e| format!("EODHD 批量連接失敗: {}", e))?
-            .error_for_status().map_err(|e| format!("EODHD API 錯誤: {}", e))?
-            .json().await.map_err(|e| format!("EODHD 批量解析失敗: {}", e))?;
+            .send()
+            .await
+            .map_err(|e| format!("EODHD 批量連接失敗: {}", e))?
+            .error_for_status()
+            .map_err(|e| format!("EODHD API 錯誤: {}", e))?
+            .json()
+            .await
+            .map_err(|e| format!("EODHD 批量解析失敗: {}", e))?;
 
-        let response_map: HashMap<String, &serde_json::Value> = arr.iter()
+        let response_map: HashMap<String, &serde_json::Value> = arr
+            .iter()
             .filter_map(|v| v["code"].as_str().map(|s| (s.to_uppercase(), v)))
             .collect();
 

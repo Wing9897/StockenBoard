@@ -6,7 +6,9 @@ pub struct KuCoinProvider {
 
 impl KuCoinProvider {
     pub fn new() -> Self {
-        Self { client: shared_client() }
+        Self {
+            client: shared_client(),
+        }
     }
 }
 
@@ -35,35 +37,58 @@ fn parse_kucoin_ticker(symbol: &str, data: &serde_json::Value) -> AssetData {
 
 #[async_trait::async_trait]
 impl DataProvider for KuCoinProvider {
-    fn info(&self) -> ProviderInfo { get_provider_info("kucoin").unwrap() }
+    fn info(&self) -> ProviderInfo {
+        get_provider_info("kucoin").unwrap()
+    }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {
         let pair = to_kucoin_symbol(symbol);
         let url = format!("https://api.kucoin.com/api/v1/market/stats?symbol={}", pair);
-        let resp: serde_json::Value = self.client.get(&url)
-            .send().await.map_err(|e| format!("KuCoin 連接失敗: {}", e))?
-            .json().await.map_err(|e| format!("KuCoin 解析失敗: {}", e))?;
+        let resp: serde_json::Value = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| format!("KuCoin 連接失敗: {}", e))?
+            .json()
+            .await
+            .map_err(|e| format!("KuCoin 解析失敗: {}", e))?;
 
         if resp["code"].as_str() != Some("200000") {
-            return Err(format!("KuCoin: {}", resp["msg"].as_str().unwrap_or("未知錯誤")));
+            return Err(format!(
+                "KuCoin: {}",
+                resp["msg"].as_str().unwrap_or("未知錯誤")
+            ));
         }
         Ok(parse_kucoin_ticker(symbol, &resp["data"]))
     }
 
     async fn fetch_prices(&self, symbols: &[String]) -> Result<Vec<AssetData>, String> {
-        if symbols.is_empty() { return Ok(vec![]); }
-        if symbols.len() == 1 { return self.fetch_price(&symbols[0]).await.map(|d| vec![d]); }
+        if symbols.is_empty() {
+            return Ok(vec![]);
+        }
+        if symbols.len() == 1 {
+            return self.fetch_price(&symbols[0]).await.map(|d| vec![d]);
+        }
 
         // KuCoin allTickers endpoint returns all tickers at once
         let url = "https://api.kucoin.com/api/v1/market/allTickers";
-        let resp: serde_json::Value = self.client.get(url)
-            .send().await.map_err(|e| format!("KuCoin 批量連接失敗: {}", e))?
-            .json().await.map_err(|e| format!("KuCoin 批量解析失敗: {}", e))?;
+        let resp: serde_json::Value = self
+            .client
+            .get(url)
+            .send()
+            .await
+            .map_err(|e| format!("KuCoin 批量連接失敗: {}", e))?
+            .json()
+            .await
+            .map_err(|e| format!("KuCoin 批量解析失敗: {}", e))?;
 
         let tickers = resp["data"]["ticker"].as_array().ok_or("KuCoin: 無結果")?;
         let mut map = std::collections::HashMap::new();
         for t in tickers {
-            if let Some(s) = t["symbol"].as_str() { map.insert(s.to_string(), t); }
+            if let Some(s) = t["symbol"].as_str() {
+                map.insert(s.to_string(), t);
+            }
         }
 
         let mut out = Vec::new();

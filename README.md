@@ -5,6 +5,7 @@
 ## 功能
 
 - 即時價格追蹤（REST + WebSocket）
+- HTTP API（端口 8080）- 供 AI 或外部程式訪問數據
 - 33 個數據源
   - 加密貨幣交易所：Binance、Coinbase、Kraken、Bybit、KuCoin、OKX、Gate.io、Bitfinex、HTX、MEXC
   - 加密貨幣聚合器：CoinGecko、CoinMarketCap、CoinPaprika、CryptoCompare
@@ -21,11 +22,46 @@
 - 自訂資產圖示
 - Toast 通知系統
 
+## HTTP API
+
+StockenBoard 提供 HTTP API 讓外部程式（如 AI、Python 腳本）訪問數據。
+
+**API 地址**: `http://localhost:8080/api`
+
+### 端點
+
+- `GET /api/status` - 系統狀態
+- `GET /api/subscriptions` - 所有訂閱
+- `GET /api/prices` - 所有最新價格
+- `GET /api/prices/{provider}/{symbol}` - 特定價格
+- `GET /api/history?symbol=&provider=&from=&to=&limit=` - 歷史數據
+
+### 使用範例
+
+```python
+import requests
+
+# 獲取所有價格
+prices = requests.get("http://localhost:8080/api/prices").json()
+for p in prices['prices']:
+    print(f"{p['symbol']}: ${p['price']}")
+
+# 獲取歷史數據
+history = requests.get("http://localhost:8080/api/history", params={
+    "symbol": "BTCUSDT",
+    "provider": "binance",
+    "limit": 1000
+}).json()
+```
+
+詳細說明請參考應用程式內的「設定 → API 使用說明」。
+
 ## 技術棧
 
 - **前端**：React 19 + TypeScript 5.8 + Vite 7
 - **後端**：Tauri 2 + Rust
 - **資料庫**：SQLite（tauri-plugin-sql）
+- **API**：Axum + Tower
 - **主題**：Catppuccin Mocha
 
 ## 架構
@@ -34,6 +70,7 @@
 - 前端 `PriceStore` 單例 + 細粒度訂閱，每張卡片只在自己的價格變化時 re-render
 - `poll-tick` 事件驅動倒計時圓圈，精確同步後端 fetch 時間
 - 共用 `getDb()` 單例，全局共享 SQLite 連接
+- HTTP API Server 自動啟動，提供 RESTful 接口
 
 ## 開發
 
@@ -46,6 +83,9 @@ npm run tauri dev
 
 # 建置
 npm run tauri build
+
+# 測試 API
+python test_api.py
 ```
 
 ## 授權

@@ -7,7 +7,10 @@ pub struct FinnhubProvider {
 
 impl FinnhubProvider {
     pub fn new(api_key: Option<String>) -> Self {
-        Self { client: shared_client(), api_key }
+        Self {
+            client: shared_client(),
+            api_key,
+        }
     }
 }
 
@@ -26,8 +29,8 @@ impl DataProvider for FinnhubProvider {
             symbol.to_string()
         } else {
             let s = symbol.to_uppercase();
-            let looks_crypto = s.ends_with("USDT") || s.ends_with("USD")
-                || s.contains('-') || s.contains('/');
+            let looks_crypto =
+                s.ends_with("USDT") || s.ends_with("USD") || s.contains('-') || s.contains('/');
             if looks_crypto {
                 let binance_sym = to_binance_symbol(symbol);
                 format!("BINANCE:{}", binance_sym)
@@ -36,16 +39,28 @@ impl DataProvider for FinnhubProvider {
             }
         };
 
-        let data: serde_json::Value = self.client
-            .get(format!("https://finnhub.io/api/v1/quote?symbol={}&token={}", api_symbol, api_key))
-            .send().await.map_err(|e| format!("Finnhub 連接失敗: {}", e))?
-            .error_for_status().map_err(|e| format!("Finnhub API 錯誤: {}", e))?
-            .json().await.map_err(|e| format!("Finnhub 解析失敗: {}", e))?;
+        let data: serde_json::Value = self
+            .client
+            .get(format!(
+                "https://finnhub.io/api/v1/quote?symbol={}&token={}",
+                api_symbol, api_key
+            ))
+            .send()
+            .await
+            .map_err(|e| format!("Finnhub 連接失敗: {}", e))?
+            .error_for_status()
+            .map_err(|e| format!("Finnhub API 錯誤: {}", e))?
+            .json()
+            .await
+            .map_err(|e| format!("Finnhub 解析失敗: {}", e))?;
 
         // Finnhub returns c=0 for invalid symbols
         let price = data["c"].as_f64().unwrap_or(0.0);
         if price == 0.0 {
-            return Err(format!("Finnhub 找不到: {}。股票用 AAPL，加密用 BINANCE:BTCUSDT", symbol));
+            return Err(format!(
+                "Finnhub 找不到: {}。股票用 AAPL，加密用 BINANCE:BTCUSDT",
+                symbol
+            ));
         }
 
         Ok(AssetDataBuilder::new(symbol, "finnhub")
@@ -61,8 +76,12 @@ impl DataProvider for FinnhubProvider {
 
     /// 限流並行查詢 — Finnhub 沒有批量 endpoint，限制同時 3 個 request
     async fn fetch_prices(&self, symbols: &[String]) -> Result<Vec<AssetData>, String> {
-        if symbols.is_empty() { return Ok(vec![]); }
-        if symbols.len() == 1 { return self.fetch_price(&symbols[0]).await.map(|d| vec![d]); }
+        if symbols.is_empty() {
+            return Ok(vec![]);
+        }
+        if symbols.len() == 1 {
+            return self.fetch_price(&symbols[0]).await.map(|d| vec![d]);
+        }
 
         let api_key = self.api_key.as_ref().ok_or("Finnhub 需要 API Key")?.clone();
         let client = self.client.clone();
@@ -77,16 +96,31 @@ impl DataProvider for FinnhubProvider {
                         sym.clone()
                     } else {
                         let s = sym.to_uppercase();
-                        let looks_crypto = s.ends_with("USDT") || s.ends_with("USD")
-                            || s.contains('-') || s.contains('/');
-                        if looks_crypto { format!("BINANCE:{}", to_binance_symbol(&sym)) } else { sym.clone() }
+                        let looks_crypto = s.ends_with("USDT")
+                            || s.ends_with("USD")
+                            || s.contains('-')
+                            || s.contains('/');
+                        if looks_crypto {
+                            format!("BINANCE:{}", to_binance_symbol(&sym))
+                        } else {
+                            sym.clone()
+                        }
                     };
                     let data: serde_json::Value = c
-                        .get(format!("https://finnhub.io/api/v1/quote?symbol={}&token={}", api_symbol, key))
-                        .send().await.map_err(|e| format!("Finnhub: {}", e))?
-                        .json().await.map_err(|e| format!("Finnhub: {}", e))?;
+                        .get(format!(
+                            "https://finnhub.io/api/v1/quote?symbol={}&token={}",
+                            api_symbol, key
+                        ))
+                        .send()
+                        .await
+                        .map_err(|e| format!("Finnhub: {}", e))?
+                        .json()
+                        .await
+                        .map_err(|e| format!("Finnhub: {}", e))?;
                     let price = data["c"].as_f64().unwrap_or(0.0);
-                    if price == 0.0 { return Err(format!("Finnhub 找不到: {}", sym)); }
+                    if price == 0.0 {
+                        return Err(format!("Finnhub 找不到: {}", sym));
+                    }
                     Ok(AssetDataBuilder::new(&sym, "finnhub")
                         .price(price)
                         .change_24h(data["d"].as_f64())

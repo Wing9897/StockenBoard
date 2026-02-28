@@ -7,13 +7,19 @@ pub struct TiingoProvider {
 
 impl TiingoProvider {
     pub fn new(api_key: Option<String>) -> Self {
-        Self { client: shared_client(), api_key }
+        Self {
+            client: shared_client(),
+            api_key,
+        }
     }
 
     fn is_crypto(symbol: &str) -> bool {
         let s = symbol.to_uppercase();
-        s.contains("USD") || s.contains("BTC") || s.contains("ETH")
-            || s.contains('-') || s.contains('/')
+        s.contains("USD")
+            || s.contains("BTC")
+            || s.contains("ETH")
+            || s.contains('-')
+            || s.contains('/')
     }
 
     fn to_tiingo_crypto(symbol: &str) -> String {
@@ -29,7 +35,11 @@ impl TiingoProvider {
         let price = item["last"].as_f64().unwrap_or(0.0);
         let prev = item["prevClose"].as_f64().unwrap_or(price);
         let change = price - prev;
-        let pct = if prev > 0.0 { (change / prev) * 100.0 } else { 0.0 };
+        let pct = if prev > 0.0 {
+            (change / prev) * 100.0
+        } else {
+            0.0
+        };
 
         Ok(AssetDataBuilder::new(symbol, "tiingo")
             .price(price)
@@ -55,11 +65,21 @@ impl DataProvider for TiingoProvider {
 
         if Self::is_crypto(symbol) {
             let tiingo_sym = Self::to_tiingo_crypto(symbol);
-            let url = format!("https://api.tiingo.com/tiingo/crypto/top?tickers={}&token={}", tiingo_sym, api_key);
-            let data: serde_json::Value = self.client.get(&url)
-                .send().await.map_err(|e| format!("Tiingo 連接失敗: {}", e))?
-                .error_for_status().map_err(|e| format!("Tiingo API 錯誤: {}", e))?
-                .json().await.map_err(|e| format!("Tiingo 解析失敗: {}", e))?;
+            let url = format!(
+                "https://api.tiingo.com/tiingo/crypto/top?tickers={}&token={}",
+                tiingo_sym, api_key
+            );
+            let data: serde_json::Value = self
+                .client
+                .get(&url)
+                .send()
+                .await
+                .map_err(|e| format!("Tiingo 連接失敗: {}", e))?
+                .error_for_status()
+                .map_err(|e| format!("Tiingo API 錯誤: {}", e))?
+                .json()
+                .await
+                .map_err(|e| format!("Tiingo 解析失敗: {}", e))?;
 
             let top = &data[0]["topOfBookData"][0];
             if top.is_null() {
@@ -70,10 +90,17 @@ impl DataProvider for TiingoProvider {
                 .build())
         } else {
             let url = format!("https://api.tiingo.com/iex/{}?token={}", symbol, api_key);
-            let data: serde_json::Value = self.client.get(&url)
-                .send().await.map_err(|e| format!("Tiingo 連接失敗: {}", e))?
-                .error_for_status().map_err(|e| format!("Tiingo API 錯誤: {}", e))?
-                .json().await.map_err(|e| format!("Tiingo 解析失敗: {}", e))?;
+            let data: serde_json::Value = self
+                .client
+                .get(&url)
+                .send()
+                .await
+                .map_err(|e| format!("Tiingo 連接失敗: {}", e))?
+                .error_for_status()
+                .map_err(|e| format!("Tiingo API 錯誤: {}", e))?
+                .json()
+                .await
+                .map_err(|e| format!("Tiingo 解析失敗: {}", e))?;
 
             Self::parse_stock(symbol, &data[0])
         }
@@ -81,8 +108,12 @@ impl DataProvider for TiingoProvider {
 
     /// 批量查詢 — tickers=aapl,msft 或 tickers=btcusd,ethusd
     async fn fetch_prices(&self, symbols: &[String]) -> Result<Vec<AssetData>, String> {
-        if symbols.is_empty() { return Ok(vec![]); }
-        if symbols.len() == 1 { return self.fetch_price(&symbols[0]).await.map(|d| vec![d]); }
+        if symbols.is_empty() {
+            return Ok(vec![]);
+        }
+        if symbols.len() == 1 {
+            return self.fetch_price(&symbols[0]).await.map(|d| vec![d]);
+        }
 
         let api_key = self.api_key.as_ref().ok_or("Tiingo 需要 API Key")?;
 
@@ -110,19 +141,32 @@ impl DataProvider for TiingoProvider {
                     let c = client.clone();
                     let key = api_key_owned.clone();
                     async move {
-                        let url = format!("https://api.tiingo.com/tiingo/crypto/top?tickers={}&token={}", tiingo_sym, key);
+                        let url = format!(
+                            "https://api.tiingo.com/tiingo/crypto/top?tickers={}&token={}",
+                            tiingo_sym, key
+                        );
                         match c.get(&url).send().await {
                             Ok(resp) => match resp.json::<serde_json::Value>().await {
                                 Ok(data) => {
                                     let top = &data[0]["topOfBookData"][0];
-                                    if top.is_null() { return None; }
-                                    Some(AssetDataBuilder::new(&original, "tiingo")
-                                        .price(top["lastPrice"].as_f64().unwrap_or(0.0))
-                                        .build())
+                                    if top.is_null() {
+                                        return None;
+                                    }
+                                    Some(
+                                        AssetDataBuilder::new(&original, "tiingo")
+                                            .price(top["lastPrice"].as_f64().unwrap_or(0.0))
+                                            .build(),
+                                    )
                                 }
-                                Err(e) => { eprintln!("Tiingo crypto 跳過 {}: {}", original, e); None }
+                                Err(e) => {
+                                    eprintln!("Tiingo crypto 跳過 {}: {}", original, e);
+                                    None
+                                }
+                            },
+                            Err(e) => {
+                                eprintln!("Tiingo crypto 跳過 {}: {}", original, e);
+                                None
                             }
-                            Err(e) => { eprintln!("Tiingo crypto 跳過 {}: {}", original, e); None }
                         }
                     }
                 })
@@ -135,13 +179,25 @@ impl DataProvider for TiingoProvider {
         // 批量查 stock — Tiingo IEX 支持 tickers=aapl,msft
         if !stock_syms.is_empty() {
             let tickers = stock_syms.join(",");
-            let url = format!("https://api.tiingo.com/iex/?tickers={}&token={}", tickers, api_key);
-            match self.client.get(&url)
-                .send().await.map_err(|e| format!("Tiingo stock 批量失敗: {}", e))
+            let url = format!(
+                "https://api.tiingo.com/iex/?tickers={}&token={}",
+                tickers, api_key
+            );
+            match self
+                .client
+                .get(&url)
+                .send()
+                .await
+                .map_err(|e| format!("Tiingo stock 批量失敗: {}", e))
             {
                 Ok(resp) => {
-                    if let Ok(arr) = resp.json::<Vec<serde_json::Value>>().await.map_err(|e| e.to_string()) {
-                        let mut ticker_map: std::collections::HashMap<String, &serde_json::Value> = std::collections::HashMap::new();
+                    if let Ok(arr) = resp
+                        .json::<Vec<serde_json::Value>>()
+                        .await
+                        .map_err(|e| e.to_string())
+                    {
+                        let mut ticker_map: std::collections::HashMap<String, &serde_json::Value> =
+                            std::collections::HashMap::new();
                         for item in &arr {
                             if let Some(t) = item["ticker"].as_str() {
                                 ticker_map.insert(t.to_uppercase(), item);

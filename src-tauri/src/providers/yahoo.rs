@@ -46,23 +46,31 @@ impl YahooProvider {
             }
         }
 
-        let _ = self.client
+        let _ = self
+            .client
             .get("https://fc.yahoo.com")
-            .send().await
+            .send()
+            .await
             .map_err(|e| format!("Yahoo cookie 獲取失敗: {}", e))?;
 
-        let crumb = self.client
+        let crumb = self
+            .client
             .get("https://query2.finance.yahoo.com/v1/test/getcrumb")
-            .send().await
+            .send()
+            .await
             .map_err(|e| format!("Yahoo crumb 獲取失敗: {}", e))?
-            .text().await
+            .text()
+            .await
             .map_err(|e| format!("Yahoo crumb 解析失敗: {}", e))?;
 
         if crumb.is_empty() || crumb.contains("<!DOCTYPE") {
             return Err("Yahoo crumb 獲取失敗，請稍後重試".to_string());
         }
 
-        let auth = YahooAuth { cookie: String::new(), crumb };
+        let auth = YahooAuth {
+            cookie: String::new(),
+            crumb,
+        };
         let mut cached = self.auth.write().await;
         *cached = Some(auth.clone());
         Ok(auth)
@@ -81,27 +89,41 @@ impl YahooProvider {
             symbols_csv, QUOTE_FIELDS, auth.crumb
         );
 
-        let resp = self.client.get(&url)
-            .send().await
+        let resp = self
+            .client
+            .get(&url)
+            .send()
+            .await
             .map_err(|e| format!("Yahoo 連接失敗: {}", e))?;
 
-        if resp.status() == reqwest::StatusCode::UNAUTHORIZED || resp.status() == reqwest::StatusCode::FORBIDDEN {
+        if resp.status() == reqwest::StatusCode::UNAUTHORIZED
+            || resp.status() == reqwest::StatusCode::FORBIDDEN
+        {
             self.invalidate_auth().await;
             let auth2 = self.get_auth().await?;
             let url2 = format!(
                 "https://query2.finance.yahoo.com/v7/finance/quote?symbols={}&fields={}&crumb={}",
                 symbols_csv, QUOTE_FIELDS, auth2.crumb
             );
-            let resp2 = self.client.get(&url2)
-                .send().await
+            let resp2 = self
+                .client
+                .get(&url2)
+                .send()
+                .await
                 .map_err(|e| format!("Yahoo 重試連接失敗: {}", e))?;
             return resp2
-                .error_for_status().map_err(|e| format!("Yahoo API 錯誤: {}", e))?
-                .json().await.map_err(|e| format!("Yahoo 解析失敗: {}", e));
+                .error_for_status()
+                .map_err(|e| format!("Yahoo API 錯誤: {}", e))?
+                .json()
+                .await
+                .map_err(|e| format!("Yahoo 解析失敗: {}", e));
         }
 
-        resp.error_for_status().map_err(|e| format!("Yahoo API 錯誤: {}", e))?
-            .json().await.map_err(|e| format!("Yahoo 解析失敗: {}", e))
+        resp.error_for_status()
+            .map_err(|e| format!("Yahoo API 錯誤: {}", e))?
+            .json()
+            .await
+            .map_err(|e| format!("Yahoo 解析失敗: {}", e))
     }
 }
 
@@ -116,29 +138,38 @@ impl DataProvider for YahooProvider {
         let data = self.fetch_v7_quote(&yahoo_symbol).await?;
         let q = &data["quoteResponse"]["result"][0];
         if q.is_null() {
-            return Err(format!("Yahoo 找不到: {}。請使用股票代號如 AAPL, GOOGL", symbol));
+            return Err(format!(
+                "Yahoo 找不到: {}。請使用股票代號如 AAPL, GOOGL",
+                symbol
+            ));
         }
         Ok(parse_v7_quote(symbol, q))
     }
 
     /// 批量查詢 — v7/quote 原生支援多 symbol
     async fn fetch_prices(&self, symbols: &[String]) -> Result<Vec<AssetData>, String> {
-        if symbols.is_empty() { return Ok(vec![]); }
-        if symbols.len() == 1 { return self.fetch_price(&symbols[0]).await.map(|d| vec![d]); }
+        if symbols.is_empty() {
+            return Ok(vec![]);
+        }
+        if symbols.len() == 1 {
+            return self.fetch_price(&symbols[0]).await.map(|d| vec![d]);
+        }
 
         let yahoo_symbols: Vec<String> = symbols.iter().map(|s| s.replace('.', "-")).collect();
         let csv = yahoo_symbols.join(",");
         let data = self.fetch_v7_quote(&csv).await?;
 
-        let arr = data["quoteResponse"]["result"].as_array()
+        let arr = data["quoteResponse"]["result"]
+            .as_array()
             .ok_or("Yahoo 批量回應格式錯誤")?;
 
         if arr.is_empty() {
-            return Err(format!("Yahoo 批量查詢全部失敗: 找不到任何結果"));
+            return Err("Yahoo 批量查詢全部失敗: 找不到任何結果".to_string());
         }
 
         let mut results = Vec::with_capacity(arr.len());
-        let sym_map: std::collections::HashMap<String, &str> = symbols.iter()
+        let sym_map: std::collections::HashMap<String, &str> = symbols
+            .iter()
             .map(|s| (s.replace('.', "-").to_uppercase(), s.as_str()))
             .collect();
 

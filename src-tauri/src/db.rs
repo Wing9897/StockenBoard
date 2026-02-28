@@ -1,5 +1,10 @@
 /// StockenBoard DB schema
 pub const SCHEMA: &str = r#"
+CREATE TABLE IF NOT EXISTS app_settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS provider_settings (
     provider_id      TEXT PRIMARY KEY,
     api_key          TEXT,
@@ -62,6 +67,8 @@ CREATE INDEX IF NOT EXISTS idx_price_history_sub_time
 
 INSERT OR IGNORE INTO views (id, name, view_type, is_default) VALUES (1, 'All', 'asset', 1);
 INSERT OR IGNORE INTO views (id, name, view_type, is_default) VALUES (2, 'All', 'dex', 1);
+
+INSERT OR IGNORE INTO app_settings (key, value) VALUES ('api_port', '8080');
 
 CREATE TRIGGER IF NOT EXISTS auto_sort_order
 AFTER INSERT ON subscriptions

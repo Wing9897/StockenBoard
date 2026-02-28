@@ -6,7 +6,9 @@ pub struct CoinbaseProvider {
 
 impl CoinbaseProvider {
     pub fn new() -> Self {
-        Self { client: shared_client() }
+        Self {
+            client: shared_client(),
+        }
     }
 }
 
@@ -20,13 +22,22 @@ impl DataProvider for CoinbaseProvider {
         // Auto-convert: BTCUSDT -> BTC-USD, BTC/USD -> BTC-USD
         let pair = to_coinbase_symbol(symbol);
         let url = format!("https://api.coinbase.com/v2/prices/{}/spot", pair);
-        let data: serde_json::Value = self.client.get(&url)
-            .send().await.map_err(|e| format!("Coinbase 連接失敗: {}", e))?
-            .error_for_status().map_err(|e| format!("Coinbase API 錯誤: {}。格式: BTC-USD", e))?
-            .json().await.map_err(|e| format!("Coinbase 解析失敗: {}", e))?;
+        let data: serde_json::Value = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| format!("Coinbase 連接失敗: {}", e))?
+            .error_for_status()
+            .map_err(|e| format!("Coinbase API 錯誤: {}。格式: BTC-USD", e))?
+            .json()
+            .await
+            .map_err(|e| format!("Coinbase 解析失敗: {}", e))?;
 
-        let price = data["data"]["amount"].as_str()
-            .and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
+        let price = data["data"]["amount"]
+            .as_str()
+            .and_then(|s| s.parse::<f64>().ok())
+            .unwrap_or(0.0);
         let currency = data["data"]["currency"].as_str().unwrap_or("USD");
 
         Ok(AssetDataBuilder::new(symbol, "coinbase")
@@ -37,8 +48,12 @@ impl DataProvider for CoinbaseProvider {
 
     /// 限流並行查詢 — Coinbase 沒有批量 API，限制同時 3 個 request
     async fn fetch_prices(&self, symbols: &[String]) -> Result<Vec<AssetData>, String> {
-        if symbols.is_empty() { return Ok(vec![]); }
-        if symbols.len() == 1 { return self.fetch_price(&symbols[0]).await.map(|d| vec![d]); }
+        if symbols.is_empty() {
+            return Ok(vec![]);
+        }
+        if symbols.len() == 1 {
+            return self.fetch_price(&symbols[0]).await.map(|d| vec![d]);
+        }
 
         use futures::stream::{self, StreamExt};
         let results: Vec<_> = stream::iter(symbols.to_vec())
@@ -50,14 +65,18 @@ impl DataProvider for CoinbaseProvider {
                     match client.get(&url).send().await {
                         Ok(resp) => match resp.json::<serde_json::Value>().await {
                             Ok(data) => {
-                                let price = data["data"]["amount"].as_str()
-                                    .and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
+                                let price = data["data"]["amount"]
+                                    .as_str()
+                                    .and_then(|s| s.parse::<f64>().ok())
+                                    .unwrap_or(0.0);
                                 let currency = data["data"]["currency"].as_str().unwrap_or("USD");
                                 Ok(AssetDataBuilder::new(&sym, "coinbase")
-                                    .price(price).currency(currency).build())
+                                    .price(price)
+                                    .currency(currency)
+                                    .build())
                             }
                             Err(e) => Err(format!("Coinbase 解析失敗: {}", e)),
-                        }
+                        },
                         Err(e) => Err(format!("Coinbase 連接失敗: {}", e)),
                     }
                 }

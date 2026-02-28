@@ -8,7 +8,10 @@ pub struct MboumProvider {
 
 impl MboumProvider {
     pub fn new(api_key: Option<String>) -> Self {
-        Self { client: shared_client(), api_key }
+        Self {
+            client: shared_client(),
+            api_key,
+        }
     }
 
     fn parse_quote(symbol: &str, q: &serde_json::Value) -> AssetData {
@@ -37,7 +40,11 @@ impl MboumProvider {
         if let Some(pp) = pre_price {
             builder = builder.extra_f64("pre_market_price", Some(pp));
             let pre_change = pp - price;
-            let pre_pct = if price > 0.0 { (pre_change / price) * 100.0 } else { 0.0 };
+            let pre_pct = if price > 0.0 {
+                (pre_change / price) * 100.0
+            } else {
+                0.0
+            };
             builder = builder.extra_f64("pre_market_change", Some(pre_change));
             builder = builder.extra_f64("pre_market_change_pct", Some(pre_pct));
         }
@@ -46,7 +53,11 @@ impl MboumProvider {
         if let Some(pp) = post_price {
             builder = builder.extra_f64("post_market_price", Some(pp));
             let post_change = pp - price;
-            let post_pct = if price > 0.0 { (post_change / price) * 100.0 } else { 0.0 };
+            let post_pct = if price > 0.0 {
+                (post_change / price) * 100.0
+            } else {
+                0.0
+            };
             builder = builder.extra_f64("post_market_change", Some(post_change));
             builder = builder.extra_f64("post_market_change_pct", Some(post_pct));
         }
@@ -64,12 +75,21 @@ impl DataProvider for MboumProvider {
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {
         let api_key = self.api_key.as_ref().ok_or("Mboum 需要 API Key")?;
 
-        let data: serde_json::Value = self.client
-            .get(format!("https://api.mboum.com/v1/markets/stock/quotes?ticker={}", symbol))
+        let data: serde_json::Value = self
+            .client
+            .get(format!(
+                "https://api.mboum.com/v1/markets/stock/quotes?ticker={}",
+                symbol
+            ))
             .header("Authorization", format!("Bearer {}", api_key))
-            .send().await.map_err(|e| format!("Mboum 連接失敗: {}", e))?
-            .error_for_status().map_err(|e| format!("Mboum API 錯誤: {}", e))?
-            .json().await.map_err(|e| format!("Mboum 解析失敗: {}", e))?;
+            .send()
+            .await
+            .map_err(|e| format!("Mboum 連接失敗: {}", e))?
+            .error_for_status()
+            .map_err(|e| format!("Mboum API 錯誤: {}", e))?
+            .json()
+            .await
+            .map_err(|e| format!("Mboum 解析失敗: {}", e))?;
 
         let q = &data["body"][0];
         if q.is_null() {
@@ -80,21 +100,35 @@ impl DataProvider for MboumProvider {
 
     /// 批量查詢 — ticker=AAPL,MSFT
     async fn fetch_prices(&self, symbols: &[String]) -> Result<Vec<AssetData>, String> {
-        if symbols.is_empty() { return Ok(vec![]); }
-        if symbols.len() == 1 { return self.fetch_price(&symbols[0]).await.map(|d| vec![d]); }
+        if symbols.is_empty() {
+            return Ok(vec![]);
+        }
+        if symbols.len() == 1 {
+            return self.fetch_price(&symbols[0]).await.map(|d| vec![d]);
+        }
 
         let api_key = self.api_key.as_ref().ok_or("Mboum 需要 API Key")?;
         let syms = symbols.join(",");
 
-        let data: serde_json::Value = self.client
-            .get(format!("https://api.mboum.com/v1/markets/stock/quotes?ticker={}", syms))
+        let data: serde_json::Value = self
+            .client
+            .get(format!(
+                "https://api.mboum.com/v1/markets/stock/quotes?ticker={}",
+                syms
+            ))
             .header("Authorization", format!("Bearer {}", api_key))
-            .send().await.map_err(|e| format!("Mboum 批量連接失敗: {}", e))?
-            .error_for_status().map_err(|e| format!("Mboum API 錯誤: {}", e))?
-            .json().await.map_err(|e| format!("Mboum 批量解析失敗: {}", e))?;
+            .send()
+            .await
+            .map_err(|e| format!("Mboum 批量連接失敗: {}", e))?
+            .error_for_status()
+            .map_err(|e| format!("Mboum API 錯誤: {}", e))?
+            .json()
+            .await
+            .map_err(|e| format!("Mboum 批量解析失敗: {}", e))?;
 
         let arr = data["body"].as_array().ok_or("Mboum 批量回應格式錯誤")?;
-        let response_map: HashMap<String, &serde_json::Value> = arr.iter()
+        let response_map: HashMap<String, &serde_json::Value> = arr
+            .iter()
             .filter_map(|v| v["symbol"].as_str().map(|s| (s.to_uppercase(), v)))
             .collect();
 
