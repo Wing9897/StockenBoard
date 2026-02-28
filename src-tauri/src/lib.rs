@@ -6,12 +6,13 @@ mod providers;
 
 use commands::{
     cleanup_history, enable_provider, export_file, fetch_asset_price, fetch_multiple_prices,
-    get_all_providers, get_api_port, get_cached_prices, get_data_dir, get_history_stats,
-    get_icons_dir, get_poll_ticks, get_price_history, get_theme_bg_path, get_unattended_polling,
-    import_file, lookup_dex_pool, purge_all_history, read_local_file_base64, reload_polling,
-    remove_icon, remove_theme_bg, save_theme_bg, set_api_port, set_icon, set_provider_record_hours,
-    set_record_hours, set_unattended_polling, set_visible_subscriptions, start_ws_stream,
-    stop_ws_stream, toggle_record, AppState,
+    get_all_providers, get_api_enabled, get_api_port, get_cached_prices, get_data_dir,
+    get_history_stats, get_icons_dir, get_poll_ticks, get_price_history, get_theme_bg_path,
+    get_unattended_polling, import_file, lookup_dex_pool, purge_all_history,
+    read_local_file_base64, reload_polling, remove_icon, remove_theme_bg, save_theme_bg,
+    set_api_enabled, set_api_port, set_icon, set_provider_record_hours, set_record_hours,
+    set_unattended_polling, set_visible_subscriptions, start_ws_stream, stop_ws_stream,
+    toggle_record, AppState,
 };
 use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
@@ -82,6 +83,8 @@ pub fn run() {
             get_data_dir,
             get_api_port,
             set_api_port,
+            get_api_enabled,
+            set_api_enabled,
         ])
         .setup(|app| {
             if let Ok(app_dir) = app.path().app_data_dir() {
@@ -91,23 +94,42 @@ pub fn run() {
                 state.set_db_path(db_path.clone());
                 state.polling.start(app.handle().clone(), db_path.clone());
 
-                // 啟動 API Server（從 DB 讀取 port）
+                // 啟動 API Server（從 DB 讀取 enabled 和 port）
                 let app_handle = app.handle().clone();
                 let db_path_for_api = db_path.clone();
                 tauri::async_runtime::spawn(async move {
-                    // 從 DB 讀取 API port
-                    let port = match rusqlite::Connection::open(&db_path_for_api) {
-                        Ok(conn) => conn
-                            .query_row(
-                                "SELECT value FROM app_settings WHERE key = 'api_port'",
-                                [],
-                                |row| row.get::<_, String>(0),
-                            )
-                            .ok()
-                            .and_then(|s| s.parse::<u16>().ok())
-                            .unwrap_or(8080),
-                        Err(_) => 8080,
+                    // 從 DB 讀取 API 設定
+                    let (enabled, port) = match rusqlite::Connection::open(&db_path_for_api) {
+                        Ok(conn) => {
+                            let enabled = conn
+                                .query_row(
+                                    "SELECT value FROM app_settings WHERE key = 'api_enabled'",
+                                    [],
+                                    |row| row.get::<_, String>(0),
+                                )
+                                .ok()
+                                .map(|s| s == "1")
+                                .unwrap_or(false);
+
+                            let port = conn
+                                .query_row(
+                                    "SELECT value FROM app_settings WHERE key = 'api_port'",
+                                    [],
+                                    |row| row.get::<_, String>(0),
+                                )
+                                .ok()
+                                .and_then(|s| s.parse::<u16>().ok())
+                                .unwrap_or(8080);
+
+                            (enabled, port)
+                        }
+                        Err(_) => (false, 8080),
                     };
+
+                    if !enabled {
+                        println!("[API] Server 已停用");
+                        return;
+                    }
 
                     let state: tauri::State<AppState> = app_handle.state();
                     let state_arc = std::sync::Arc::new(state.clone_for_api());

@@ -281,6 +281,10 @@ const en: Locale = {
   api: {
     title: 'API Guide',
     description: 'StockenBoard provides HTTP API for external programs (e.g., AI, Python scripts) to access real-time and historical data.',
+    enableApi: 'Enable API Server',
+    enableDesc: 'Restart required after enabling',
+    enabledMsg: 'API enabled, please restart the application',
+    disabledMsg: 'API disabled, please restart the application',
     address: 'API Address',
     editPort: 'Edit Port',
     portRange: 'Port must be between 1024-65535',

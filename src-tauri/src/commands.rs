@@ -770,3 +770,45 @@ pub async fn set_api_port(app: tauri::AppHandle, port: u16) -> Result<(), String
 
     Ok(())
 }
+
+#[tauri::command]
+pub async fn get_api_enabled(app: tauri::AppHandle) -> Result<bool, String> {
+    let db_path = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("無法取得 app 目錄: {}", e))?
+        .join("stockenboard.db");
+
+    let conn =
+        rusqlite::Connection::open(&db_path).map_err(|e| format!("無法開啟資料庫: {}", e))?;
+
+    let enabled: String = conn
+        .query_row(
+            "SELECT value FROM app_settings WHERE key = 'api_enabled'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or_else(|_| "0".to_string());
+
+    Ok(enabled == "1")
+}
+
+#[tauri::command]
+pub async fn set_api_enabled(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let db_path = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("無法取得 app 目錄: {}", e))?
+        .join("stockenboard.db");
+
+    let conn =
+        rusqlite::Connection::open(&db_path).map_err(|e| format!("無法開啟資料庫: {}", e))?;
+
+    conn.execute(
+        "INSERT OR REPLACE INTO app_settings (key, value) VALUES ('api_enabled', ?1)",
+        [if enabled { "1" } else { "0" }],
+    )
+    .map_err(|e| format!("無法儲存設定: {}", e))?;
+
+    Ok(())
+}

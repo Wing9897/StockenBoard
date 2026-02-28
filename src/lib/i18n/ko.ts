@@ -281,6 +281,10 @@ const ko: Locale = {
   api: {
     title: 'API 사용 가이드',
     description: 'StockenBoard는 외부 프로그램(예: AI, Python 스크립트)이 실시간 및 과거 데이터에 액세스할 수 있는 HTTP API를 제공합니다.',
+    enableApi: 'API Server 활성화',
+    enableDesc: '활성화 후 애플리케이션 재시작 필요',
+    enabledMsg: 'API가 활성화되었습니다. 애플리케이션을 다시 시작하세요',
+    disabledMsg: 'API가 비활성화되었습니다. 애플리케이션을 다시 시작하세요',
     address: 'API 주소',
     editPort: '포트 수정',
     portRange: '포트는 1024-65535 사이여야 합니다',

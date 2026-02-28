@@ -69,6 +69,7 @@ INSERT OR IGNORE INTO views (id, name, view_type, is_default) VALUES (1, 'All', 
 INSERT OR IGNORE INTO views (id, name, view_type, is_default) VALUES (2, 'All', 'dex', 1);
 
 INSERT OR IGNORE INTO app_settings (key, value) VALUES ('api_port', '8080');
+INSERT OR IGNORE INTO app_settings (key, value) VALUES ('api_enabled', '0');
 
 CREATE TRIGGER IF NOT EXISTS auto_sort_order
 AFTER INSERT ON subscriptions

@@ -281,6 +281,10 @@ const ja: Locale = {
   api: {
     title: 'API 使用ガイド',
     description: 'StockenBoard は外部プログラム（AI、Python スクリプトなど）がリアルタイムおよび履歴データにアクセスできる HTTP API を提供します。',
+    enableApi: 'API Server を有効化',
+    enableDesc: '有効化後、アプリケーションの再起動が必要です',
+    enabledMsg: 'API を有効化しました。アプリケーションを再起動してください',
+    disabledMsg: 'API を無効化しました。アプリケーションを再起動してください',
     address: 'API アドレス',
     editPort: 'ポート変更',
     portRange: 'ポートは 1024-65535 の範囲で指定してください',

@@ -281,6 +281,10 @@ const zh_CN: Locale = {
   api: {
     title: 'API 使用说明',
     description: 'StockenBoard 提供 HTTP API 让外部程序（如 AI、Python 脚本）访问实时和历史数据。',
+    enableApi: '启用 API Server',
+    enableDesc: '启用后需重启应用程序才会生效',
+    enabledMsg: 'API 已启用，请重启应用程序以生效',
+    disabledMsg: 'API 已停用，请重启应用程序以生效',
     address: 'API 地址',
     editPort: '修改 Port',
     portRange: 'Port 必须在 1024-65535 之间',

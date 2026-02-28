@@ -284,6 +284,10 @@ const zh_TW = {
   api: {
     title: 'API 使用說明',
     description: 'StockenBoard 提供 HTTP API 讓外部程式（如 AI、Python 腳本）訪問實時和歷史數據。',
+    enableApi: '啟用 API Server',
+    enableDesc: '啟用後需重啟應用程式才會生效',
+    enabledMsg: 'API 已啟用，請重啟應用程式以生效',
+    disabledMsg: 'API 已停用，請重啟應用程式以生效',
     address: 'API 地址',
     editPort: '修改 Port',
     portRange: 'Port 必須在 1024-65535 之間',

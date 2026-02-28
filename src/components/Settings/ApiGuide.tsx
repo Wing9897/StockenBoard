@@ -11,18 +11,32 @@ export function ApiGuide() {
   const [apiPort, setApiPort] = useState(8080);
   const [editingPort, setEditingPort] = useState(false);
   const [tempPort, setTempPort] = useState('8080');
+  const [apiEnabled, setApiEnabled] = useState(false);
 
   useEffect(() => {
-    loadApiPort();
+    loadApiSettings();
   }, []);
 
-  const loadApiPort = async () => {
+  const loadApiSettings = async () => {
     try {
       const port = await invoke<number>('get_api_port');
+      const enabled = await invoke<boolean>('get_api_enabled');
       setApiPort(port);
       setTempPort(port.toString());
+      setApiEnabled(enabled);
     } catch (err) {
-      console.error('載入 API port 失敗:', err);
+      console.error('載入 API 設定失敗:', err);
+    }
+  };
+
+  const toggleApiEnabled = async () => {
+    try {
+      const newEnabled = !apiEnabled;
+      await invoke('set_api_enabled', { enabled: newEnabled });
+      setApiEnabled(newEnabled);
+      alert(newEnabled ? t.api.enabledMsg : t.api.disabledMsg);
+    } catch (err) {
+      alert(`${t.api.saveFailed}: ${err}`);
     }
   };
 
@@ -98,8 +112,50 @@ curl ${apiBase}/prices/binance/BTCUSDT`;
       <h3 className="ps-title">{t.api.title}</h3>
       
       <div style={{ padding: '20px', background: 'var(--surface0)', borderRadius: '12px', border: '1px solid var(--surface1)' }}>
+        {/* 啟用開關 */}
+        <div style={{ marginBottom: '20px', padding: '14px', background: 'var(--mantle)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: '15px', fontWeight: '500', color: 'var(--text)', marginBottom: '4px' }}>
+              {t.api.enableApi}
+            </div>
+            <div style={{ fontSize: '13px', color: 'var(--subtext0)' }}>
+              {t.api.enableDesc}
+            </div>
+          </div>
+          <label style={{ position: 'relative', display: 'inline-block', width: '48px', height: '26px', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={apiEnabled}
+              onChange={toggleApiEnabled}
+              style={{ opacity: 0, width: 0, height: 0 }}
+            />
+            <span style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: apiEnabled ? 'var(--green)' : 'var(--surface2)',
+              borderRadius: '13px',
+              transition: 'background 0.2s',
+            }}>
+              <span style={{
+                position: 'absolute',
+                content: '',
+                height: '20px',
+                width: '20px',
+                left: apiEnabled ? '25px' : '3px',
+                bottom: '3px',
+                background: 'white',
+                borderRadius: '50%',
+                transition: 'left 0.2s',
+              }} />
+            </span>
+          </label>
+        </div>
+
         {/* 說明 */}
-        <p style={{ margin: '0 0 16px 0', color: 'var(--text)', lineHeight: '1.6' }}>
+        <p style={{ margin: '0 0 16px 0', color: 'var(--text)', lineHeight: '1.6', opacity: apiEnabled ? 1 : 0.5 }}>
           {t.api.description}
         </p>
         
