@@ -183,7 +183,23 @@ StockenBoard/
 
 ## 🎨 Screenshots
 
-> TODO: Add application screenshots
+### Main Page - Grid View
+![Main Page 1](doc/main_page1.png)
+
+### Main Page - List View
+![Main Page 2](doc/main_page2.png)
+
+### DEX Page
+![DEX Page](doc/dex.png)
+
+### Historical Records & Charts
+![Historical Records](doc/records.png)
+
+### Data Source Settings
+![Data Source Settings](doc/providers.png)
+
+### Settings Page
+![Settings Page](doc/setting_page.png)
 
 ---
 

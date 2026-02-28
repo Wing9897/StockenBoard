@@ -43,3 +43,8 @@ src-tauri/gen/schemas/
 
 # Rust
 *.pdb
+
+# Test scripts (Python)
+*.py
+__pycache__/
+*.pyc

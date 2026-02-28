@@ -183,7 +183,23 @@ StockenBoard/
 
 ## 🎨 스크린샷
 
-> TODO: 애플리케이션 스크린샷 추가
+### 메인 페이지 - Grid 뷰
+![메인 페이지 1](doc/main_page1.png)
+
+### 메인 페이지 - List 뷰
+![메인 페이지 2](doc/main_page2.png)
+
+### DEX 페이지
+![DEX 페이지](doc/dex.png)
+
+### 과거 기록 및 차트
+![과거 기록](doc/records.png)
+
+### 데이터 소스 설정
+![데이터 소스 설정](doc/providers.png)
+
+### 설정 페이지
+![설정 페이지](doc/setting_page.png)
 
 ---
 

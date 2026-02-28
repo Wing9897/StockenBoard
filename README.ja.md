@@ -183,7 +183,23 @@ StockenBoard/
 
 ## 🎨 スクリーンショット
 
-> TODO: アプリケーションのスクリーンショットを追加
+### メインページ - Grid ビュー
+![メインページ 1](doc/main_page1.png)
+
+### メインページ - List ビュー
+![メインページ 2](doc/main_page2.png)
+
+### DEX ページ
+![DEX ページ](doc/dex.png)
+
+### 履歴記録とチャート
+![履歴記録](doc/records.png)
+
+### データソース設定
+![データソース設定](doc/providers.png)
+
+### 設定ページ
+![設定ページ](doc/setting_page.png)
 
 ---
 
