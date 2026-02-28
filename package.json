@@ -3,6 +3,13 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "description": "StockenBoard - Stock & Token Dashboard",
+  "author": "Wing",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/stockenboard.git"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
