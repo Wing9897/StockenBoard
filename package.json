@@ -14,8 +14,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri",
-    "bump": "node bump-version.js"
+    "tauri": "tauri"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
