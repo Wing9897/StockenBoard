@@ -23,11 +23,8 @@
 .btn-save-key { margin-top: 4px; padding: 4px 12px; font-size: 11px; border: 1px solid var(--blue); border-radius: 4px; background: transparent; color: var(--blue); cursor: pointer; align-self: flex-start; }
 .btn-save-key:hover { background: var(--blue-bg); }
 .btn-save-key:disabled { opacity: 0.5; cursor: not-allowed; }
-.form-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
-.btn-edit, .btn-cancel, .btn-save, .btn-add { padding: 6px 12px; border-radius: var(--radius-sm); font-size: 12px; cursor: pointer; transition: all var(--transition-normal); }
-.btn-edit { background: transparent; border: 1px solid var(--blue); color: var(--blue); }
-.btn-edit:hover { background: var(--blue); color: var(--base); }
+.btn-cancel, .btn-save, .btn-add { padding: 6px 12px; border-radius: var(--radius-sm); font-size: 12px; cursor: pointer; transition: all var(--transition-normal); }
 .btn-cancel { background: transparent; border: 1px solid var(--overlay0); color: var(--overlay0); }
 .btn-cancel:hover { background: var(--overlay0); color: var(--base); }
 .btn-save, .btn-add { background: var(--green); border: none; color: var(--base); font-weight: 500; }
@@ -44,8 +41,6 @@
 .mode-btn:hover { background: var(--surface1); color: var(--text); }
 .mode-btn.active { background: var(--blue); border-color: var(--blue); color: var(--base); }
 .mode-interval { font-size: 10px; opacity: 0.8; }
-.badge.free-mode { background: var(--positive-bg); color: var(--green); }
-.badge.api-key-mode { background: var(--blue-bg); color: var(--blue); }
 
 /* Batch Result Modal */
 .batch-result-modal { width: 380px; }
@@ -220,10 +215,7 @@
 
 /* ===== Record Hours (Provider) ===== */
 .record-hours-row { display: flex; flex-direction: column; gap: 8px; }
-.record-hours-row > select { background: var(--surface0); border: 1px solid var(--surface1); border-radius: 6px; padding: 8px 12px; color: var(--text); font-size: 14px; }
-.record-hours-row > select:focus { outline: none; border-color: var(--blue); }
 .record-hours-pickers { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--subtext0); }
-.record-hours-pickers select { background: var(--surface0); border: 1px solid var(--surface1); border-radius: 6px; padding: 6px 10px; color: var(--text); font-size: 13px; }
-.record-hours-pickers select:focus { outline: none; border-color: var(--blue); }
+.record-hours-pickers select { padding: 6px 10px; font-size: 13px; }
 
 .form-hint.priority { color: var(--teal); font-weight: 500; }

@@ -7,6 +7,7 @@ import { useConfirm } from './hooks/useConfirm';
 import { useEscapeKey } from './hooks/useEscapeKey';
 import { useVisibleSubscriptions } from './hooks/useVisibleSubscriptions';
 import { useBulkDelete } from './hooks/useBulkDelete';
+import { useAppModals } from './hooks/useAppModals';
 import { AssetCard } from './components/AssetCard/AssetCard';
 import { ViewEditor } from './components/ViewEditor/ViewEditor';
 import { ViewSubscriptionManager } from './components/ViewEditor/ViewSubscriptionManager';
@@ -33,47 +34,30 @@ import './App.css';
 type Tab = 'dashboard' | 'dex' | 'history' | 'providers' | 'settings';
 
 function App() {
-  useLocale(); // 訂閱語言變更，觸發整個 App 重新渲染
+  useLocale();
   const [activeTab, setActiveTabRaw] = useState<Tab>(() => {
     const saved = localStorage.getItem('sb_active_tab') as Tab | null;
     if (saved === 'dashboard' || saved === 'dex' || saved === 'history' || saved === 'providers' || saved === 'settings') return saved;
     return 'dashboard';
   });
-  const setActiveTab = useCallback((tab: Tab) => {
-    setActiveTabRaw(tab);
-    localStorage.setItem('sb_active_tab', tab);
-  }, []);
+  const setActiveTab = useCallback((tab: Tab) => { setActiveTabRaw(tab); localStorage.setItem('sb_active_tab', tab); }, []);
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem('sb_view_mode');
     if (saved === 'list' || saved === 'compact') return saved;
     return 'grid';
   });
-  const [showSubscriptionManager, setShowSubscriptionManager] = useState(false);
-  const [showViewManager, setShowViewManager] = useState(false);
-  const [showBulkDelete, setShowBulkDelete] = useState(false);
-  const [showBatchActions, setShowBatchActions] = useState(false);
+  const m = useAppModals();
   const [forceExpandAll, setForceExpandAll] = useState(() => localStorage.getItem('sb_expand_all') === '1');
   const [hidePrePost, setHidePrePost] = useState(() => localStorage.getItem('sb_hide_prepost') === '1');
-  const [showAddSubscription, setShowAddSubscription] = useState(false);
   const toast = useToast();
   const { confirmState, requestConfirm, handleConfirm, handleCancel } = useConfirm();
 
-  const handleSetViewMode = (mode: ViewMode) => {
-    setViewMode(mode);
-    localStorage.setItem('sb_view_mode', mode);
-  };
+  const handleSetViewMode = (mode: ViewMode) => { setViewMode(mode); localStorage.setItem('sb_view_mode', mode); };
+
   const {
-    views,
-    activeViewId,
-    activeViewSubscriptionIds,
-    viewSubCounts,
-    setActiveView,
-    createView,
-    renameView,
-    deleteView,
-    addSubscriptionToView,
-    removeSubscriptionFromView,
-    refresh: refreshViews,
+    views, activeViewId, activeViewSubscriptionIds, viewSubCounts,
+    setActiveView, createView, renameView, deleteView,
+    addSubscriptionToView, removeSubscriptionFromView, refresh: refreshViews,
   } = useViews('asset');
 
   const {
@@ -82,22 +66,14 @@ function App() {
     handleDeleteView, togglePinView,
   } = useViewToolbar({
     views, activeViewId, createView, renameView, deleteView, toast,
-    storageKey: 'sb_pinned_views',
-    confirmDelete: requestConfirm,
+    storageKey: 'sb_pinned_views', confirmDelete: requestConfirm,
   });
 
   const {
-    subscriptions,
-    providerInfoList,
-    loading,
-    addSubscription,
-    addSubscriptionBatch,
-    removeSubscription,
-    removeSubscriptions,
-    updateSubscription,
-    getSelectedProvider,
-    getAssetType,
-    getRefreshInterval,
+    subscriptions, providerInfoList, loading,
+    addSubscription, addSubscriptionBatch,
+    removeSubscription, removeSubscriptions,
+    updateSubscription, getSelectedProvider, getAssetType, getRefreshInterval,
     refresh: refreshAssets,
   } = useAssetData();
 
@@ -117,7 +93,6 @@ function App() {
 
   const subscriptionsRef = useRef(subscriptions);
   subscriptionsRef.current = subscriptions;
-
   const isCustomView = activeViewSubscriptionIds !== null;
 
   const handleRemove = useCallback(async (id: number) => {
@@ -135,21 +110,19 @@ function App() {
 
   const handleBulkConfirm = useBulkDelete({
     isCustomView, activeViewId,
-    removeSubscriptions, removeSubscriptionFromView: removeSubscriptionFromView,
+    removeSubscriptions, removeSubscriptionFromView,
     requestConfirm, toast,
-    onDone: () => setShowBulkDelete(false),
+    onDone: () => m.setShowBulkDelete(false),
   });
 
   const handleCopySymbols = () => {
     const symbols = viewFilteredSubs.map(s => s.symbol).join(', ');
     navigator.clipboard.writeText(symbols).then(() => {
       toast.success(t.common.copied, t.subs.symbolsCopied(viewFilteredSubs.length));
-    }).catch(() => {
-      toast.error(t.common.copyFailed);
-    });
+    }).catch(() => { toast.error(t.common.copyFailed); });
   };
 
-  useEscapeKey(() => { if (showAddSubscription) setShowAddSubscription(false); });
+  useEscapeKey(() => { if (m.showAddSubscription) m.setShowAddSubscription(false); });
 
   return (
     <div className="app">
@@ -174,48 +147,33 @@ function App() {
             ) : subscriptions.length === 0 ? (
               <div className="empty-state">
                 <p>{t.subs.noSubs}</p>
-                <button className="btn-add" onClick={() => setShowAddSubscription(true)}>{t.subs.addSub}</button>
+                <button className="btn-add" onClick={() => m.setShowAddSubscription(true)}>{t.subs.addSub}</button>
               </div>
             ) : (
               <>
                 <DashboardToolbar
-                  toolbarViews={toolbarViews}
-                  views={views}
-                  activeViewId={activeViewId}
-                  totalCount={subscriptions.length}
-                  viewSubCounts={viewSubCounts}
-                  isCustomView={isCustomView}
-                  showSubManager={showSubscriptionManager}
-                  viewMode={viewMode}
-                  onSetViewMode={handleSetViewMode}
-                  onSelectView={setActiveView}
-                  onCreateView={handleCreateView}
-                  onOpenViewManager={() => setShowViewManager(true)}
-                  onToggleSubManager={() => setShowSubscriptionManager(prev => !prev)}
-                  onAdd={() => setShowAddSubscription(true)}
+                  toolbarViews={toolbarViews} views={views} activeViewId={activeViewId}
+                  totalCount={subscriptions.length} viewSubCounts={viewSubCounts}
+                  isCustomView={isCustomView} showSubManager={m.showSubscriptionManager}
+                  viewMode={viewMode} onSetViewMode={handleSetViewMode}
+                  onSelectView={setActiveView} onCreateView={handleCreateView}
+                  onOpenViewManager={() => m.setShowViewManager(true)}
+                  onToggleSubManager={() => m.setShowSubscriptionManager(prev => !prev)}
+                  onAdd={() => m.setShowAddSubscription(true)}
                   onCopy={handleCopySymbols}
-                  onBatchActions={() => setShowBatchActions(true)}
-                  onBulkDelete={() => setShowBulkDelete(true)}
-                  addTitle={t.subs.addSub}
-                  copyTitle={t.subs.copyAllSymbols}
+                  onBatchActions={() => m.setShowBatchActions(true)}
+                  onBulkDelete={() => m.setShowBulkDelete(true)}
+                  addTitle={t.subs.addSub} copyTitle={t.subs.copyAllSymbols}
                   bulkDeleteTitle={isCustomView ? t.subs.bulkRemoveView : t.subs.bulkUnsubscribe}
                   tabListLabel={t.nav.pageSwitch}
                 />
                 <div className={getGridClass(viewMode)}>
-                  {viewFilteredSubs.map((sub) => (
-                    <AssetCard
-                      key={sub.id}
-                      subscription={sub}
-                      providers={providerInfoList}
-                      currentProviderId={getSelectedProvider(sub.id)}
-                      assetType={getAssetType(sub.id)}
+                  {viewFilteredSubs.map(sub => (
+                    <AssetCard key={sub.id} subscription={sub} providers={providerInfoList}
+                      currentProviderId={getSelectedProvider(sub.id)} assetType={getAssetType(sub.id)}
                       refreshInterval={getRefreshInterval(sub.selected_provider_id)}
-                      onRemove={handleRemove}
-                      onEdit={updateSubscription}
-                      viewMode={viewMode}
-                      isCustomView={isCustomView}
-                      forceExpand={forceExpandAll}
-                      hidePrePost={hidePrePost}
+                      onRemove={handleRemove} onEdit={updateSubscription} viewMode={viewMode}
+                      isCustomView={isCustomView} forceExpand={forceExpandAll} hidePrePost={hidePrePost}
                     />
                   ))}
                 </div>
@@ -224,114 +182,75 @@ function App() {
           </div>
         )}
 
-        {activeTab === 'dex' && (
-          <DexPage onToast={toast} />
-        )}
-
-        {activeTab === 'history' && (
-          <HistoryPage onToast={toast} />
-        )}
-
+        {activeTab === 'dex' && <DexPage onToast={toast} />}
+        {activeTab === 'history' && <HistoryPage onToast={toast} />}
         {activeTab === 'providers' && (
           <div className="providers-page">
             <ProviderSettings onSaved={() => toast.success(t.providers.settingsSaved)} />
           </div>
         )}
-
         {activeTab === 'settings' && (
           <div className="settings">
             <ThemePicker />
             <LanguagePicker />
             <UICustomizer />
-            <DataManager
-              views={views}
-              onRefresh={() => { refreshAssets(); refreshViews(); }}
-              onToast={(type, title, msg) => toast[type](title, msg)}
-            />
+            <DataManager views={views} onRefresh={() => { refreshAssets(); refreshViews(); }}
+              onToast={(type, title, msg) => toast[type](title, msg)} />
             <p className="settings-disclaimer">{t.settings.disclaimer}</p>
           </div>
         )}
       </main>
 
       {editorState && (
-        <ViewEditor
-          mode={editorState.mode}
+        <ViewEditor mode={editorState.mode}
           currentName={editorState.mode === 'rename' ? editorState.currentName : undefined}
           existingNames={views.map(v => v.name)}
-          onConfirm={handleEditorConfirm}
-          onCancel={() => setEditorState(null)}
-        />
+          onConfirm={handleEditorConfirm} onCancel={() => setEditorState(null)} />
       )}
 
-      {showSubscriptionManager && activeViewSubscriptionIds !== null && (
-        <ViewSubscriptionManager
-          allSubscriptions={subscriptions}
-          viewSubscriptionIds={activeViewSubscriptionIds}
-          onToggleSubscription={(subId, add) => {
-            if (add) addSubscriptionToView(activeViewId, subId);
-            else removeSubscriptionFromView(activeViewId, subId);
-          }}
-          onClose={() => setShowSubscriptionManager(false)}
-        />
+      {m.showSubscriptionManager && activeViewSubscriptionIds !== null && (
+        <ViewSubscriptionManager allSubscriptions={subscriptions} viewSubscriptionIds={activeViewSubscriptionIds}
+          onToggleSubscription={(subId, add) => { if (add) addSubscriptionToView(activeViewId, subId); else removeSubscriptionFromView(activeViewId, subId); }}
+          onClose={() => m.setShowSubscriptionManager(false)} />
       )}
 
-      {showViewManager && (
-        <ViewManager
-          views={views}
-          activeViewId={activeViewId}
-          pinnedViewIds={pinnedViewIds}
-          onSelectView={setActiveView}
-          onTogglePin={togglePinView}
-          onRename={handleRequestRename}
-          onDelete={handleDeleteView}
-          onCreate={handleCreateView}
-          onClose={() => setShowViewManager(false)}
-        />
+      {m.showViewManager && (
+        <ViewManager views={views} activeViewId={activeViewId} pinnedViewIds={pinnedViewIds}
+          onSelectView={setActiveView} onTogglePin={togglePinView} onRename={handleRequestRename}
+          onDelete={handleDeleteView} onCreate={handleCreateView}
+          onClose={() => m.setShowViewManager(false)} />
       )}
 
-      {showBulkDelete && (
-        <BulkDelete
-          subscriptions={viewFilteredSubs}
-          isCustomView={isCustomView}
-          onConfirm={handleBulkConfirm}
-          onClose={() => setShowBulkDelete(false)}
-        />
+      {m.showBulkDelete && (
+        <BulkDelete subscriptions={viewFilteredSubs} isCustomView={isCustomView}
+          onConfirm={handleBulkConfirm} onClose={() => m.setShowBulkDelete(false)} />
       )}
-      {showAddSubscription && (
-        <div className="modal-backdrop sub-modal-backdrop" onClick={() => setShowAddSubscription(false)}>
+
+      {m.showAddSubscription && (
+        <div className="modal-backdrop" onClick={() => m.setShowAddSubscription(false)}>
           <div className="modal-container sub-modal" role="dialog" aria-modal="true" aria-label={t.subs.addSub} onClick={e => e.stopPropagation()}>
             <div className="sub-modal-header">
               <h4 className="sub-modal-title">{t.subs.addSub}</h4>
-              <button className="vsm-close" onClick={() => setShowAddSubscription(false)} aria-label={t.common.close}>✕</button>
+              <button className="vsm-close" onClick={() => m.setShowAddSubscription(false)} aria-label={t.common.close}>✕</button>
             </div>
             <div className="sub-modal-body">
-              <SubscriptionManager
-                onBatchAdd={handleAdd}
-                onBatchAddMultiple={handleBatchAdd}
-                subscriptions={subscriptions}
-                providers={providerInfoList}
+              <SubscriptionManager onBatchAdd={handleAdd} onBatchAddMultiple={handleBatchAdd}
+                subscriptions={subscriptions} providers={providerInfoList}
                 onToast={(type, title, msg) => toast[type](title, msg)}
-                onDone={() => setShowAddSubscription(false)}
-              />
+                onDone={() => m.setShowAddSubscription(false)} />
             </div>
           </div>
         </div>
       )}
 
-      {showBatchActions && (
-        <BatchActions
-          mode="spot"
-          expandAll={forceExpandAll}
-          showPrePost={!hidePrePost}
+      {m.showBatchActions && (
+        <BatchActions mode="spot" expandAll={forceExpandAll} showPrePost={!hidePrePost}
           onToggleExpandAll={() => setForceExpandAll(v => { const next = !v; localStorage.setItem('sb_expand_all', next ? '1' : '0'); return next; })}
           onTogglePrePost={() => setHidePrePost(v => { const next = !v; localStorage.setItem('sb_hide_prepost', next ? '1' : '0'); return next; })}
-          onClose={() => setShowBatchActions(false)}
-        />
+          onClose={() => m.setShowBatchActions(false)} />
       )}
 
-      {confirmState && (
-        <ConfirmDialog message={confirmState.message} onConfirm={handleConfirm} onCancel={handleCancel} />
-      )}
+      {confirmState && <ConfirmDialog message={confirmState.message} onConfirm={handleConfirm} onCancel={handleCancel} />}
     </div>
   );
 }

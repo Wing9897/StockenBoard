@@ -357,6 +357,8 @@ const zh_CN: Locale = {
     records: (n: number) => `${n} 笔记录`,
     cleanup: '清理旧数据',
     cleanupDone: (n: number) => `已清理 ${n} 笔旧记录`,
+    cleanupCurrent: '清除当前数据',
+    noOldData: '没有 90 天前的旧记录',
     purgeAll: '清除全部',
     purgeAllConfirm: '确定要清除所有历史记录吗？此操作无法恢复。',
     purgeAllDone: (n: number) => `已清除 ${n} 笔记录`,

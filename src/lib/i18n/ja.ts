@@ -357,6 +357,8 @@ const ja: Locale = {
     records: (n: number) => `${n} 件の記録`,
     cleanup: '古いデータを削除',
     cleanupDone: (n: number) => `${n} 件の古い記録を削除しました`,
+    cleanupCurrent: '現在のデータを削除',
+    noOldData: '90日以前の記録はありません',
     purgeAll: '全件削除',
     purgeAllConfirm: 'すべての履歴を削除しますか？この操作は元に戻せません。',
     purgeAllDone: (n: number) => `${n} 件の記録を削除しました`,

@@ -357,6 +357,8 @@ const en: Locale = {
     records: (n: number) => `${n} records`,
     cleanup: 'Clean Up Old Data',
     cleanupDone: (n: number) => `Cleaned up ${n} old records`,
+    cleanupCurrent: 'Delete Current Data',
+    noOldData: 'No records older than 90 days',
     purgeAll: 'Purge All',
     purgeAllConfirm: 'Are you sure you want to delete all history records? This cannot be undone.',
     purgeAllDone: (n: number) => `Purged ${n} records`,

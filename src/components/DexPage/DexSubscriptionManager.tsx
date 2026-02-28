@@ -173,7 +173,7 @@ export function DexSubscriptionManager({ onAdd, existingKeys, onToast, onClose }
       : t.dex.evmPoolPlaceholder;
 
   return (
-    <div className="modal-backdrop sub-modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-container sub-modal" role="dialog" aria-modal="true" aria-label={t.dex.addDexSub} onClick={e => e.stopPropagation()}>
         <div className="sub-modal-header">
           <h4 className="sub-modal-title">{t.dex.addDexSub}</h4>

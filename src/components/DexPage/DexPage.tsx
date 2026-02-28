@@ -4,6 +4,7 @@ import { useViews } from '../../hooks/useViews';
 import { useViewToolbar } from '../../hooks/useViewToolbar';
 import { useVisibleSubscriptions } from '../../hooks/useVisibleSubscriptions';
 import { useBulkDelete } from '../../hooks/useBulkDelete';
+import { useLocale } from '../../hooks/useLocale';
 import { t } from '../../lib/i18n';
 import { getGridClass } from '../../lib/viewUtils';
 import { useConfirm } from '../../hooks/useConfirm';
@@ -29,6 +30,7 @@ interface DexPageProps {
 }
 
 export function DexPage({ onToast }: DexPageProps) {
+  useLocale();
   const { confirmState, requestConfirm, handleConfirm, handleCancel } = useConfirm();
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem('sb_dex_view_mode');

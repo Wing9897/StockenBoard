@@ -81,10 +81,3 @@ export interface PriceHistoryRecord {
   post_price: number | null;
   recorded_at: number;
 }
-
-export interface HistoryStats {
-  subscription_id: number;
-  total_records: number;
-  earliest: number | null;
-  latest: number | null;
-}

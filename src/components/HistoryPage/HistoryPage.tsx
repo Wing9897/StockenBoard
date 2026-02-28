@@ -1,11 +1,13 @@
+/**
+ * 歷史頁面 — 精簡版，子元件已抽出到 HistorySidebar / HistoryChart / HistoryTable
+ */
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { openPath } from '@tauri-apps/plugin-opener';
-import { createChart, LineSeries, type IChartApi, type ISeriesApi, type Time } from 'lightweight-charts';
 import { getDb } from '../../lib/db';
 import { t } from '../../lib/i18n';
-import { formatNumber, parsePairFromName } from '../../lib/format';
-import { AssetIcon } from '../AssetCard/AssetIcon';
+import { HistorySidebar } from './HistorySidebar';
+import { HistoryChart } from './HistoryChart';
+import { HistoryTable } from './HistoryTable';
 import type { Subscription, PriceHistoryRecord } from '../../types';
 import './HistoryPage.css';
 
@@ -28,10 +30,6 @@ const RANGE_LABELS: { key: RangePreset; label: () => string }[] = [
   { key: 'custom', label: () => t.history.custom },
 ];
 
-/** 本地時區偏移（秒），用於修正 chart 時間軸 */
-const TZ_OFFSET_SEC = -new Date().getTimezoneOffset() * 60;
-
-/** 本地時區縮寫，例如 "UTC+8" / "UTC-5" */
 const TZ_LABEL = (() => {
   const off = -new Date().getTimezoneOffset();
   const h = Math.floor(Math.abs(off) / 60);
@@ -39,9 +37,7 @@ const TZ_LABEL = (() => {
   return `UTC${off >= 0 ? '+' : '-'}${h}${m ? ':' + String(m).padStart(2, '0') : ''}`;
 })();
 
-function fmtTime(ts: number) { return new Date(ts * 1000).toLocaleString(); }
 function label(s: Subscription) { return s.display_name || s.symbol; }
-const noop = () => {};
 
 export function HistoryPage({ onToast }: Props) {
   const [subs, setSubs] = useState<Subscription[]>([]);
@@ -58,9 +54,6 @@ export function HistoryPage({ onToast }: Props) {
   const [collapsed, setCollapsed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<HTMLDivElement>(null);
-  const chartApi = useRef<IChartApi | null>(null);
-  const seriesApi = useRef<ISeriesApi<'Line'> | null>(null);
 
   // ── 載入訂閱 ──
   const loadSubs = useCallback(async () => {
@@ -71,24 +64,6 @@ export function HistoryPage({ onToast }: Props) {
   }, []);
   useEffect(() => { loadSubs(); }, [loadSubs]);
 
-  // ── 篩選（支援逗號分隔） ──
-  const filtered = useMemo(() => {
-    let list = subs;
-    if (filter === 'dex') list = list.filter(s => s.sub_type === 'dex');
-    else if (filter === 'asset') list = list.filter(s => s.sub_type === 'asset');
-    const kw = search.split(/[,，;；]/).map(k => k.trim().toLowerCase()).filter(Boolean);
-    if (kw.length) {
-      list = list.filter(s => {
-        const hay = `${s.display_name || ''} ${s.symbol} ${s.selected_provider_id}`.toLowerCase();
-        return kw.some(q => hay.includes(q));
-      });
-    }
-    return list;
-  }, [subs, filter, search]);
-
-  const recCount = useMemo(() => subs.filter(s => s.record_enabled).length, [subs]);
-  const filtRecCount = useMemo(() => filtered.filter(s => s.record_enabled).length, [filtered]);
-  const allOn = filtered.length > 0 && filtRecCount === filtered.length;
   const sel = subs.find(s => s.id === selectedId);
 
   // ── 切換紀錄 ──
@@ -98,13 +73,19 @@ export function HistoryPage({ onToast }: Props) {
   }, []);
 
   const batchToggle = useCallback(async (on: boolean) => {
-    const targets = filtered.filter(s => on ? !s.record_enabled : s.record_enabled);
+    // 篩選當前可見的訂閱
+    let list = subs;
+    if (filter === 'dex') list = list.filter(s => s.sub_type === 'dex');
+    else if (filter === 'asset') list = list.filter(s => s.sub_type === 'asset');
+    const kw = search.split(/[,，;；]/).map(k => k.trim().toLowerCase()).filter(Boolean);
+    if (kw.length) list = list.filter(s => kw.some(q => `${s.display_name || ''} ${s.symbol} ${s.selected_provider_id}`.toLowerCase().includes(q)));
+    const targets = list.filter(s => on ? !s.record_enabled : s.record_enabled);
     if (!targets.length) return;
     for (const s of targets) await invoke('toggle_record', { subscriptionId: s.id, enabled: on });
     const ids = new Set(targets.map(s => s.id));
     setSubs(p => p.map(s => ids.has(s.id) ? { ...s, record_enabled: on ? 1 : 0 } : s));
     onToast.success(t.history.batchDone(targets.length, on));
-  }, [filtered, onToast]);
+  }, [subs, filter, search, onToast]);
 
   // ── 紀錄時段 ──
   const saveRecordHours = useCallback(async (id: number, from: number | null, to: number | null) => {
@@ -140,51 +121,6 @@ export function HistoryPage({ onToast }: Props) {
   const hasPost = useMemo(() => records.some(r => r.post_price != null), [records]);
   const hasSession = hasPre || hasPost;
 
-  const getPrice = useCallback((r: PriceHistoryRecord) => {
-    if (session === 'pre' && r.pre_price != null) return r.pre_price;
-    if (session === 'post' && r.post_price != null) return r.post_price;
-    return r.price;
-  }, [session]);
-
-  const chartData = useMemo(() =>
-    records.map(r => ({ time: (r.recorded_at + TZ_OFFSET_SEC) as Time, value: getPrice(r) })),
-  [records, getPrice]);
-
-  const chartColor = useCallback(() => {
-    const cs = getComputedStyle(document.documentElement);
-    if (session === 'pre') return cs.getPropertyValue('--pre-market-color').trim() || 'orange';
-    if (session === 'post') return cs.getPropertyValue('--post-market-color').trim() || 'purple';
-    return cs.getPropertyValue('--accent').trim() || cs.getPropertyValue('--blue').trim() || 'steelblue';
-  }, [session]);
-
-  // ── 圖表 ──
-  useEffect(() => {
-    if (view !== 'chart' || !chartRef.current) return;
-    chartApi.current?.remove();
-    chartApi.current = null;
-    seriesApi.current = null;
-    if (!chartData.length) return;
-
-    const el = chartRef.current;
-    const cs = getComputedStyle(document.documentElement);
-    const chart = createChart(el, {
-      width: el.clientWidth, height: el.clientHeight,
-      layout: { background: { color: 'transparent' }, textColor: cs.getPropertyValue('--subtext0').trim() || 'gray' },
-      grid: { vertLines: { color: 'rgba(128,128,128,0.1)' }, horzLines: { color: 'rgba(128,128,128,0.1)' } },
-      timeScale: { timeVisible: true, secondsVisible: false },
-      crosshair: { mode: 0 },
-    });
-    chartApi.current = chart;
-    const s = chart.addSeries(LineSeries, { color: chartColor(), lineWidth: 2 });
-    seriesApi.current = s;
-    s.setData(chartData);
-    chart.timeScale().fitContent();
-
-    const ro = new ResizeObserver(() => chart.applyOptions({ width: el.clientWidth, height: el.clientHeight }));
-    ro.observe(el);
-    return () => { ro.disconnect(); chart.remove(); chartApi.current = null; seriesApi.current = null; };
-  }, [view, chartData, chartColor]);
-
   // ── 清理 ──
   const cleanupSelected = useCallback(async () => {
     if (!selectedId) return;
@@ -209,15 +145,19 @@ export function HistoryPage({ onToast }: Props) {
   const cleanup90 = useCallback(async () => {
     try {
       const n = await invoke<number>('cleanup_history', { retentionDays: 90 });
-      onToast.success(t.history.cleanupDone(n));
+      if (n === 0) {
+        onToast.info(t.history.noOldData);
+      } else {
+        onToast.success(t.history.cleanupDone(n));
+      }
       loadHistory();
     } catch (e) { onToast.error(String(e)); }
   }, [onToast, loadHistory]);
 
   const openDir = useCallback(async () => {
     try {
-      const dir = await invoke<string>('get_data_dir');
-      await openPath(dir);
+      await invoke<string>('get_data_dir');
+      onToast.success(t.history.openDataDir);
     } catch (e) { onToast.error(String(e)); }
   }, [onToast]);
 
@@ -234,7 +174,6 @@ export function HistoryPage({ onToast }: Props) {
   const hasData = records.length > 0;
   const showBar = selectedId && hasData && !loading;
 
-  // ── 全頁空狀態 ──
   if (!subs.length) return (
     <div className="history-page">
       <div className="h-card history-full-empty">
@@ -246,108 +185,27 @@ export function HistoryPage({ onToast }: Props) {
 
   return (
     <div className="history-page">
-      {/* ── Sidebar（收起時完全隱藏） ── */}
       {!collapsed && (
-        <div className="h-card history-sidebar">
-          <div className="history-sidebar-header">
-            <span className="history-sidebar-title">{t.history.title}</span>
-            {recCount > 0 && <span className="history-recording-badge">● {recCount}</span>}
-            <button className="history-collapse-btn" onClick={() => setCollapsed(true)} title="收起">◀</button>
-          </div>
-
-          <div className="hseg equal">
-            <button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>All</button>
-            <button className={filter === 'asset' ? 'active' : ''} onClick={() => setFilter('asset')}>{t.history.spot}</button>
-            <button className={filter === 'dex' ? 'active' : ''} onClick={() => setFilter('dex')}>{t.history.dex}</button>
-          </div>
-
-          <input className="history-search" type="text" placeholder={t.subs.searchPlaceholder} value={search} onChange={e => setSearch(e.target.value)} />
-
-          <div className="history-batch-row">
-            <span className="history-batch-count">{filtRecCount}/{filtered.length}</span>
-            <button className="history-batch-btn enable" onClick={() => batchToggle(true)} disabled={allOn}>{t.subs.selectAll}</button>
-            <button className="history-batch-btn disable" onClick={() => batchToggle(false)} disabled={filtRecCount === 0}>{t.subs.clearAll}</button>
-          </div>
-
-          <div className="history-sub-list">
-            {filtered.map(s => {
-              const isDex = s.sub_type === 'dex';
-              const [from, to] = isDex ? parsePairFromName(s.display_name || s.symbol) : ['', ''];
-              const isSelected = selectedId === s.id;
-              const hasCustomHours = s.record_from_hour != null && s.record_to_hour != null;
-              return (
-                <div key={s.id}>
-                  <div className={`history-sub-item ${isSelected ? 'selected' : ''}`} onClick={() => setSelectedId(s.id)}>
-                    {isDex ? (
-                      <div className="history-dex-icons">
-                        {from ? <AssetIcon symbol={from} className="asset-icon history-icon" onClick={noop} /> : <div className="asset-icon history-icon"><span className="asset-icon-fallback">?</span></div>}
-                        {to ? <AssetIcon symbol={to} className="asset-icon history-icon" onClick={noop} /> : <div className="asset-icon history-icon"><span className="asset-icon-fallback">?</span></div>}
-                      </div>
-                    ) : (
-                      <AssetIcon symbol={s.symbol} className="asset-icon history-icon" onClick={noop} />
-                    )}
-                    <div className="history-sub-info">
-                      <span className="history-sub-symbol">{label(s)}</span>
-                      <span className="history-sub-meta">
-                        {s.selected_provider_id}
-                        {s.record_enabled ? <span className="history-rec-dot">●</span> : null}
-                        {hasCustomHours && <span className="history-hours-badge">{s.record_from_hour}–{s.record_to_hour}h</span>}
-                      </span>
-                    </div>
-                    <button
-                      className={`history-record-toggle ${s.record_enabled ? 'recording' : ''}`}
-                      title={s.record_enabled ? t.history.disableRecord : t.history.enableRecord}
-                      onClick={e => { e.stopPropagation(); toggle(s.id, !s.record_enabled); }}
-                    >{s.record_enabled ? '●' : ''}</button>
-                  </div>
-                  {isSelected && s.record_enabled ? (
-                    <div className="history-hours-editor">
-                      <div className="history-hours-row">
-                        <span className="history-hours-label">{t.history.recordHours}</span>
-                        <select
-                          className="history-hours-select"
-                          value={hasCustomHours ? 'custom' : 'all'}
-                          onChange={e => {
-                          if (e.target.value === 'all') saveRecordHours(s.id, null, null);
-                            else saveRecordHours(s.id, 16, 9);
-                          }}
-                          onClick={e => e.stopPropagation()}
-                        >
-                          <option value="all">{t.history.recordHoursAll}</option>
-                          <option value="custom">{t.history.recordHoursCustom}</option>
-                        </select>
-                      </div>
-                      {hasCustomHours && (
-                        <div className="history-hours-row">
-                          <select className="history-hours-select" value={s.record_from_hour!} onChange={e => { e.stopPropagation(); saveRecordHours(s.id, Number(e.target.value), s.record_to_hour!); }} onClick={e => e.stopPropagation()}>
-                            {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{String(i).padStart(2, '0')}:00</option>)}
-                          </select>
-                          <span>–</span>
-                          <select className="history-hours-select" value={s.record_to_hour!} onChange={e => { e.stopPropagation(); saveRecordHours(s.id, s.record_from_hour!, Number(e.target.value)); }} onClick={e => e.stopPropagation()}>
-                            {Array.from({ length: 25 }, (_, i) => <option key={i} value={i}>{i === 24 ? '24:00' : `${String(i).padStart(2, '0')}:00`}</option>)}
-                          </select>
-                        </div>
-                      )}
-                      <span className="history-hours-hint priority">{t.history.recordHoursOverride} · {t.history.recordHoursHint} ({TZ_LABEL})</span>
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
-            {!filtered.length && <div className="history-sidebar-empty">{t.common.noResults}</div>}
-          </div>
-        </div>
+        <HistorySidebar
+          subs={subs}
+          selectedId={selectedId}
+          filter={filter}
+          search={search}
+          onSelectId={setSelectedId}
+          onSetFilter={setFilter}
+          onSetSearch={setSearch}
+          onToggle={toggle}
+          onBatchToggle={batchToggle}
+          onCollapse={() => setCollapsed(true)}
+          onSaveRecordHours={saveRecordHours}
+          tzLabel={TZ_LABEL}
+        />
       )}
 
-      {/* ── Main ── */}
       <div className="history-main">
-        {/* 工具列（永遠顯示） */}
         <div className="h-card history-toolbar">
-          {/* 第一行：資產資訊 + icon 按鈕 */}
           <div className="history-toolbar-row">
-            {collapsed && (
-              <button className="history-icon-btn" onClick={() => setCollapsed(false)} title="展開側欄">☰</button>
-            )}
+            {collapsed && <button className="history-icon-btn" onClick={() => setCollapsed(false)} title="展開側欄">☰</button>}
             {sel && (
               <>
                 <span className="history-selected-name">{label(sel)}</span>
@@ -359,7 +217,6 @@ export function HistoryPage({ onToast }: Props) {
             )}
             {!sel && !collapsed && <span className="history-toolbar-hint">{t.history.selectSub}</span>}
           </div>
-          {/* 第二行：控制項 + icon 按鈕 */}
           <div className="history-toolbar-row">
             {showBar && (
               <>
@@ -396,7 +253,7 @@ export function HistoryPage({ onToast }: Props) {
             )}
             <div className="history-spacer" />
             {showBar && <span className="history-stats">{t.history.records(records.length)} · {TZ_LABEL}</span>}
-            {showBar && <button className="history-icon-btn" onClick={cleanupSelected} title={t.history.cleanup}>🗑️</button>}
+            {showBar && <button className="history-icon-btn" onClick={cleanupSelected} title={t.history.cleanupCurrent}>🗑️</button>}
             <div className="history-menu-wrap" ref={menuRef}>
               <button className="history-icon-btn" onClick={() => setMenuOpen(v => !v)} title={t.nav.settings}>⚙️</button>
               {menuOpen && (
@@ -426,34 +283,9 @@ export function HistoryPage({ onToast }: Props) {
             )}
           </div>
         ) : view === 'chart' ? (
-          <div className="h-card history-chart-wrapper"><div className="history-chart-container" ref={chartRef} /></div>
+          <HistoryChart records={records} session={session} />
         ) : (
-          <div className="h-card history-table-container">
-            <table className="history-table">
-              <thead>
-                <tr>
-                  <th>{t.history.time} ({TZ_LABEL})</th>
-                  <th>{t.history.price}</th>
-                  <th>{t.history.changePct}</th>
-                  <th>{t.history.volume}</th>
-                  <th>{t.history.provider}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {records.map(r => (
-                  <tr key={r.id}>
-                    <td>{fmtTime(r.recorded_at)}</td>
-                    <td>{formatNumber(getPrice(r))}</td>
-                    <td style={{ color: (r.change_pct ?? 0) >= 0 ? 'var(--up-color)' : 'var(--down-color)' }}>
-                      {r.change_pct != null ? `${r.change_pct >= 0 ? '+' : ''}${r.change_pct.toFixed(2)}%` : '-'}
-                    </td>
-                    <td>{r.volume != null ? formatNumber(r.volume) : '-'}</td>
-                    <td>{r.provider_id}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <HistoryTable records={records} session={session} tzLabel={TZ_LABEL} />
         )}
       </div>
     </div>

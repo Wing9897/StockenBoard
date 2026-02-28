@@ -1,11 +1,10 @@
 /**
- * AssetCard 的編輯面板 — 從 AssetCard.tsx 抽出，減少主元件複雜度。
+ * AssetCard 的編輯面板 — 使用 EditPanelShell 共用外殼
  */
-import { useState, useRef, useMemo } from 'react';
-import { createPortal } from 'react-dom';
+import { useState, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { Subscription, ProviderInfo } from '../../types';
-import { useEscapeKey } from '../../hooks/useEscapeKey';
+import { EditPanelShell } from '../EditPanel/EditPanelShell';
 import { t } from '../../lib/i18n';
 
 interface AssetEditPanelProps {
@@ -26,9 +25,6 @@ export function AssetEditPanel({ subscription, providers, currentProviderId, ass
   const [editAssetType, setEditAssetType] = useState<'crypto' | 'stock'>(assetType);
   const [editError, setEditError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const editRef = useRef<HTMLDivElement>(null);
-
-  useEscapeKey(onClose);
 
   const filteredProviders = useMemo(() => providers.filter(p =>
     editAssetType === 'crypto'
@@ -58,51 +54,45 @@ export function AssetEditPanel({ subscription, providers, currentProviderId, ass
       onClose();
     } catch (err) {
       setEditError(t.dex.saveFailed(err instanceof Error ? err.message : String(err)));
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   };
 
-  return createPortal(
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-container asset-edit-panel" ref={editRef} role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
-        <div className="edit-row">
-          <label>{isEditDex ? t.subForm.symbolDex : t.subForm.symbol}</label>
-          <input value={editSymbol} onChange={e => { setEditSymbol(e.target.value); setEditError(null); }} disabled={saving}
-            placeholder={isEditDex ? (editProvider === 'jupiter' ? t.dex.solMintEditPlaceholder : t.dex.ethAddrEditPlaceholder) : ''}
-            className={isEditDex ? 'dex-address-input' : undefined}
-          />
-          {isEditDex && editProvider === 'jupiter' && <span className="edit-hint">{t.subForm.jupiterEditHint}</span>}
-          {isEditDex && editProvider === 'okx_dex' && <span className="edit-hint">{t.subForm.okxDexEditHint}</span>}
-        </div>
-        <div className="edit-row">
-          <label>{t.dex.nickname}</label>
-          <input value={editDisplayName} onChange={e => setEditDisplayName(e.target.value)} placeholder={t.dex.nicknameOptional} disabled={saving} />
-        </div>
-        <div className="edit-row">
-          <label>{t.common.type}</label>
-          <div className="edit-type-toggle">
-            <button type="button" className={editAssetType === 'crypto' ? 'active' : ''} onClick={() => { setEditAssetType('crypto'); setEditProvider('binance'); }} disabled={saving}>{t.subForm.cryptoShort}</button>
-            <button type="button" className={editAssetType === 'stock' ? 'active' : ''} onClick={() => { setEditAssetType('stock'); setEditProvider('yahoo'); }} disabled={saving}>{t.subForm.stockShort}</button>
-          </div>
-        </div>
-        <div className="edit-row">
-          <label>{t.dex.provider}</label>
-          <select value={editProvider} onChange={e => setEditProvider(e.target.value)} disabled={saving}>
-            {filteredProviders.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-          {editProviderInfo?.requires_api_key && <span className="edit-hint warning">{t.subForm.apiKeyRequired}</span>}
-        </div>
-        {editError && <div className="edit-error">{editError}</div>}
-        <div className="edit-actions">
-          <button className="edit-btn delete" onClick={() => { onRemove(subscription.id); onClose(); }}>{isCustomView ? t.subs.removeDisplay : t.common.delete}</button>
-          <div className="edit-actions-right">
-            <button className="edit-btn cancel" onClick={onClose} disabled={saving}>{t.common.cancel}</button>
-            <button className="edit-btn save" onClick={handleSave} disabled={saving}>{saving ? t.common.saving : t.common.save}</button>
-          </div>
+  return (
+    <EditPanelShell
+      error={editError}
+      saving={saving}
+      isCustomView={isCustomView}
+      onSave={handleSave}
+      onDelete={() => { onRemove(subscription.id); onClose(); }}
+      onClose={onClose}
+    >
+      <div className="edit-row">
+        <label>{isEditDex ? t.subForm.symbolDex : t.subForm.symbol}</label>
+        <input value={editSymbol} onChange={e => { setEditSymbol(e.target.value); setEditError(null); }} disabled={saving}
+          placeholder={isEditDex ? (editProvider === 'jupiter' ? t.dex.solMintEditPlaceholder : t.dex.ethAddrEditPlaceholder) : ''}
+          className={isEditDex ? 'dex-address-input' : undefined}
+        />
+        {isEditDex && editProvider === 'jupiter' && <span className="edit-hint">{t.subForm.jupiterEditHint}</span>}
+        {isEditDex && editProvider === 'okx_dex' && <span className="edit-hint">{t.subForm.okxDexEditHint}</span>}
+      </div>
+      <div className="edit-row">
+        <label>{t.dex.nickname}</label>
+        <input value={editDisplayName} onChange={e => setEditDisplayName(e.target.value)} placeholder={t.dex.nicknameOptional} disabled={saving} />
+      </div>
+      <div className="edit-row">
+        <label>{t.common.type}</label>
+        <div className="edit-type-toggle">
+          <button type="button" className={editAssetType === 'crypto' ? 'active' : ''} onClick={() => { setEditAssetType('crypto'); setEditProvider('binance'); }} disabled={saving}>{t.subForm.cryptoShort}</button>
+          <button type="button" className={editAssetType === 'stock' ? 'active' : ''} onClick={() => { setEditAssetType('stock'); setEditProvider('yahoo'); }} disabled={saving}>{t.subForm.stockShort}</button>
         </div>
       </div>
-    </div>,
-    document.body
+      <div className="edit-row">
+        <label>{t.dex.provider}</label>
+        <select value={editProvider} onChange={e => setEditProvider(e.target.value)} disabled={saving}>
+          {filteredProviders.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        {editProviderInfo?.requires_api_key && <span className="edit-hint warning">{t.subForm.apiKeyRequired}</span>}
+      </div>
+    </EditPanelShell>
   );
 }

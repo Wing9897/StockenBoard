@@ -357,6 +357,8 @@ const ko: Locale = {
     records: (n: number) => `${n}개 기록`,
     cleanup: '오래된 데이터 정리',
     cleanupDone: (n: number) => `${n}개의 오래된 기록을 정리했습니다`,
+    cleanupCurrent: '현재 데이터 삭제',
+    noOldData: '90일 이전의 기록이 없습니다',
     purgeAll: '전체 삭제',
     purgeAllConfirm: '모든 기록을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.',
     purgeAllDone: (n: number) => `${n}개의 기록을 삭제했습니다`,

@@ -251,7 +251,7 @@ export function SubscriptionManager({ onBatchAdd, onBatchAddMultiple, subscripti
       </form>
 
       {batchResult && (
-        <div className="modal-backdrop batch-result-backdrop" onClick={() => setBatchResult(null)}>
+        <div className="modal-backdrop" onClick={() => setBatchResult(null)}>
           <div className="modal-container batch-result-modal" role="dialog" aria-modal="true" aria-label={t.batchResult.title} onClick={e => e.stopPropagation()}>
             <div className="batch-result-header">
               <h4 className="batch-result-title">{t.batchResult.title}</h4>

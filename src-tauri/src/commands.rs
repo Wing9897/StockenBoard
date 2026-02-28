@@ -6,6 +6,7 @@ use crate::providers::{
 use std::collections::HashMap;
 use std::sync::Arc;
 use tauri::{Emitter, Manager};
+use tauri_plugin_shell::ShellExt;
 use tokio::sync::{broadcast, RwLock};
 
 pub struct AppState {
@@ -611,5 +612,34 @@ pub async fn get_data_dir(
 ) -> Result<String, String> {
     let dir = app.path().app_data_dir()
         .map_err(|e| format!("無法取得 app 目錄: {}", e))?;
+    
+    // 使用 shell 插件打開資料夾
+    #[cfg(target_os = "windows")]
+    {
+        let path_str = dir.to_string_lossy().to_string();
+        app.shell().command("explorer")
+            .arg(&path_str)
+            .spawn()
+            .map_err(|e| format!("無法開啟資料夾: {}", e))?;
+    }
+    
+    #[cfg(target_os = "macos")]
+    {
+        let path_str = dir.to_string_lossy().to_string();
+        app.shell().command("open")
+            .arg(&path_str)
+            .spawn()
+            .map_err(|e| format!("無法開啟資料夾: {}", e))?;
+    }
+    
+    #[cfg(target_os = "linux")]
+    {
+        let path_str = dir.to_string_lossy().to_string();
+        app.shell().command("xdg-open")
+            .arg(&path_str)
+            .spawn()
+            .map_err(|e| format!("無法開啟資料夾: {}", e))?;
+    }
+    
     Ok(dir.to_string_lossy().to_string())
 }

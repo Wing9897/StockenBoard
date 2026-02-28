@@ -1,12 +1,11 @@
 /**
- * DexCard 的編輯面板 — 從 DexCard.tsx 抽出。
+ * DexCard 的編輯面板 — 使用 EditPanelShell 共用外殼
  */
-import { useState, useRef, useMemo } from 'react';
-import { createPortal } from 'react-dom';
+import { useState, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { Subscription, ProviderInfo } from '../../types';
 import { truncateAddr } from '../../lib/format';
-import { useEscapeKey } from '../../hooks/useEscapeKey';
+import { EditPanelShell } from '../EditPanel/EditPanelShell';
 import { t } from '../../lib/i18n';
 
 interface DexEditPanelProps {
@@ -38,9 +37,6 @@ export function DexEditPanel({ subscription, providers, isCustomView, onSave, on
   const [saving, setSaving] = useState(false);
   const [lookingUp, setLookingUp] = useState(false);
   const [manualTokens, setManualTokens] = useState(false);
-  const editRef = useRef<HTMLDivElement>(null);
-
-  useEscapeKey(onClose);
 
   const editBusy = saving || lookingUp;
   const isEditJupiter = editProvider === 'jupiter';
@@ -49,31 +45,22 @@ export function DexEditPanel({ subscription, providers, isCustomView, onSave, on
   const handleLookup = async () => {
     const pool = editPool.trim();
     if (!pool) { setEditError(isEditJupiter ? t.errors.pairInputRequired : t.errors.poolInputRequired); return; }
-    setLookingUp(true);
-    setEditError(null);
+    setLookingUp(true); setEditError(null);
     try {
       const info = await invoke<{ token0_address: string; token0_symbol: string; token1_address: string; token1_symbol: string }>(
         'lookup_dex_pool', { providerId: editProvider, poolAddress: pool }
       );
-      setEditTokenFrom(info.token0_address);
-      setEditTokenTo(info.token1_address);
-      setEditFromSymbol(info.token0_symbol);
-      setEditToSymbol(info.token1_symbol);
-      if (isEditJupiter && !editDisplayName) {
-        setEditDisplayName(`${info.token0_symbol}/${info.token1_symbol}`);
-      }
+      setEditTokenFrom(info.token0_address); setEditTokenTo(info.token1_address);
+      setEditFromSymbol(info.token0_symbol); setEditToSymbol(info.token1_symbol);
+      if (isEditJupiter && !editDisplayName) setEditDisplayName(`${info.token0_symbol}/${info.token1_symbol}`);
     } catch (err) {
-      setEditError(t.dex.lookupFailed(err instanceof Error ? err.message : String(err)));
+      setEditError(t.dex.lookupFailed(err instanceof Error ? err.message : String(err)) + t.dex.lookupFailedManualHint);
     } finally { setLookingUp(false); }
   };
 
   const handleSwap = () => {
-    const tmpFrom = editTokenFrom;
-    const tmpFromSym = editFromSymbol;
-    setEditTokenFrom(editTokenTo);
-    setEditTokenTo(tmpFrom);
-    setEditFromSymbol(editToSymbol);
-    setEditToSymbol(tmpFromSym);
+    setEditTokenFrom(editTokenTo); setEditTokenTo(editTokenFrom);
+    setEditFromSymbol(editToSymbol); setEditToSymbol(editFromSymbol);
   };
 
   const handleSave = async () => {
@@ -81,8 +68,7 @@ export function DexEditPanel({ subscription, providers, isCustomView, onSave, on
     const finalPool = isJup ? 'auto' : editPool.trim();
     if (!isJup && !finalPool) { setEditError(t.dex.poolEmpty); return; }
     if (!editTokenFrom.trim() || !editTokenTo.trim()) { setEditError(t.dex.tokenEmpty); return; }
-    setSaving(true);
-    setEditError(null);
+    setSaving(true); setEditError(null);
     const testSymbol = `${finalPool}:${editTokenFrom.trim()}:${editTokenTo.trim()}`;
     try {
       await invoke('fetch_asset_price', { providerId: editProvider, symbol: testSymbol });
@@ -101,9 +87,16 @@ export function DexEditPanel({ subscription, providers, isCustomView, onSave, on
     } finally { setSaving(false); }
   };
 
-  return createPortal(
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-container dex-edit-panel" ref={editRef} role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
+  return (
+    <EditPanelShell
+      className="dex-edit-panel"
+      error={editError}
+      saving={editBusy}
+      isCustomView={isCustomView}
+      onSave={handleSave}
+      onDelete={() => { onRemove(subscription.id); onClose(); }}
+      onClose={onClose}
+    >
       <div className="edit-row">
         <label>{t.dex.provider}</label>
         <select value={editProvider} onChange={e => setEditProvider(e.target.value)} disabled={editBusy}>
@@ -136,9 +129,7 @@ export function DexEditPanel({ subscription, providers, isCustomView, onSave, on
                 <button className="edit-btn cancel dex-edit-swap-sm" onClick={handleSwap} disabled={editBusy} title={t.dex.flipDirection}>⇄</button>
               </div>
             </div>
-            <button type="button" className="dex-edit-link-btn" onClick={() => setManualTokens(false)}>
-              {t.dex.useAutoMode}
-            </button>
+            <button type="button" className="dex-edit-link-btn" onClick={() => setManualTokens(false)}>{t.dex.useAutoMode}</button>
           </>
         ) : (
           <>
@@ -148,9 +139,7 @@ export function DexEditPanel({ subscription, providers, isCustomView, onSave, on
               </span>
               <button className="edit-btn cancel dex-edit-swap-sm" onClick={handleSwap} disabled={editBusy} title={t.dex.flipDirection}>⇄</button>
             </div>
-            <button type="button" className="dex-edit-link-btn" onClick={() => setManualTokens(true)}>
-              {t.dex.useManualMode}
-            </button>
+            <button type="button" className="dex-edit-link-btn" onClick={() => setManualTokens(true)}>{t.dex.useManualMode}</button>
           </>
         )}
       </div>
@@ -158,18 +147,6 @@ export function DexEditPanel({ subscription, providers, isCustomView, onSave, on
         <label>{t.dex.nickname}</label>
         <input value={editDisplayName} onChange={e => setEditDisplayName(e.target.value)} placeholder={t.dex.nicknameOptional} disabled={editBusy} />
       </div>
-      {editError && <div className="edit-error">{editError}</div>}
-      <div className="edit-actions">
-        <button className="edit-btn delete" onClick={() => { onRemove(subscription.id); onClose(); }}>
-          {isCustomView ? t.subs.removeDisplay : t.common.delete}
-        </button>
-        <div className="edit-actions-right">
-          <button className="edit-btn cancel" onClick={onClose} disabled={editBusy}>{t.common.cancel}</button>
-          <button className="edit-btn save" onClick={handleSave} disabled={editBusy}>{saving ? t.common.saving : t.common.save}</button>
-        </div>
-      </div>
-      </div>
-    </div>,
-    document.body
+    </EditPanelShell>
   );
 }

@@ -1,50 +1,28 @@
+/**
+ * Provider 設定頁面 — 精簡版 orchestrator
+ * Grid/List 渲染 inline，Modal 抽到 ProviderModal.tsx
+ */
 import { useState, useMemo } from 'react';
 import { useProviders } from '../../hooks/useProviders';
-import { t } from '../../lib/i18n';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
+import { useLocale } from '../../hooks/useLocale';
+import { TYPE_COLORS, TYPE_BG, getTypeLabels, getTypeFilters } from './providerConstants';
+import { ProviderModal } from './ProviderModal';
+import { t } from '../../lib/i18n';
 import './Settings.css';
 
 type SettingsViewMode = 'grid' | 'list';
 
-const TYPE_COLORS: Record<string, string> = {
-  crypto: 'var(--peach)',
-  stock: 'var(--blue)',
-  both: 'var(--mauve)',
-  prediction: 'var(--teal)',
-  dex: 'var(--yellow)',
-};
-
-const TYPE_BG: Record<string, string> = {
-  crypto: 'var(--peach-bg)',
-  stock: 'var(--blue-bg)',
-  both: 'var(--mauve-bg)',
-  prediction: 'var(--teal-bg)',
-  dex: 'var(--yellow-bg)',
-};
-
 export function ProviderSettings({ onSaved }: { onSaved?: () => void }) {
-  const TYPE_LABELS: Record<string, string> = {
-    crypto: t.providers.crypto,
-    stock: t.providers.stock,
-    both: t.providers.both,
-    prediction: t.providers.prediction,
-    dex: t.providers.dex,
-  };
-  const TYPE_FILTERS = [
-    { key: 'all', label: t.providers.all },
-    { key: 'crypto', label: t.providers.crypto },
-    { key: 'stock', label: t.providers.stock },
-    { key: 'both', label: t.providers.both },
-    { key: 'dex', label: t.providers.dex },
-    { key: 'prediction', label: t.providers.prediction },
-  ];
+  useLocale();
+  const TYPE_LABELS = getTypeLabels();
+  const TYPE_FILTERS = getTypeFilters();
   const { providers, loading, getProviderInfo, updateProvider } = useProviders();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
-  const [viewMode, setViewMode] = useState<SettingsViewMode>(() => {
-    const saved = localStorage.getItem('sb_settings_view');
-    return saved === 'list' ? 'list' : 'grid';
-  });
+  const [viewMode, setViewMode] = useState<SettingsViewMode>(() =>
+    localStorage.getItem('sb_settings_view') === 'list' ? 'list' : 'grid'
+  );
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     api_key: '', api_secret: '', api_url: '',
@@ -53,20 +31,14 @@ export function ProviderSettings({ onSaved }: { onSaved?: () => void }) {
   });
   const [useKeyMode, setUseKeyMode] = useState(false);
 
-  const handleSetView = (m: SettingsViewMode) => {
-    setViewMode(m);
-    localStorage.setItem('sb_settings_view', m);
-  };
+  const handleSetView = (m: SettingsViewMode) => { setViewMode(m); localStorage.setItem('sb_settings_view', m); };
 
   const filtered = useMemo(() => {
     let list = providers;
     if (filter !== 'all') list = list.filter(p => p.provider_type === filter);
     if (search.trim()) {
       const q = search.toLowerCase();
-      list = list.filter(p =>
-        p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q) ||
-        (TYPE_LABELS[p.provider_type] || '').includes(q)
-      );
+      list = list.filter(p => p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q) || (TYPE_LABELS[p.provider_type] || '').includes(q));
     }
     return list;
   }, [providers, filter, search]);
@@ -111,22 +83,11 @@ export function ProviderSettings({ onSaved }: { onSaved?: () => void }) {
 
   useEscapeKey(() => { if (editingId) setEditingId(null); });
 
-  const showModeToggle = (pid: string) => {
-    const info = getProviderInfo(pid);
-    return info ? (info.requires_api_key || info.optional_api_key) : false;
-  };
-  const canUseFree = (pid: string) => {
-    const info = getProviderInfo(pid);
-    return info ? (!info.requires_api_key || info.optional_api_key) : false;
-  };
-
   if (loading) return <div className="loading">{t.common.loading}</div>;
+
   const editingProvider = editingId ? providers.find(p => p.id === editingId) : null;
-  const editInfo = editingId ? getProviderInfo(editingId) : null;
-  const getDesc = (id: string) => {
-    const desc = (t.providerDesc as Record<string, string>)?.[id];
-    return desc || getProviderInfo(id)?.free_tier_info || '';
-  };
+  const editInfo = editingId ? getProviderInfo(editingId) : undefined;
+  const getDesc = (id: string) => (t.providerDesc as Record<string, string>)?.[id] || getProviderInfo(id)?.free_tier_info || '';
 
   return (
     <div className="ps-section">
@@ -224,104 +185,19 @@ export function ProviderSettings({ onSaved }: { onSaved?: () => void }) {
       )}
 
       {editingId && editingProvider && (
-        <div className="modal-backdrop ps-modal-backdrop" onClick={() => setEditingId(null)}>
-          <div className="modal-container ps-modal" role="dialog" aria-modal="true" aria-label={editingProvider.name} onClick={e => e.stopPropagation()}>
-            <div className="ps-modal-head">
-              <div>
-                <h4 className="ps-modal-title">{editingProvider.name}</h4>
-                <span className="ps-modal-type" style={{ color: TYPE_COLORS[editingProvider.provider_type] }}>{TYPE_LABELS[editingProvider.provider_type]}</span>
-              </div>
-              <button className="ps-modal-close" onClick={() => setEditingId(null)} aria-label={t.common.close}>&#x2715;</button>
-            </div>
-            {editInfo && (
-              <div className="ps-modal-meta">
-                <div className="ps-meta-item"><span className="ps-meta-label">{t.providers.plan}</span><span className="ps-meta-value">{getDesc(editingId)}</span></div>
-                <div className="ps-meta-item"><span className="ps-meta-label">{t.providers.connection}</span><span className="ps-meta-value">{editingProvider?.connection_type === 'websocket' ? t.providers.websocket : t.providers.restApi}</span></div>
-                <div className="ps-meta-item"><span className="ps-meta-label">{t.providers.format}</span><span className="ps-meta-value mono">{editInfo.symbol_format}</span></div>
-              </div>
-            )}
-            <div className="ps-modal-body">
-              {showModeToggle(editingId) && (
-                <div className="form-group">
-                  <label>{t.providers.useMode}</label>
-                  <div className="mode-toggle">
-                    {canUseFree(editingId) && (
-                      <button type="button" className={`mode-btn ${!useKeyMode ? 'active' : ''}`} onClick={() => handleModeSwitch(false)}>
-                        {t.providers.freeMode} {editInfo && <span className="mode-interval">{editInfo.free_interval / 1000}{t.providers.seconds}</span>}
-                      </button>
-                    )}
-                    <button type="button" className={`mode-btn ${useKeyMode ? 'active' : ''}`} onClick={() => handleModeSwitch(true)}>
-                      {t.providers.apiKeyMode} {editInfo && <span className="mode-interval">{editInfo.key_interval / 1000}{t.providers.seconds}</span>}
-                    </button>
-                  </div>
-                </div>
-              )}
-              {useKeyMode && (editInfo?.requires_api_key || editInfo?.optional_api_key) && (
-                <div className="form-group">
-                  <label>{t.apiKey.label} {editInfo?.optional_api_key && !editInfo?.requires_api_key && <span className="optional-badge">{t.providers.boostRate}</span>}</label>
-                  <input type="password" value={formData.api_key} onChange={e => setFormData({ ...formData, api_key: e.target.value })} placeholder={t.apiKey.placeholder} />
-                </div>
-              )}
-              {useKeyMode && editInfo?.requires_api_secret && (
-                <div className="form-group">
-                  <label>{t.apiKey.secretLabel}</label>
-                  <input type="password" value={formData.api_secret} onChange={e => setFormData({ ...formData, api_secret: e.target.value })} placeholder={t.apiKey.secretPlaceholder} />
-                </div>
-              )}
-              {editInfo?.provider_type === 'dex' && (
-                <div className="form-group">
-                  <label>{t.providers.apiUrl} <span className="optional-badge">{t.providers.apiUrlOptional}</span></label>
-                  <input value={formData.api_url} onChange={e => setFormData({ ...formData, api_url: e.target.value })} placeholder={t.providers.apiUrlPlaceholder} />
-                </div>
-              )}
-              <div className="form-group">
-                <label>{t.providers.refreshInterval} {editInfo && <span className="optional-badge">{t.providers.refreshHint((useKeyMode ? editInfo.key_interval : editInfo.free_interval) / 1000)}</span>}</label>
-                <input type="number" value={formData.refresh_interval} onChange={e => setFormData({ ...formData, refresh_interval: parseInt(e.target.value) || 5000 })} min={5000} step={1000} />
-              </div>
-              {editingProvider.supports_websocket === 1 && (
-                <div className="form-group">
-                  <label>{t.providers.connectionMethod}</label>
-                  <select value={formData.connection_type} onChange={e => setFormData({ ...formData, connection_type: e.target.value })}>
-                    <option value="rest">{t.providers.restApi}</option>
-                    <option value="websocket">{t.providers.websocket}</option>
-                  </select>
-                </div>
-              )}
-              <div className="form-group">
-                <label>{t.history.recordHours}</label>
-                <div className="record-hours-row">
-                  <select
-                    value={formData.record_from_hour != null && formData.record_to_hour != null ? 'custom' : 'all'}
-                    onChange={e => {
-                      if (e.target.value === 'all') setFormData({ ...formData, record_from_hour: null, record_to_hour: null });
-                      else setFormData({ ...formData, record_from_hour: 16, record_to_hour: 9 });
-                    }}
-                  >
-                    <option value="all">{t.history.recordHoursAll}</option>
-                    <option value="custom">{t.history.recordHoursCustom}</option>
-                  </select>
-                  {formData.record_from_hour != null && formData.record_to_hour != null && (
-                    <div className="record-hours-pickers">
-                      <span>{t.history.recordHoursFrom}</span>
-                      <select value={formData.record_from_hour} onChange={e => setFormData({ ...formData, record_from_hour: Number(e.target.value) })}>
-                        {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{String(i).padStart(2, '0')}:00</option>)}
-                      </select>
-                      <span>{t.history.recordHoursTo}</span>
-                      <select value={formData.record_to_hour} onChange={e => setFormData({ ...formData, record_to_hour: Number(e.target.value) })}>
-                        {Array.from({ length: 25 }, (_, i) => <option key={i} value={i}>{i === 24 ? '24:00' : `${String(i).padStart(2, '0')}:00`}</option>)}
-                      </select>
-                    </div>
-                  )}
-                </div>
-                <span className="form-hint priority">{t.history.recordHoursProviderHint} · {t.history.recordHoursPriority} · {t.history.recordHoursHint} ({(() => { const o = -new Date().getTimezoneOffset(), h = Math.floor(Math.abs(o)/60), m = Math.abs(o)%60; return `UTC${o>=0?'+':'-'}${h}${m?':'+String(m).padStart(2,'0'):''}`; })()})</span>
-              </div>
-            </div>
-            <div className="ps-modal-foot">
-              <button className="btn-cancel" onClick={() => setEditingId(null)}>{t.common.cancel}</button>
-              <button className="btn-save" onClick={handleSave}>{t.common.save}</button>
-            </div>
-          </div>
-        </div>
+        <ProviderModal
+          provider={editingProvider}
+          info={editInfo}
+          formData={formData}
+          useKeyMode={useKeyMode}
+          getDesc={getDesc}
+          showModeToggle={(() => { const i = getProviderInfo(editingId); return i ? (i.requires_api_key || i.optional_api_key) : false; })()}
+          canUseFree={(() => { const i = getProviderInfo(editingId); return i ? (!i.requires_api_key || i.optional_api_key) : false; })()}
+          onFormChange={setFormData}
+          onModeSwitch={handleModeSwitch}
+          onSave={handleSave}
+          onClose={() => setEditingId(null)}
+        />
       )}
     </div>
   );

@@ -360,6 +360,8 @@ const zh_TW = {
     records: (n: number) => `${n} 筆紀錄`,
     cleanup: '清理舊數據',
     cleanupDone: (n: number) => `已清理 ${n} 筆舊紀錄`,
+    cleanupCurrent: '清除當前數據',
+    noOldData: '沒有 90 天前的舊紀錄',
     purgeAll: '清除全部',
     purgeAllConfirm: '確定要清除所有歷史紀錄嗎？此操作無法復原。',
     purgeAllDone: (n: number) => `已清除 ${n} 筆紀錄`,
