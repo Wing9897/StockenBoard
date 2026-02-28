@@ -48,3 +48,6 @@ src-tauri/gen/schemas/
 *.py
 __pycache__/
 *.pyc
+
+# Version bump script
+bump-version.js
