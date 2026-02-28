@@ -4,37 +4,33 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'package.json'
-      - 'src-tauri/tauri.conf.json'
 
 jobs:
   check-version:
     runs-on: ubuntu-latest
     outputs:
-      should_release: ${{ steps.check.outputs.should_release }}
       version: ${{ steps.check.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Check if version tag exists
+      - name: Generate Tag Version
         id: check
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          echo "version=v$VERSION" >> $GITHUB_OUTPUT
           if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-            echo "Tag v$VERSION already exists, skipping release"
-            echo "should_release=false" >> $GITHUB_OUTPUT
+            echo "Tag v$VERSION already exists, appending run number."
+            # 生產一個唯一的 tag，例如 v0.1.0-update.25
+            NEW_VERSION="v${VERSION}-update.${{ github.run_number }}"
+            echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
           else
-            echo "Tag v$VERSION does not exist, will create release"
-            echo "should_release=true" >> $GITHUB_OUTPUT
+            echo "Tag v$VERSION does not exist, creating it."
+            echo "version=v$VERSION" >> $GITHUB_OUTPUT
           fi
 
   create-tag:
     needs: check-version
-    if: needs.check-version.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -50,7 +46,6 @@ jobs:
 
   build-tauri:
     needs: [check-version, create-tag]
-    if: needs.check-version.outputs.should_release == 'true'
     permissions:
       contents: write
     strategy:
