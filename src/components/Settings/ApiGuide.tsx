@@ -3,8 +3,10 @@
  */
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { useLocale } from '../../hooks/useLocale';
 
 export function ApiGuide() {
+  const { t } = useLocale();
   const [copied, setCopied] = useState('');
   const [apiPort, setApiPort] = useState(8080);
   const [editingPort, setEditingPort] = useState(false);
@@ -27,7 +29,7 @@ export function ApiGuide() {
   const saveApiPort = async () => {
     const port = parseInt(tempPort);
     if (isNaN(port) || port < 1024 || port > 65535) {
-      alert('Port 必須在 1024-65535 之間');
+      alert(t.api.portRange);
       return;
     }
     
@@ -35,9 +37,9 @@ export function ApiGuide() {
       await invoke('set_api_port', { port });
       setApiPort(port);
       setEditingPort(false);
-      alert('Port 已更新，請重啟應用程式以生效');
+      alert(t.api.portSaved);
     } catch (err) {
-      alert(`儲存失敗: ${err}`);
+      alert(`${t.api.saveFailed}: ${err}`);
     }
   };
 
@@ -51,7 +53,7 @@ export function ApiGuide() {
 
   const pythonExample = `import requests
 
-# 獲取所有價格
+# ${t.api.pricesEndpoint}
 response = requests.get("${apiBase}/prices")
 prices = response.json()['prices']
 
@@ -64,7 +66,7 @@ for item in prices:
   const historyExample = `import requests
 from datetime import datetime, timedelta
 
-# 獲取最近 24 小時的歷史數據
+# ${t.api.historyEndpoint}
 now = int(datetime.now().timestamp())
 yesterday = now - 86400
 
@@ -77,85 +79,40 @@ response = requests.get("${apiBase}/history", params={
 })
 
 history = response.json()['records']
-print(f"獲取 {len(history)} 筆歷史數據")`;
+print(f"Records: {len(history)}")`;
 
-  const curlExample = `# 獲取系統狀態
+  const curlExample = `# ${t.api.statusEndpoint}
 curl ${apiBase}/status
 
-# 獲取所有訂閱
+# ${t.api.subsEndpoint}
 curl ${apiBase}/subscriptions
 
-# 獲取所有價格
+# ${t.api.pricesEndpoint}
 curl ${apiBase}/prices
 
-# 獲取特定價格
+# ${t.api.priceEndpoint}
 curl ${apiBase}/prices/binance/BTCUSDT`;
 
   return (
     <div className="ps-section">
-      <h3 className="ps-title">API 使用說明</h3>
+      <h3 className="ps-title">{t.api.title}</h3>
       
-      <div style={{ marginBottom: '24px', padding: '16px', background: 'var(--surface0)', borderRadius: '8px', border: '1px solid var(--surface1)' }}>
-        <p style={{ margin: '0 0 12px 0', color: 'var(--text)' }}>
-          StockenBoard 提供 HTTP API 讓外部程式（如 AI、Python 腳本）訪問實時和歷史數據。
+      <div style={{ padding: '20px', background: 'var(--surface0)', borderRadius: '12px', border: '1px solid var(--surface1)' }}>
+        {/* 說明 */}
+        <p style={{ margin: '0 0 16px 0', color: 'var(--text)', lineHeight: '1.6' }}>
+          {t.api.description}
         </p>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{ color: 'var(--subtext0)' }}>API 地址:</span>
-          <code style={{ padding: '4px 8px', background: 'var(--mantle)', borderRadius: '4px', color: 'var(--blue)' }}>
-            {apiBase}
-          </code>
-          {!editingPort ? (
-            <button
-              onClick={() => setEditingPort(true)}
-              style={{
-                padding: '4px 12px',
-                background: 'var(--surface1)',
-                border: '1px solid var(--surface2)',
-                borderRadius: '4px',
-                color: 'var(--text)',
-                cursor: 'pointer',
-                fontSize: '12px'
-              }}
-            >
-              修改 Port
-            </button>
-          ) : (
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <input
-                type="number"
-                value={tempPort}
-                onChange={(e) => setTempPort(e.target.value)}
-                min="1024"
-                max="65535"
-                style={{
-                  width: '80px',
-                  padding: '4px 8px',
-                  background: 'var(--mantle)',
-                  border: '1px solid var(--surface2)',
-                  borderRadius: '4px',
-                  color: 'var(--text)',
-                  fontSize: '13px'
-                }}
-              />
+        
+        {/* API 地址 */}
+        <div style={{ marginBottom: '24px', padding: '12px', background: 'var(--mantle)', borderRadius: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            <span style={{ color: 'var(--subtext0)', fontSize: '14px' }}>{t.api.address}:</span>
+            <code style={{ padding: '4px 8px', background: 'var(--base)', borderRadius: '4px', color: 'var(--blue)', fontSize: '14px' }}>
+              {apiBase}
+            </code>
+            {!editingPort ? (
               <button
-                onClick={saveApiPort}
-                style={{
-                  padding: '4px 12px',
-                  background: 'var(--green)',
-                  border: 'none',
-                  borderRadius: '4px',
-                  color: 'var(--base)',
-                  cursor: 'pointer',
-                  fontSize: '12px'
-                }}
-              >
-                儲存
-              </button>
-              <button
-                onClick={() => {
-                  setEditingPort(false);
-                  setTempPort(apiPort.toString());
-                }}
+                onClick={() => setEditingPort(true)}
                 style={{
                   padding: '4px 12px',
                   background: 'var(--surface1)',
@@ -166,160 +123,215 @@ curl ${apiBase}/prices/binance/BTCUSDT`;
                   fontSize: '12px'
                 }}
               >
-                取消
+                {t.api.editPort}
               </button>
-            </div>
-          )}
+            ) : (
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input
+                  type="number"
+                  value={tempPort}
+                  onChange={(e) => setTempPort(e.target.value)}
+                  min="1024"
+                  max="65535"
+                  style={{
+                    width: '80px',
+                    padding: '4px 8px',
+                    background: 'var(--base)',
+                    border: '1px solid var(--surface2)',
+                    borderRadius: '4px',
+                    color: 'var(--text)',
+                    fontSize: '13px'
+                  }}
+                />
+                <button
+                  onClick={saveApiPort}
+                  style={{
+                    padding: '4px 12px',
+                    background: 'var(--green)',
+                    border: 'none',
+                    borderRadius: '4px',
+                    color: 'var(--base)',
+                    cursor: 'pointer',
+                    fontSize: '12px'
+                  }}
+                >
+                  {t.common.save}
+                </button>
+                <button
+                  onClick={() => {
+                    setEditingPort(false);
+                    setTempPort(apiPort.toString());
+                  }}
+                  style={{
+                    padding: '4px 12px',
+                    background: 'var(--surface1)',
+                    border: '1px solid var(--surface2)',
+                    borderRadius: '4px',
+                    color: 'var(--text)',
+                    cursor: 'pointer',
+                    fontSize: '12px'
+                  }}
+                >
+                  {t.common.cancel}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
 
-      <div style={{ marginBottom: '24px' }}>
-        <h4 style={{ margin: '0 0 12px 0', fontSize: '16px', color: 'var(--text)' }}>📡 API 端點</h4>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid var(--surface1)' }}>
-              <th style={{ padding: '8px', textAlign: 'left', color: 'var(--subtext1)' }}>端點</th>
-              <th style={{ padding: '8px', textAlign: 'left', color: 'var(--subtext1)' }}>說明</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr style={{ borderBottom: '1px solid var(--surface0)' }}>
-              <td style={{ padding: '8px', fontFamily: 'monospace', color: 'var(--blue)' }}>GET /api/status</td>
-              <td style={{ padding: '8px', color: 'var(--text)' }}>系統狀態</td>
-            </tr>
-            <tr style={{ borderBottom: '1px solid var(--surface0)' }}>
-              <td style={{ padding: '8px', fontFamily: 'monospace', color: 'var(--blue)' }}>GET /api/subscriptions</td>
-              <td style={{ padding: '8px', color: 'var(--text)' }}>所有訂閱列表</td>
-            </tr>
-            <tr style={{ borderBottom: '1px solid var(--surface0)' }}>
-              <td style={{ padding: '8px', fontFamily: 'monospace', color: 'var(--blue)' }}>GET /api/prices</td>
-              <td style={{ padding: '8px', color: 'var(--text)' }}>所有最新價格</td>
-            </tr>
-            <tr style={{ borderBottom: '1px solid var(--surface0)' }}>
-              <td style={{ padding: '8px', fontFamily: 'monospace', color: 'var(--blue)' }}>GET /api/prices/:provider/:symbol</td>
-              <td style={{ padding: '8px', color: 'var(--text)' }}>特定價格</td>
-            </tr>
-            <tr>
-              <td style={{ padding: '8px', fontFamily: 'monospace', color: 'var(--blue)' }}>GET /api/history</td>
-              <td style={{ padding: '8px', color: 'var(--text)' }}>歷史數據查詢</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div style={{ marginBottom: '24px' }}>
-        <h4 style={{ margin: '0 0 12px 0', fontSize: '16px', color: 'var(--text)' }}>🐍 Python 範例</h4>
-        <div style={{ position: 'relative' }}>
-          <pre style={{ 
-            margin: 0, 
-            padding: '16px', 
-            background: 'var(--mantle)', 
-            borderRadius: '8px', 
-            overflow: 'auto',
-            fontSize: '13px',
-            lineHeight: '1.5',
-            color: 'var(--text)'
-          }}>
-            {pythonExample}
-          </pre>
-          <button 
-            onClick={() => copyCode(pythonExample, 'python')}
-            style={{
-              position: 'absolute',
-              top: '8px',
-              right: '8px',
-              padding: '4px 12px',
-              background: 'var(--surface0)',
-              border: '1px solid var(--surface1)',
-              borderRadius: '4px',
-              color: 'var(--text)',
-              cursor: 'pointer',
-              fontSize: '12px'
-            }}
-          >
-            {copied === 'python' ? '✓ 已複製' : '複製'}
-          </button>
+        {/* API 端點 */}
+        <div style={{ marginBottom: '24px' }}>
+          <h4 style={{ margin: '0 0 12px 0', fontSize: '15px', color: 'var(--text)' }}>📡 {t.api.endpoints}</h4>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--surface1)' }}>
+                <th style={{ padding: '8px', textAlign: 'left', color: 'var(--subtext1)' }}>{t.api.endpointCol}</th>
+                <th style={{ padding: '8px', textAlign: 'left', color: 'var(--subtext1)' }}>{t.api.descCol}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style={{ borderBottom: '1px solid var(--surface0)' }}>
+                <td style={{ padding: '8px', fontFamily: 'monospace', color: 'var(--blue)', fontSize: '12px' }}>GET /api/status</td>
+                <td style={{ padding: '8px', color: 'var(--text)' }}>{t.api.statusEndpoint}</td>
+              </tr>
+              <tr style={{ borderBottom: '1px solid var(--surface0)' }}>
+                <td style={{ padding: '8px', fontFamily: 'monospace', color: 'var(--blue)', fontSize: '12px' }}>GET /api/subscriptions</td>
+                <td style={{ padding: '8px', color: 'var(--text)' }}>{t.api.subsEndpoint}</td>
+              </tr>
+              <tr style={{ borderBottom: '1px solid var(--surface0)' }}>
+                <td style={{ padding: '8px', fontFamily: 'monospace', color: 'var(--blue)', fontSize: '12px' }}>GET /api/prices</td>
+                <td style={{ padding: '8px', color: 'var(--text)' }}>{t.api.pricesEndpoint}</td>
+              </tr>
+              <tr style={{ borderBottom: '1px solid var(--surface0)' }}>
+                <td style={{ padding: '8px', fontFamily: 'monospace', color: 'var(--blue)', fontSize: '12px' }}>GET /api/prices/:provider/:symbol</td>
+                <td style={{ padding: '8px', color: 'var(--text)' }}>{t.api.priceEndpoint}</td>
+              </tr>
+              <tr>
+                <td style={{ padding: '8px', fontFamily: 'monospace', color: 'var(--blue)', fontSize: '12px' }}>GET /api/history</td>
+                <td style={{ padding: '8px', color: 'var(--text)' }}>{t.api.historyEndpoint}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-      </div>
 
-      <div style={{ marginBottom: '24px' }}>
-        <h4 style={{ margin: '0 0 12px 0', fontSize: '16px', color: 'var(--text)' }}>📈 歷史數據範例</h4>
-        <div style={{ position: 'relative' }}>
-          <pre style={{ 
-            margin: 0, 
-            padding: '16px', 
-            background: 'var(--mantle)', 
-            borderRadius: '8px', 
-            overflow: 'auto',
-            fontSize: '13px',
-            lineHeight: '1.5',
-            color: 'var(--text)'
-          }}>
-            {historyExample}
-          </pre>
-          <button 
-            onClick={() => copyCode(historyExample, 'history')}
-            style={{
-              position: 'absolute',
-              top: '8px',
-              right: '8px',
-              padding: '4px 12px',
-              background: 'var(--surface0)',
-              border: '1px solid var(--surface1)',
-              borderRadius: '4px',
-              color: 'var(--text)',
-              cursor: 'pointer',
-              fontSize: '12px'
-            }}
-          >
-            {copied === 'history' ? '✓ 已複製' : '複製'}
-          </button>
+        {/* Python 範例 */}
+        <div style={{ marginBottom: '20px' }}>
+          <h4 style={{ margin: '0 0 10px 0', fontSize: '15px', color: 'var(--text)' }}>🐍 {t.api.pythonExample}</h4>
+          <div style={{ position: 'relative' }}>
+            <pre style={{ 
+              margin: 0, 
+              padding: '14px', 
+              background: 'var(--mantle)', 
+              borderRadius: '6px', 
+              overflow: 'auto',
+              fontSize: '12px',
+              lineHeight: '1.5',
+              color: 'var(--text)'
+            }}>
+              {pythonExample}
+            </pre>
+            <button 
+              onClick={() => copyCode(pythonExample, 'python')}
+              style={{
+                position: 'absolute',
+                top: '8px',
+                right: '8px',
+                padding: '4px 10px',
+                background: 'var(--surface0)',
+                border: '1px solid var(--surface1)',
+                borderRadius: '4px',
+                color: 'var(--text)',
+                cursor: 'pointer',
+                fontSize: '11px'
+              }}
+            >
+              {copied === 'python' ? t.api.copied : t.api.copy}
+            </button>
+          </div>
         </div>
-      </div>
 
-      <div style={{ marginBottom: '24px' }}>
-        <h4 style={{ margin: '0 0 12px 0', fontSize: '16px', color: 'var(--text)' }}>💻 curl 範例</h4>
-        <div style={{ position: 'relative' }}>
-          <pre style={{ 
-            margin: 0, 
-            padding: '16px', 
-            background: 'var(--mantle)', 
-            borderRadius: '8px', 
-            overflow: 'auto',
-            fontSize: '13px',
-            lineHeight: '1.5',
-            color: 'var(--text)'
-          }}>
-            {curlExample}
-          </pre>
-          <button 
-            onClick={() => copyCode(curlExample, 'curl')}
-            style={{
-              position: 'absolute',
-              top: '8px',
-              right: '8px',
-              padding: '4px 12px',
-              background: 'var(--surface0)',
-              border: '1px solid var(--surface1)',
-              borderRadius: '4px',
-              color: 'var(--text)',
-              cursor: 'pointer',
-              fontSize: '12px'
-            }}
-          >
-            {copied === 'curl' ? '✓ 已複製' : '複製'}
-          </button>
+        {/* 歷史數據範例 */}
+        <div style={{ marginBottom: '20px' }}>
+          <h4 style={{ margin: '0 0 10px 0', fontSize: '15px', color: 'var(--text)' }}>📈 {t.api.historyExample}</h4>
+          <div style={{ position: 'relative' }}>
+            <pre style={{ 
+              margin: 0, 
+              padding: '14px', 
+              background: 'var(--mantle)', 
+              borderRadius: '6px', 
+              overflow: 'auto',
+              fontSize: '12px',
+              lineHeight: '1.5',
+              color: 'var(--text)'
+            }}>
+              {historyExample}
+            </pre>
+            <button 
+              onClick={() => copyCode(historyExample, 'history')}
+              style={{
+                position: 'absolute',
+                top: '8px',
+                right: '8px',
+                padding: '4px 10px',
+                background: 'var(--surface0)',
+                border: '1px solid var(--surface1)',
+                borderRadius: '4px',
+                color: 'var(--text)',
+                cursor: 'pointer',
+                fontSize: '11px'
+              }}
+            >
+              {copied === 'history' ? t.api.copied : t.api.copy}
+            </button>
+          </div>
         </div>
-      </div>
 
-      <div style={{ padding: '16px', background: 'var(--yellow-bg)', borderRadius: '8px', border: '1px solid var(--yellow)' }}>
-        <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', color: 'var(--yellow)' }}>⚠️ 注意事項</h4>
-        <ul style={{ margin: 0, paddingLeft: '20px', color: 'var(--text)', fontSize: '14px' }}>
-          <li>API 只監聽本地（127.0.0.1），只能從本機訪問</li>
-          <li>需要先在 UI 中添加訂閱，API 才能訪問數據</li>
-          <li>歷史數據需要啟用訂閱的「紀錄」功能</li>
-          <li>建議輪詢間隔 ≥ 5 秒，避免過於頻繁</li>
-        </ul>
+        {/* curl 範例 */}
+        <div style={{ marginBottom: '20px' }}>
+          <h4 style={{ margin: '0 0 10px 0', fontSize: '15px', color: 'var(--text)' }}>💻 {t.api.curlExample}</h4>
+          <div style={{ position: 'relative' }}>
+            <pre style={{ 
+              margin: 0, 
+              padding: '14px', 
+              background: 'var(--mantle)', 
+              borderRadius: '6px', 
+              overflow: 'auto',
+              fontSize: '12px',
+              lineHeight: '1.5',
+              color: 'var(--text)'
+            }}>
+              {curlExample}
+            </pre>
+            <button 
+              onClick={() => copyCode(curlExample, 'curl')}
+              style={{
+                position: 'absolute',
+                top: '8px',
+                right: '8px',
+                padding: '4px 10px',
+                background: 'var(--surface0)',
+                border: '1px solid var(--surface1)',
+                borderRadius: '4px',
+                color: 'var(--text)',
+                cursor: 'pointer',
+                fontSize: '11px'
+              }}
+            >
+              {copied === 'curl' ? t.api.copied : t.api.copy}
+            </button>
+          </div>
+        </div>
+
+        {/* 注意事項 */}
+        <div style={{ padding: '14px', background: 'var(--yellow-bg)', borderRadius: '8px', border: '1px solid var(--yellow)' }}>
+          <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', color: 'var(--yellow)' }}>⚠️ {t.api.notes}</h4>
+          <ul style={{ margin: 0, paddingLeft: '20px', color: 'var(--text)', fontSize: '13px', lineHeight: '1.6' }}>
+            <li>{t.api.note1}</li>
+            <li>{t.api.note2}</li>
+            <li>{t.api.note3}</li>
+            <li>{t.api.note4}</li>
+          </ul>
+        </div>
       </div>
     </div>
   );
