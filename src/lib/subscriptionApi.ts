@@ -76,14 +76,16 @@ export async function addAssetSubscriptionBatch(
   for (const [pid, group] of groups) {
     const symbols = group.map(g => g.storedSymbol);
     try {
-      // fetch_multiple_prices 回傳成功取得價格的 AssetData[]
-      // Binance 的實作用單一 HTTP 請求 /api/v3/ticker/24hr?symbols=[...]
+      // 呼叫 Rust 的 fetch_multiple_prices
+      // 若是 Binance，它會自動決定是精確查詢(<=5) 還是全量過濾(>5)
       const results = await invoke<{ symbol: string }[]>('fetch_multiple_prices', { providerId: pid, symbols });
       const validSymbols = new Set(results.map(r => r.symbol.toUpperCase()));
+
       for (const g of group) {
         if (validSymbols.has(g.storedSymbol.toUpperCase())) {
           allValid.push(g);
         } else {
+          // 在全量查詢或結果中沒出現此 symbol，代表交易所不支援或無效
           failed.push(g.symbol);
         }
       }
@@ -95,24 +97,23 @@ export async function addAssetSubscriptionBatch(
     onProgress?.(done, total);
   }
 
-  // 3. 寫入 DB
+  // 3. 逐筆寫入 DB（不使用 BEGIN TRANSACTION，避免與背景 Polling 的 SQLite 連線產生鎖競爭）
   const succeeded: string[] = [];
   const dbDuplicates: string[] = [];
   if (allValid.length > 0) {
     const db = await getDb();
-    await db.execute('BEGIN TRANSACTION');
     for (const v of allValid) {
-      try {
-        await db.execute(
-          'INSERT INTO subscriptions (sub_type, symbol, display_name, selected_provider_id, asset_type) VALUES ($1, $2, $3, $4, $5)',
-          ['asset', v.storedSymbol, v.displayName || null, v.pid, v.assetType || 'crypto']
-        );
+      // 使用 INSERT OR IGNORE 處理重複，並檢查 row_affected 來判斷是否成功插入
+      const result = await db.execute(
+        'INSERT OR IGNORE INTO subscriptions (sub_type, symbol, display_name, selected_provider_id, asset_type) VALUES ($1, $2, $3, $4, $5)',
+        ['asset', v.storedSymbol, v.displayName || null, v.pid, v.assetType || 'crypto']
+      );
+      if (result.rowsAffected > 0) {
         succeeded.push(v.storedSymbol);
-      } catch {
+      } else {
         dbDuplicates.push(v.storedSymbol);
       }
     }
-    await db.execute('COMMIT');
   }
   return { succeeded, failed, dbDuplicates };
 }

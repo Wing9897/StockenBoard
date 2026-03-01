@@ -125,7 +125,10 @@ export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
   const addSubscriptionBatch = useCallback(
     async (items: { symbol: string; displayName?: string; providerId?: string; assetType?: string }[], onProgress?: (done: number, total: number) => void) => {
       const result = await api.addAssetSubscriptionBatch(items, providerInfoRef.current, onProgress);
-      if (result.succeeded.length > 0) { await loadSubs(); await api.reloadPolling(); }
+      // 即使 reload 失敗也不影響已寫入的結果
+      try {
+        if (result.succeeded.length > 0) { await loadSubs(); await api.reloadPolling(); }
+      } catch (e) { silentLog('batchReload', e); }
       return result;
     }, [loadSubs]);
 

@@ -54,8 +54,9 @@ impl DataProvider for BinanceProvider {
         Ok(Self::parse_ticker(symbol, &data))
     }
 
-    /// 批量查詢 — symbols=["BTCUSDT","ETHUSDT"] 一次查多個
-    /// 容忍無效 symbol：若批量請求因無效 symbol 失敗，自動降級為逐一查詢
+    /// 批量查詢 — 智慧策略：
+    /// - ≤5 個 symbol：用 symbols=[...] 精確查詢
+    /// - >5 個 symbol：不帶 symbols 參數取回所有 ticker，在本地過濾（免疫無效 symbol）
     async fn fetch_prices(&self, symbols: &[String]) -> Result<Vec<AssetData>, String> {
         if symbols.is_empty() {
             return Ok(vec![]);
@@ -70,75 +71,70 @@ impl DataProvider for BinanceProvider {
             .map(|s| (s.clone(), to_binance_symbol(s)))
             .collect();
 
-        let binance_syms: Vec<String> = mappings
-            .iter()
-            .map(|(_, bs)| format!("\"{}\"", bs))
-            .collect();
-        let syms_param = format!("[{}]", binance_syms.join(","));
-
-        let url = format!(
-            "https://api.binance.com/api/v3/ticker/24hr?symbols={}",
-            syms_param
-        );
-
-        let resp = self
-            .client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| format!("Binance 批量連接失敗: {}", e))?;
-
-        // 不用 error_for_status — 無效 symbol 會導致 400，我們自行處理
-        let body = resp
-            .text()
-            .await
-            .map_err(|e| format!("Binance 批量讀取失敗: {}", e))?;
-
-        if let Ok(arr) = serde_json::from_str::<Vec<serde_json::Value>>(&body) {
-            // 批量成功 — 解析結果
-            let response_map: HashMap<String, &serde_json::Value> = arr
+        if symbols.len() <= 5 {
+            // 少量 symbol → 用精確批量查詢（不會包含太多無效 symbol）
+            let binance_syms: Vec<String> = mappings
                 .iter()
-                .filter_map(|v| v["symbol"].as_str().map(|s| (s.to_string(), v)))
+                .map(|(_, bs)| format!("\"{}\"", bs))
                 .collect();
+            let syms_param = format!("[{}]", binance_syms.join(","));
+            let url = format!(
+                "https://api.binance.com/api/v3/ticker/24hr?symbols={}",
+                syms_param
+            );
+            let resp = self.client.get(&url).send().await
+                .map_err(|e| format!("Binance 批量連接失敗: {}", e))?;
+            let body = resp.text().await
+                .map_err(|e| format!("Binance 批量讀取失敗: {}", e))?;
 
-            let mut results = Vec::new();
-            for (original, binance_sym) in &mappings {
-                if let Some(data) = response_map.get(binance_sym) {
-                    results.push(Self::parse_ticker(original, data));
-                }
-            }
-            return Ok(results);
-        }
-
-        // 批量失敗（可能包含無效 symbol）— 降級為逐一查詢，但限制並行數
-        eprintln!("Binance 批量查詢失敗，降級為逐一查詢: {}", &body[..body.len().min(200)]);
-        let client = self.client.clone();
-        let mut tasks = tokio::task::JoinSet::new();
-        let mut results = Vec::new();
-        let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(5));
-
-        for (original, binance_sym) in mappings {
-            let c = client.clone();
-            let sem = semaphore.clone();
-            tasks.spawn(async move {
-                let _permit = sem.acquire().await;
-                let url = format!(
-                    "https://api.binance.com/api/v3/ticker/24hr?symbol={}",
-                    binance_sym
-                );
-                match c.get(&url).send().await {
-                    Ok(resp) if resp.status().is_success() => {
-                        if let Ok(data) = resp.json::<serde_json::Value>().await {
-                            Some(Self::parse_ticker(&original, &data))
-                        } else { None }
+            if let Ok(arr) = serde_json::from_str::<Vec<serde_json::Value>>(&body) {
+                let response_map: HashMap<String, &serde_json::Value> = arr
+                    .iter()
+                    .filter_map(|v| v["symbol"].as_str().map(|s| (s.to_string(), v)))
+                    .collect();
+                let mut results = Vec::new();
+                for (original, binance_sym) in &mappings {
+                    if let Some(data) = response_map.get(binance_sym) {
+                        results.push(Self::parse_ticker(original, data));
                     }
-                    _ => None,
                 }
-            });
+                return Ok(results);
+            }
+            // 精確查詢失敗，降級到下方全量查詢
         }
-        while let Some(Ok(maybe)) = tasks.join_next().await {
-            if let Some(data) = maybe {
-                results.push(data);
+
+        // 大量 symbol 或精確查詢失敗 → 取回所有 ticker，在本地過濾（免疫無效 symbol）
+        let url = "https://api.binance.com/api/v3/ticker/24hr";
+        let resp = self.client.get(url).send().await.map_err(|e| {
+            eprintln!("Binance 請求失敗: {:?}", e);
+            format!("Binance 全量查詢連接失敗: {}", e)
+        })?;
+
+        let status = resp.status();
+        let body = resp.text().await.map_err(|e| {
+            eprintln!("Binance 讀取 body 失敗: {:?}", e);
+            format!("Binance 全量查詢讀取失敗: {}", e)
+        })?;
+
+        if !status.is_success() {
+            eprintln!("Binance 全量查詢遭拒絕 ({}): {}", status, &body[..body.len().min(200)]);
+            return Err(format!("Binance API 拒絕請求 (IP 可能受到限制): {}", status));
+        }
+
+        let arr: Vec<serde_json::Value> = serde_json::from_str(&body).map_err(|e| {
+            eprintln!("Binance 序列化失敗: {:?}", e);
+            format!("Binance 全量查詢解析失敗: {}", e)
+        })?;
+
+        let response_map: HashMap<String, &serde_json::Value> = arr
+            .iter()
+            .filter_map(|v| v["symbol"].as_str().map(|s| (s.to_string(), v)))
+            .collect();
+
+        let mut results = Vec::new();
+        for (original, binance_sym) in &mappings {
+            if let Some(data) = response_map.get(binance_sym) {
+                results.push(Self::parse_ticker(original, data));
             }
         }
         Ok(results)

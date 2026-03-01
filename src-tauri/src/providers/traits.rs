@@ -219,7 +219,7 @@ pub fn get_provider_info(id: &str) -> Option<ProviderInfo> {
 }
 
 fn build_all_provider_info() -> Vec<ProviderInfo> {
-    vec![
+        vec![
         // Crypto                                                                                    free_iv  key_iv
         pi(
             "binance",
@@ -228,11 +228,11 @@ fn build_all_provider_info() -> Vec<ProviderInfo> {
             false,
             false,
             true,
-            "Free unlimited (1200 weight/min)",
+            "Free: 1200 wt/m. >5 symbols uses 160 wt. Rec: >=15s",
             "BTCUSDT, ETHUSDT",
             &["price", "change_24h", "high_24h", "low_24h", "volume"],
-            5000,
-            5000,
+            15000,
+            15000,
         ),
         pi(
             "coinbase",
@@ -702,7 +702,15 @@ pub fn parse_crypto_symbol(symbol: &str) -> (String, String) {
 
 /// Convert symbol to Binance format: BTCUSDT
 pub fn to_binance_symbol(symbol: &str) -> String {
-    let (base, quote) = parse_crypto_symbol(symbol);
+    let s = symbol.trim().to_uppercase();
+    // 如果輸入本身就帶有常見後綴 (例如 HYPEUSDT)，直接原封不動回傳，避免拆分錯誤
+    for suffix in &["USDT", "USDC", "BUSD", "BTC", "ETH", "BNB"] {
+        if s.len() > suffix.len() && s.ends_with(suffix) {
+            return s;
+        }
+    }
+    
+    let (base, quote) = parse_crypto_symbol(&s);
     let q = if quote == "USD" { "USDT" } else { &quote };
     format!("{}{}", base, q)
 }

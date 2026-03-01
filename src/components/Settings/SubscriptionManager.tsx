@@ -74,10 +74,11 @@ export function SubscriptionManager({ onBatchAdd, onBatchAddMultiple, subscripti
     e.preventDefault();
     if (needsKey && !keySaved && apiKeyInput.trim()) await handleSaveKey();
 
-    const symbols = symbolInput
+    const rawSymbols = symbolInput
       .split(/[,\n\r;]+/)
       .map(s => s.trim())
       .filter(s => s.length > 0);
+    const symbols = Array.from(new Set(rawSymbols));
     if (symbols.length === 0) return;
 
     const existing = new Set(subscriptions.map(s => isDex ? s.symbol : s.symbol.toUpperCase()));
@@ -119,7 +120,9 @@ export function SubscriptionManager({ onBatchAdd, onBatchAddMultiple, subscripti
         succeeded.push(...result.succeeded);
         failed.push(...result.failed);
         duplicates.push(...(result.dbDuplicates || []));
-      } catch {
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        onToast?.('error', '系統錯誤', `批量新增時發生未捕捉例外: ${msg}`);
         failed.push(...unique);
       }
     } else {
@@ -137,6 +140,19 @@ export function SubscriptionManager({ onBatchAdd, onBatchAddMultiple, subscripti
     setImporting(false);
     setImportStatus(null);
     setBatchResult({ succeeded, failed, duplicates });
+
+    // ── Toast 通知，確保使用者無論如何都看到結果摘要 ──
+    if (failed.length > 0 && succeeded.length > 0) {
+      onToast?.('info', t.batchResult.title,
+        `✅ ${t.batchResult.success(succeeded.length)} · ❌ ${t.batchResult.failed(failed.length)}`);
+    } else if (failed.length > 0 && succeeded.length === 0) {
+      onToast?.('error', t.batchResult.title,
+        `❌ ${t.batchResult.failed(failed.length)}`);
+    } else if (succeeded.length > 0) {
+      onToast?.('success', t.batchResult.title,
+        `✅ ${t.batchResult.success(succeeded.length)}${duplicates.length > 0 ? ` · ⚠️ ${t.batchResult.skipped(duplicates.length)}` : ''}`);
+    }
+
     if (failed.length === 0) {
       setSymbolInput('');
       onDone?.();

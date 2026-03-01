@@ -4,7 +4,7 @@ use crate::providers::traits::{
     ProviderInfo,
 };
 use serde::Deserialize;
-use std::collections::HashMap;
+
 
 pub struct SubgraphProvider {
     client: reqwest::Client,
