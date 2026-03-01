@@ -242,9 +242,70 @@ impl DataProvider for OkxDexProvider {
         if symbols.is_empty() {
             return Ok(vec![]);
         }
-        // OKX DEX quote API 不支持批量，使用並行請求
-        let futures: Vec<_> = symbols.iter().map(|s| self.fetch_price(s)).collect();
-        let results = futures::future::join_all(futures).await;
-        Ok(results.into_iter().filter_map(|r| r.ok()).collect())
+        // OKX DEX quote API 不支持批量，使用 JoinSet + Semaphore 限流並行
+        let mut tasks = tokio::task::JoinSet::new();
+        let mut results = Vec::new();
+        let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(5));
+
+        for sym in symbols.to_vec() {
+            let client = self.client.clone();
+            let api_key = self.api_key.clone();
+            let sem = semaphore.clone();
+            tasks.spawn(async move {
+                let _permit = sem.acquire().await;
+                let api_key = match api_key.as_deref() {
+                    Some(k) => k,
+                    None => return None,
+                };
+                let (chain_id, token_address, decimals) = parse_okx_dex_symbol(&sym);
+                let usdc_addr = usdc_address(&chain_id);
+                let usdc_dec = usdc_decimals(&chain_id);
+                let amount = 10u128.pow(decimals);
+                let url = format!(
+                    "https://web3.okx.com/api/v5/dex/aggregator/quote?chainId={}&fromTokenAddress={}&toTokenAddress={}&amount={}",
+                    chain_id, token_address, usdc_addr, amount
+                );
+                let resp: serde_json::Value = match client
+                    .get(&url)
+                    .header("OK-ACCESS-KEY", api_key)
+                    .send()
+                    .await
+                {
+                    Ok(r) => match r.json().await {
+                        Ok(j) => j,
+                        Err(_) => return None,
+                    },
+                    Err(_) => return None,
+                };
+                if resp["code"].as_str().unwrap_or("") != "0" {
+                    return None;
+                }
+                let data = &resp["data"][0];
+                let to_amount: f64 = data["toTokenAmount"]
+                    .as_str()
+                    .unwrap_or("0")
+                    .parse()
+                    .unwrap_or(0.0);
+                let price = to_amount / 10f64.powi(usdc_dec as i32);
+                let estimate_gas = data["estimateGasFee"]
+                    .as_str()
+                    .and_then(|s| s.parse::<f64>().ok());
+                Some(
+                    AssetDataBuilder::new(&sym, "okx_dex")
+                        .price(price)
+                        .currency("USD")
+                        .extra_str("chain", Some(chain_name(&chain_id)))
+                        .extra_str("token", Some(&token_address))
+                        .extra_f64("est_gas", estimate_gas)
+                        .build(),
+                )
+            });
+        }
+        while let Some(Ok(maybe)) = tasks.join_next().await {
+            if let Some(data) = maybe {
+                results.push(data);
+            }
+        }
+        Ok(results)
     }
 }

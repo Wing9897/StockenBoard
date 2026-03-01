@@ -80,50 +80,57 @@ impl DataProvider for AlphaVantageProvider {
             .ok_or("Alpha Vantage 需要 API Key")?
             .clone();
         let client = self.client.clone();
+        
+        let mut tasks = tokio::task::JoinSet::new();
+        let mut results = Vec::new();
+        let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(2));
 
-        use futures::stream::{self, StreamExt};
-        let results: Vec<_> = stream::iter(symbols.to_vec())
-            .map(|sym| {
-                let c = client.clone();
-                let key = api_key.clone();
-                async move {
-                    let data: serde_json::Value = c
-                        .get(format!("https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={}&apikey={}", sym, key))
-                        .send().await.map_err(|e| format!("AlphaVantage: {}", e))?
-                        .json().await.map_err(|e| format!("AlphaVantage: {}", e))?;
-                    if data["Note"].is_string() || data["Information"].is_string() {
-                        return Err("Alpha Vantage 已達到速率限制".to_string());
-                    }
-                    let q = &data["Global Quote"];
-                    if q.is_null() || q["05. price"].is_null() {
-                        return Err(format!("AlphaVantage 找不到: {}", sym));
-                    }
-                    let parse = |key: &str| q[key].as_str().and_then(|s| s.parse::<f64>().ok());
-                    let pct = q["10. change percent"].as_str()
-                        .and_then(|s| s.trim_end_matches('%').parse::<f64>().ok());
-                    Ok(AssetDataBuilder::new(&sym, "alphavantage")
-                        .price(parse("05. price").unwrap_or(0.0))
-                        .change_24h(parse("09. change"))
-                        .change_percent_24h(pct)
-                        .high_24h(parse("03. high"))
-                        .low_24h(parse("04. low"))
-                        .volume(parse("06. volume"))
-                        .extra_f64("open_price", parse("02. open"))
-                        .extra_f64("prev_close", parse("08. previous close"))
-                        .build())
+        for sym in symbols.to_vec() {
+            let c = client.clone();
+            let key = api_key.clone();
+            let sem = semaphore.clone();
+            tasks.spawn(async move {
+                let _permit = sem.acquire().await;
+                let data_res: Result<serde_json::Value, _> = c
+                    .get(format!("https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={}&apikey={}", sym, key))
+                    .send().await.map_err(|e| format!("AlphaVantage: {}", e))?
+                    .json().await.map_err(|e| format!("AlphaVantage: {}", e));
+                
+                let data = match data_res {
+                    Ok(d) => d,
+                    Err(e) => return Err(e),
+                };
+
+                if data["Note"].is_string() || data["Information"].is_string() {
+                    return Err("Alpha Vantage 已達到速率限制".to_string());
                 }
-            })
-            .buffer_unordered(2)
-            .collect()
-            .await;
+                let q = &data["Global Quote"];
+                if q.is_null() || q["05. price"].is_null() {
+                    return Err(format!("AlphaVantage 找不到: {}", sym));
+                }
+                let parse = |key: &str| q[key].as_str().and_then(|s| s.parse::<f64>().ok());
+                let pct = q["10. change percent"].as_str()
+                    .and_then(|s| s.trim_end_matches('%').parse::<f64>().ok());
+                
+                Ok(AssetDataBuilder::new(&sym, "alphavantage")
+                    .price(parse("05. price").unwrap_or(0.0))
+                    .change_24h(parse("09. change"))
+                    .change_percent_24h(pct)
+                    .high_24h(parse("03. high"))
+                    .low_24h(parse("04. low"))
+                    .volume(parse("06. volume"))
+                    .extra_f64("open_price", parse("02. open"))
+                    .extra_f64("prev_close", parse("08. previous close"))
+                    .build())
+            });
+        }
 
-        let mut out = Vec::new();
-        for r in results {
-            match r {
-                Ok(data) => out.push(data),
+        while let Some(Ok(res)) = tasks.join_next().await {
+            match res {
+                Ok(data) => results.push(data),
                 Err(e) => eprintln!("AlphaVantage 跳過: {}", e),
             }
         }
-        Ok(out)
+        Ok(results)
     }
 }

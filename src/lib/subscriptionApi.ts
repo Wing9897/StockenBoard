@@ -47,35 +47,61 @@ export async function addAssetSubscription(
   );
 }
 
-/** 批量新增 asset 訂閱（並行驗證，只寫通過的） */
+/** 批量新增 asset 訂閱（使用批量 API 一次驗證，避免大量並行請求卡住） */
 export async function addAssetSubscriptionBatch(
   items: { symbol: string; displayName?: string; providerId?: string; assetType?: string }[],
   providers: ProviderInfo[],
   onProgress?: (done: number, total: number) => void,
 ): Promise<{ succeeded: string[]; failed: string[]; dbDuplicates: string[] }> {
-  let done = 0;
   const total = items.length;
-  const results = await Promise.allSettled(
-    items.map(item => {
-      const pid = item.providerId || 'binance';
-      const isDex = isDexProvider(providers, pid);
-      const storedSymbol = isDex ? item.symbol.trim() : item.symbol.toUpperCase();
-      return invoke('fetch_asset_price', { providerId: pid, symbol: storedSymbol })
-        .then(() => ({ ...item, storedSymbol, pid }))
-        .finally(() => { done++; onProgress?.(done, total); });
-    })
-  );
-  type ValidItem = { symbol: string; displayName?: string; providerId?: string; assetType?: string; storedSymbol: string; pid: string };
-  const valid = results
-    .filter((r): r is PromiseFulfilledResult<ValidItem> => r.status === 'fulfilled')
-    .map(r => r.value);
-  const failed = items.filter((_, i) => results[i].status === 'rejected').map(item => item.symbol);
+  type PreparedItem = { symbol: string; displayName?: string; assetType?: string; storedSymbol: string; pid: string };
+
+  // 1. 按 provider 分組，並預處理 symbol
+  const groups = new Map<string, PreparedItem[]>();
+  for (const item of items) {
+    const pid = item.providerId || 'binance';
+    const isDex = isDexProvider(providers, pid);
+    const storedSymbol = isDex ? item.symbol.trim() : item.symbol.toUpperCase();
+    const prepared: PreparedItem = { symbol: item.symbol, displayName: item.displayName, assetType: item.assetType, storedSymbol, pid };
+    const list = groups.get(pid);
+    if (list) list.push(prepared);
+    else groups.set(pid, [prepared]);
+  }
+
+  // 2. 每個 provider 用一次批量 API 驗證所有 symbol（而非逐個發請求）
+  const allValid: PreparedItem[] = [];
+  const failed: string[] = [];
+  let done = 0;
+
+  for (const [pid, group] of groups) {
+    const symbols = group.map(g => g.storedSymbol);
+    try {
+      // fetch_multiple_prices 回傳成功取得價格的 AssetData[]
+      // Binance 的實作用單一 HTTP 請求 /api/v3/ticker/24hr?symbols=[...]
+      const results = await invoke<{ symbol: string }[]>('fetch_multiple_prices', { providerId: pid, symbols });
+      const validSymbols = new Set(results.map(r => r.symbol.toUpperCase()));
+      for (const g of group) {
+        if (validSymbols.has(g.storedSymbol.toUpperCase())) {
+          allValid.push(g);
+        } else {
+          failed.push(g.symbol);
+        }
+      }
+    } catch {
+      // 整個批量請求失敗 → 該 provider 所有 symbol 都失敗
+      for (const g of group) failed.push(g.symbol);
+    }
+    done += group.length;
+    onProgress?.(done, total);
+  }
+
+  // 3. 寫入 DB
   const succeeded: string[] = [];
   const dbDuplicates: string[] = [];
-  if (valid.length > 0) {
+  if (allValid.length > 0) {
     const db = await getDb();
     await db.execute('BEGIN TRANSACTION');
-    for (const v of valid) {
+    for (const v of allValid) {
       try {
         await db.execute(
           'INSERT INTO subscriptions (sub_type, symbol, display_name, selected_provider_id, asset_type) VALUES ($1, $2, $3, $4, $5)',

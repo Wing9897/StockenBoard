@@ -88,7 +88,7 @@ impl DataProvider for MarketstackProvider {
         let api_key = self.api_key.as_ref().ok_or("Marketstack 需要 API Key")?;
         let syms = symbols.join(",");
 
-        let data: serde_json::Value = self
+        let resp = self
             .client
             .get(format!(
                 "http://api.marketstack.com/v1/eod/latest?access_key={}&symbols={}",
@@ -96,12 +96,15 @@ impl DataProvider for MarketstackProvider {
             ))
             .send()
             .await
-            .map_err(|e| format!("Marketstack 批量連接失敗: {}", e))?
-            .error_for_status()
-            .map_err(|e| format!("Marketstack API 錯誤: {}", e))?
-            .json()
+            .map_err(|e| format!("Marketstack 批量連接失敗: {}", e))?;
+
+        let body = resp
+            .text()
             .await
-            .map_err(|e| format!("Marketstack 批量解析失敗: {}", e))?;
+            .map_err(|e| format!("Marketstack 批量讀取失敗: {}", e))?;
+
+        let data: serde_json::Value = serde_json::from_str(&body)
+            .map_err(|_| "Marketstack 批量解析失敗".to_string())?;
 
         if let Some(err) = data["error"].as_object() {
             let msg = err

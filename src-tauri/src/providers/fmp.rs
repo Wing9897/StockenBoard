@@ -147,20 +147,23 @@ impl DataProvider for FMPProvider {
         let fmp_syms: Vec<&str> = mappings.iter().map(|(_, f)| f.as_str()).collect();
         let syms_str = fmp_syms.join(",");
 
-        let arr: Vec<serde_json::Value> = self
-            .client
-            .get(format!(
-                "https://financialmodelingprep.com/api/v3/quote/{}?apikey={}",
-                syms_str, api_key
-            ))
-            .send()
-            .await
-            .map_err(|e| format!("FMP 批量連接失敗: {}", e))?
-            .error_for_status()
-            .map_err(|e| format!("FMP API 錯誤: {}", e))?
-            .json()
-            .await
-            .map_err(|e| format!("FMP 批量解析失敗: {}", e))?;
+        let resp = self
+        .client
+        .get(format!(
+            "https://financialmodelingprep.com/api/v3/quote/{}?apikey={}",
+            syms_str, api_key
+        ))
+        .send()
+        .await
+        .map_err(|e| format!("FMP 批量連接失敗: {}", e))?;
+
+    let body = resp
+        .text()
+        .await
+        .map_err(|e| format!("FMP 批量讀取失敗: {}", e))?;
+
+    let arr: Vec<serde_json::Value> = serde_json::from_str(&body)
+        .map_err(|_| format!("FMP 批量解析失敗 (可能含無效 symbol)"))?;
 
         // 建立 fmp_symbol -> response 查找表
         let response_map: HashMap<String, &serde_json::Value> = arr

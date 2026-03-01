@@ -115,7 +115,7 @@ impl DataProvider for TwelveDataProvider {
         let td_syms: Vec<&str> = mappings.iter().map(|(_, t)| t.as_str()).collect();
         let syms_str = td_syms.join(",");
 
-        let data: serde_json::Value = self
+        let resp = self
             .client
             .get(format!(
                 "https://api.twelvedata.com/quote?symbol={}&prepost=true&apikey={}",
@@ -123,12 +123,15 @@ impl DataProvider for TwelveDataProvider {
             ))
             .send()
             .await
-            .map_err(|e| format!("TwelveData 批量連接失敗: {}", e))?
-            .error_for_status()
-            .map_err(|e| format!("TwelveData API 錯誤: {}", e))?
-            .json()
+            .map_err(|e| format!("TwelveData 批量連接失敗: {}", e))?;
+
+        let body = resp
+            .text()
             .await
-            .map_err(|e| format!("TwelveData 批量解析失敗: {}", e))?;
+            .map_err(|e| format!("TwelveData 批量讀取失敗: {}", e))?;
+
+        let data: serde_json::Value = serde_json::from_str(&body)
+            .map_err(|_| "TwelveData 批量解析失敗".to_string())?;
 
         let mut results = Vec::new();
         // TwelveData: 單個返回 object，多個返回 { "AAPL": {...}, "BTC/USD": {...} }

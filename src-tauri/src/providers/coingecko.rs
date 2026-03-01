@@ -98,16 +98,19 @@ impl DataProvider for CoinGeckoProvider {
             ids_str
         );
 
-        let data: serde_json::Value = self
-            .build_request(&url)
-            .send()
-            .await
-            .map_err(|e| format!("CoinGecko 批量連接失敗: {}", e))?
-            .error_for_status()
-            .map_err(|e| format!("CoinGecko API 錯誤 (速率限制): {}", e))?
-            .json()
-            .await
-            .map_err(|e| format!("CoinGecko 批量解析失敗: {}", e))?;
+        let resp = self
+        .build_request(&url)
+        .send()
+        .await
+        .map_err(|e| format!("CoinGecko 批量連接失敗: {}", e))?;
+
+    let body = resp
+        .text()
+        .await
+        .map_err(|e| format!("CoinGecko 批量讀取失敗: {}", e))?;
+
+    let data: serde_json::Value = serde_json::from_str(&body)
+        .map_err(|_| format!("CoinGecko 批量解析失敗 (可能被速率限制)"))?;
 
         let mut results = Vec::new();
         for (symbol, coin_id) in &mappings {

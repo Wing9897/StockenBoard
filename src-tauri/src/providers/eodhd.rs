@@ -73,17 +73,20 @@ impl DataProvider for EODHDProvider {
             symbols[0], api_key, extra
         );
 
-        let arr: Vec<serde_json::Value> = self
+        let resp = self
             .client
             .get(&url)
             .send()
             .await
-            .map_err(|e| format!("EODHD 批量連接失敗: {}", e))?
-            .error_for_status()
-            .map_err(|e| format!("EODHD API 錯誤: {}", e))?
-            .json()
+            .map_err(|e| format!("EODHD 批量連接失敗: {}", e))?;
+
+        let body = resp
+            .text()
             .await
-            .map_err(|e| format!("EODHD 批量解析失敗: {}", e))?;
+            .map_err(|e| format!("EODHD 批量讀取失敗: {}", e))?;
+
+        let arr: Vec<serde_json::Value> = serde_json::from_str(&body)
+            .map_err(|_| format!("EODHD 批量解析失敗 (可能含無效 symbol)"))?;
 
         let response_map: HashMap<String, &serde_json::Value> = arr
             .iter()
