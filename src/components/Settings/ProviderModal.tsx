@@ -63,6 +63,12 @@ export function ProviderModal({
             <div className="ps-meta-item"><span className="ps-meta-label">{t.providers.plan}</span><span className="ps-meta-value">{getDesc(provider.id)}</span></div>
             <div className="ps-meta-item"><span className="ps-meta-label">{t.providers.connection}</span><span className="ps-meta-value">{provider.connection_type === 'websocket' ? t.providers.websocket : t.providers.restApi}</span></div>
             <div className="ps-meta-item"><span className="ps-meta-label">{t.providers.format}</span><span className="ps-meta-value mono">{info.symbol_format}</span></div>
+            <details className="ps-meta-details" style={{ marginTop: '8px', cursor: 'pointer' }}>
+              <summary style={{ outline: 'none', color: 'var(--text-muted)' }}>{t.providers.rateLimitLabel || '限流與並發佇列說明'}</summary>
+              <div style={{ marginTop: '6px', fontSize: '0.85em', color: 'var(--text-muted)', background: 'var(--bg-glass)', padding: '8px', borderRadius: '4px' }}>
+                {t.providers.rateLimitDesc?.(3, (info.requires_api_key || info.optional_api_key) ? 5 : undefined)}
+              </div>
+            </details>
           </div>
         )}
         <div className="ps-modal-body">

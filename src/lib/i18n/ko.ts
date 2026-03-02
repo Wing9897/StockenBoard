@@ -247,6 +247,10 @@ const ko: Locale = {
     apiUrlPlaceholder: '비워두면 기본값 사용',
     boostRate: '속도 향상',
     settingsSaved: '설정 저장됨',
+    rateLimitLabel: '속도 제한 및 대기열 정보',
+    rateLimitDesc: (baseRate: number, keyRate?: number) => keyRate
+      ? `동시 실행 대기열: 최대 ${baseRate}개 요청(API 키 설정 시 ${keyRate}개). 속도 제한 방지를 위해 Semaphore가 자동 관리합니다.`
+      : `동시 실행 대기열: 최대 ${baseRate}개 요청. 속도 제한 방지를 위해 Semaphore가 자동 관리합니다.`,
   },
   settings: {
     theme: '테마',

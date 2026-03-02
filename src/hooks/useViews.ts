@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { View } from '../types';
-import { getDb } from '../lib/db';
 import { silentLog } from '../lib/errorLog';
 import { STORAGE_KEYS } from '../lib/storageKeys';
 
-interface RawView { id: number; name: string; view_type: string; is_default: number }
-const toView = (r: RawView): View => ({ id: r.id, name: r.name, view_type: r.view_type as 'asset' | 'dex', is_default: r.is_default === 1 });
+interface RawView { id: number; name: string; view_type: string; is_default: boolean }
+const toView = (r: RawView): View => ({ id: r.id, name: r.name, view_type: r.view_type as 'asset' | 'dex', is_default: r.is_default });
 
 export function useViews(viewType: 'asset' | 'dex' = 'asset') {
   const storageKey = viewType === 'dex' ? STORAGE_KEYS.DEX_ACTIVE_VIEW_ID : STORAGE_KEYS.ACTIVE_VIEW_ID;
@@ -24,19 +24,17 @@ export function useViews(viewType: 'asset' | 'dex' = 'asset') {
 
   const loadViewSubCounts = useCallback(async (vl: View[]) => {
     try {
-      const db = await getDb();
-      const rows = await db.select<{ view_id: number; cnt: number }[]>('SELECT view_id, COUNT(*) as cnt FROM view_subscriptions GROUP BY view_id');
+      const rows = await invoke<{ view_id: number; count: number }[]>('get_view_sub_counts');
       const counts: Record<number, number> = {};
       for (const v of vl) if (!v.is_default) counts[v.id] = 0;
-      for (const r of rows) counts[r.view_id] = r.cnt;
+      for (const r of rows) counts[r.view_id] = r.count;
       setViewSubCounts(counts);
     } catch (e) { silentLog('loadViewSubCounts', e); }
   }, []);
 
   const loadViews = useCallback(async () => {
     try {
-      const db = await getDb();
-      const rows = await db.select<RawView[]>('SELECT id, name, view_type, is_default FROM views WHERE view_type = $1 ORDER BY id', [viewType]);
+      const rows = await invoke<RawView[]>('list_views', { viewType });
       const loaded = rows.map(toView);
       setViews(loaded);
       await loadViewSubCounts(loaded);
@@ -48,9 +46,8 @@ export function useViews(viewType: 'asset' | 'dex' = 'asset') {
     const view = vl.find(v => v.id === viewId);
     if (!view || view.is_default) { setActiveViewSubscriptionIds(null); return; }
     try {
-      const db = await getDb();
-      const rows = await db.select<{ subscription_id: number }[]>('SELECT subscription_id FROM view_subscriptions WHERE view_id = $1', [viewId]);
-      setActiveViewSubscriptionIds(rows.map(r => r.subscription_id));
+      const ids = await invoke<number[]>('get_view_subscription_ids', { viewId });
+      setActiveViewSubscriptionIds(ids);
     } catch (e) { silentLog('loadActiveViewSubs', e); setActiveViewSubscriptionIds(null); }
   }, []);
 
@@ -64,8 +61,7 @@ export function useViews(viewType: 'asset' | 'dex' = 'asset') {
     const trimmed = name.trim();
     if (!trimmed) throw new Error('View name cannot be empty');
     if (viewsRef.current.some(v => v.name.trim().toLowerCase() === trimmed.toLowerCase())) throw new Error('View name already exists');
-    const db = await getDb();
-    await db.execute('INSERT INTO views (name, view_type, is_default) VALUES ($1, $2, 0)', [trimmed, viewType]);
+    await invoke<number>('create_view', { name: trimmed, viewType });
     await loadViews();
   }, [viewType, loadViews]);
 
@@ -76,8 +72,7 @@ export function useViews(viewType: 'asset' | 'dex' = 'asset') {
     const trimmed = newName.trim();
     if (!trimmed) throw new Error('View name cannot be empty');
     if (viewsRef.current.some(v => v.id !== viewId && v.name.trim().toLowerCase() === trimmed.toLowerCase())) throw new Error('View name already exists');
-    const db = await getDb();
-    await db.execute('UPDATE views SET name = $1 WHERE id = $2', [trimmed, viewId]);
+    await invoke('rename_view', { id: viewId, name: trimmed });
     await loadViews();
   }, [loadViews]);
 
@@ -85,8 +80,7 @@ export function useViews(viewType: 'asset' | 'dex' = 'asset') {
     const view = viewsRef.current.find(v => v.id === viewId);
     if (!view) throw new Error('View not found');
     if (view.is_default) throw new Error('Cannot delete the default view');
-    const db = await getDb();
-    await db.execute('DELETE FROM views WHERE id = $1', [viewId]);
+    await invoke('delete_view', { id: viewId });
     const updated = await loadViews();
     if (activeViewIdRef.current === viewId) {
       const def = updated.find(v => v.is_default);
@@ -95,15 +89,13 @@ export function useViews(viewType: 'asset' | 'dex' = 'asset') {
   }, [storageKey, loadViews]);
 
   const addSubscriptionToView = useCallback(async (viewId: number, subscriptionId: number) => {
-    const db = await getDb();
-    await db.execute('INSERT OR IGNORE INTO view_subscriptions (view_id, subscription_id) VALUES ($1, $2)', [viewId, subscriptionId]);
+    await invoke('add_sub_to_view', { viewId, subscriptionId });
     if (viewId === activeViewIdRef.current) await loadActiveViewSubs(viewId, viewsRef.current);
     await loadViewSubCounts(viewsRef.current);
   }, [loadActiveViewSubs, loadViewSubCounts]);
 
   const removeSubscriptionFromView = useCallback(async (viewId: number, subscriptionId: number) => {
-    const db = await getDb();
-    await db.execute('DELETE FROM view_subscriptions WHERE view_id = $1 AND subscription_id = $2', [viewId, subscriptionId]);
+    await invoke('remove_sub_from_view', { viewId, subscriptionId });
     if (viewId === activeViewIdRef.current) await loadActiveViewSubs(viewId, viewsRef.current);
     await loadViewSubCounts(viewsRef.current);
   }, [loadActiveViewSubs, loadViewSubCounts]);

@@ -250,6 +250,10 @@ const zh_TW = {
     apiUrlPlaceholder: '留空使用預設',
     boostRate: '提高速率',
     settingsSaved: '設定已儲存',
+    rateLimitLabel: '限流與並發佇列說明',
+    rateLimitDesc: (baseRate: number, keyRate?: number) => keyRate
+      ? `並發佇列：最多同時處理 ${baseRate} 個請求（若設定 API Key 則提升至 ${keyRate} 個）。由系統 Semaphore 自動排隊管理，防止超出頻率限制。`
+      : `並發佇列：最多同時處理 ${baseRate} 個請求。由系統 Semaphore 自動排隊管理，防止超出頻率限制。`,
   },
   settings: {
     theme: '風格主題',

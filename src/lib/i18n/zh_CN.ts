@@ -247,6 +247,10 @@ const zh_CN: Locale = {
     apiUrlPlaceholder: '留空使用默认',
     boostRate: '提高速率',
     settingsSaved: '设置已保存',
+    rateLimitLabel: '限流与并发队列说明',
+    rateLimitDesc: (baseRate: number, keyRate?: number) => keyRate
+      ? `并发队列：最多同时处理 ${baseRate} 个请求（若设定 API Key 则提升至 ${keyRate} 个）。由系统 Semaphore 自动排队管理，防止超出频率限制。`
+      : `并发队列：最多同时处理 ${baseRate} 个请求。由系统 Semaphore 自动排队管理，防止超出频率限制。`,
   },
   settings: {
     theme: '风格主题',
