@@ -67,6 +67,7 @@ impl ProviderRegistry {
     }
 
     /// 取得或建立 provider（直接指定 key，用於 enable_provider 場景）
+    #[allow(dead_code)]
     pub async fn get_or_create_with_key(
         &self,
         id: &str,

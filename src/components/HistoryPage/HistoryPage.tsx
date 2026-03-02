@@ -205,7 +205,7 @@ export function HistoryPage({ onToast }: Props) {
       <div className="history-main">
         <div className="h-card history-toolbar">
           <div className="history-toolbar-row">
-            {collapsed && <button className="history-icon-btn" onClick={() => setCollapsed(false)} title="展開側欄">☰</button>}
+            {collapsed && <button className="history-icon-btn" onClick={() => setCollapsed(false)} title={t.asset.expand}>☰</button>}
             {sel && (
               <>
                 <span className="history-selected-name">{label(sel)}</span>

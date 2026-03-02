@@ -174,6 +174,10 @@ pub struct ExportSubscription {
     pub pool_address: Option<String>,
     pub token_from_address: Option<String>,
     pub token_to_address: Option<String>,
+    pub record_enabled: Option<bool>,
+    pub record_from_hour: Option<i64>,
+    pub record_to_hour: Option<i64>,
+    pub sort_order: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -227,6 +231,29 @@ impl DbPool {
             params![key, value],
         )
         .map_err(|e| format!("設定 app_settings 失敗: {}", e))?;
+        Ok(())
+    }
+
+    pub fn reset_all_data(&self) -> Result<(), String> {
+        let conn = self.conn.lock().unwrap();
+        // 刪除所有資料
+        conn.execute_batch(
+            "DELETE FROM price_history;
+             DELETE FROM view_subscriptions;
+             DELETE FROM subscriptions;
+             DELETE FROM views;
+             DELETE FROM provider_settings;
+             DELETE FROM app_settings;"
+        ).map_err(|e| format!("刪除所有資料失敗: {}", e))?;
+
+        // 重新插入預設 Views
+        conn.execute_batch(
+            "INSERT OR IGNORE INTO views (id, name, view_type, is_default) VALUES (1, 'All', 'asset', 1);
+             INSERT OR IGNORE INTO views (id, name, view_type, is_default) VALUES (2, 'All', 'dex', 1);
+             INSERT OR IGNORE INTO app_settings (key, value) VALUES ('api_port', '8080');
+             INSERT OR IGNORE INTO app_settings (key, value) VALUES ('api_enabled', '0');"
+        ).map_err(|e| format!("還原預設資料失敗: {}", e))?;
+
         Ok(())
     }
 
@@ -785,7 +812,7 @@ impl DbPool {
         let subs_out: Vec<ExportSubscription>;
         {
             let mut stmt = conn
-                .prepare("SELECT symbol, display_name, selected_provider_id, asset_type, sub_type, pool_address, token_from_address, token_to_address FROM subscriptions ORDER BY sort_order, id")
+                .prepare("SELECT symbol, display_name, selected_provider_id, asset_type, sub_type, pool_address, token_from_address, token_to_address, record_enabled, record_from_hour, record_to_hour, sort_order FROM subscriptions ORDER BY sort_order, id")
                 .map_err(|e| e.to_string())?;
             let rows = stmt
                 .query_map([], |row| {
@@ -798,6 +825,10 @@ impl DbPool {
                         pool_address: row.get(5)?,
                         token_from_address: row.get(6)?,
                         token_to_address: row.get(7)?,
+                        record_enabled: row.get(8)?,
+                        record_from_hour: row.get(9)?,
+                        record_to_hour: row.get(10)?,
+                        sort_order: row.get(11)?,
                     })
                 })
                 .map_err(|e| e.to_string())?;
@@ -819,11 +850,12 @@ impl DbPool {
         for sub in &data.subscriptions {
             let changed = conn
                 .execute(
-                    "INSERT OR IGNORE INTO subscriptions (sub_type, symbol, display_name, selected_provider_id, asset_type, pool_address, token_from_address, token_to_address)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                    "INSERT OR IGNORE INTO subscriptions (sub_type, symbol, display_name, selected_provider_id, asset_type, pool_address, token_from_address, token_to_address, record_enabled, record_from_hour, record_to_hour, sort_order)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
                     params![
                         sub.sub_type, sub.symbol, sub.display_name, sub.selected_provider_id,
-                        sub.asset_type, sub.pool_address, sub.token_from_address, sub.token_to_address
+                        sub.asset_type, sub.pool_address, sub.token_from_address, sub.token_to_address,
+                        sub.record_enabled.unwrap_or(false), sub.record_from_hour, sub.record_to_hour, sub.sort_order.unwrap_or(0)
                     ],
                 )
                 .unwrap_or(0);

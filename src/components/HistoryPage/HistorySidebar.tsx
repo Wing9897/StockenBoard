@@ -24,7 +24,7 @@ interface HistorySidebarProps {
   tzLabel: string;
 }
 
-const noop = () => {};
+const noop = () => { };
 
 export function HistorySidebar({
   subs, selectedId, filter, search,
@@ -55,7 +55,7 @@ export function HistorySidebar({
       <div className="history-sidebar-header">
         <span className="history-sidebar-title">{t.history.title}</span>
         {recCount > 0 && <span className="history-recording-badge">● {recCount}</span>}
-        <button className="history-collapse-btn" onClick={onCollapse} title="收起">◀</button>
+        <button className="history-collapse-btn" onClick={onCollapse} title={t.asset.collapse}>◀</button>
       </div>
 
       <div className="hseg equal">

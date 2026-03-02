@@ -122,7 +122,7 @@ export function SubscriptionManager({ onBatchAdd, onBatchAddMultiple, subscripti
         duplicates.push(...(result.dbDuplicates || []));
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        onToast?.('error', '系統錯誤', `批量新增時發生未捕捉例外: ${msg}`);
+        onToast?.('error', t.subForm.batchErrorTitle, t.subForm.batchException(msg));
         failed.push(...unique);
       }
     } else {

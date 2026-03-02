@@ -1,0 +1,15 @@
+    Checking stockenboard v0.1.0 (C:\Users\Wing\Desktop\Github_USING\StockenBoard\src-tauri)
+error[E0432]: unresolved import `commands::reset_all_data`
+  --> src\lib.rs:17:57
+   |
+17 |     remove_subscriptions, remove_theme_bg, rename_view, reset_all_data, save_theme_bg, set_api_enabled,
+   |                                                         ^^^^^^^^^^^^^^ no `reset_all_data` in `commands`
+
+error: cannot find macro `__cmd__reset_all_data` in this scope
+   --> src\lib.rs:116:13
+    |
+116 |             reset_all_data,
+    |             ^^^^^^^^^^^^^^
+
+For more information about this error, try `rustc --explain E0432`.
+error: could not compile `stockenboard` (lib) due to 2 previous errors
