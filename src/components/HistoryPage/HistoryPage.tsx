@@ -3,7 +3,7 @@
  */
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { getDb } from '../../lib/db';
+
 import { t } from '../../lib/i18n';
 import { HistorySidebar } from './HistorySidebar';
 import { HistoryChart } from './HistoryChart';
@@ -57,10 +57,11 @@ export function HistoryPage({ onToast }: Props) {
 
   // ── 載入訂閱 ──
   const loadSubs = useCallback(async () => {
-    const db = await getDb();
-    setSubs(await db.select<Subscription[]>(
-      'SELECT id, sub_type, symbol, display_name, selected_provider_id, asset_type, pool_address, token_from_address, token_to_address, sort_order, record_enabled, record_from_hour, record_to_hour FROM subscriptions ORDER BY sort_order, id'
-    ));
+    try {
+      const assetSubs = await invoke<Subscription[]>('list_subscriptions', { subType: 'asset' });
+      const dexSubs = await invoke<Subscription[]>('list_subscriptions', { subType: 'dex' });
+      setSubs([...assetSubs, ...dexSubs]);
+    } catch (e) { console.error('loadSubs:', e); }
   }, []);
   useEffect(() => { loadSubs(); }, [loadSubs]);
 
@@ -126,9 +127,8 @@ export function HistoryPage({ onToast }: Props) {
     if (!selectedId) return;
     if (!confirm(t.history.purgeAllConfirm)) return;
     try {
-      const db = await getDb();
-      const r = await db.execute('DELETE FROM price_history WHERE subscription_id = ?', [selectedId]);
-      onToast.success(t.history.purgeAllDone(r.rowsAffected));
+      const n = await invoke<number>('delete_subscription_history', { subscriptionId: selectedId });
+      onToast.success(t.history.purgeAllDone(n));
       setRecords([]);
     } catch (e) { onToast.error(String(e)); }
   }, [selectedId, onToast]);

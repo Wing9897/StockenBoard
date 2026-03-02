@@ -247,6 +247,10 @@ const ja: Locale = {
     apiUrlPlaceholder: '空欄でデフォルト使用',
     boostRate: 'レート向上',
     settingsSaved: '設定を保存しました',
+    rateLimitLabel: 'レート制限とキュー情報',
+    rateLimitDesc: (baseRate: number, keyRate?: number) => keyRate
+      ? `同時実行キュー: 最大 ${baseRate} リクエスト（APIキー設定時は ${keyRate}）。レート制限を防ぐため Semaphore により自動管理されます。`
+      : `同時実行キュー: 最大 ${baseRate} リクエスト。レート制限を防ぐため Semaphore により自動管理されます。`,
   },
   settings: {
     theme: 'テーマ',

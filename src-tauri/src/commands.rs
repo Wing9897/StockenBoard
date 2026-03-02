@@ -1,7 +1,10 @@
+use crate::db::{DbPool, ExportData, ProviderSettingsRow, Subscription, ViewRow, ViewSubCount};
+use crate::events::AppEvent;
 use crate::polling::{PollTick, PollingManager};
 use crate::providers::{
-    create_dex_lookup, create_provider_with_url, create_ws_provider, get_all_provider_info,
-    AssetData, DataProvider, DexPoolInfo, ProviderInfo, WsTickerUpdate,
+    create_dex_lookup, create_ws_provider, get_all_provider_info,
+    registry::ProviderRegistry,
+    AssetData, DexPoolInfo, ProviderInfo, WsTickerUpdate,
 };
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -9,110 +12,48 @@ use tauri::{Emitter, Manager};
 use tauri_plugin_shell::ShellExt;
 use tokio::sync::{broadcast, RwLock};
 
+// ── AppState ────────────────────────────────────────────────────
+
 pub struct AppState {
-    /// On-demand provider instances（用於前端驗證 symbol 等即時查詢）
-    providers: RwLock<HashMap<String, Arc<dyn DataProvider>>>,
+    /// 統一 DB 存取層
+    pub db: Arc<DbPool>,
+    /// 共享 Provider Registry（含 rate limiting）
+    pub registry: Arc<ProviderRegistry>,
+    /// Event Bus（解耦 Polling ↔ DB ↔ 前端）
+    pub event_bus: broadcast::Sender<AppEvent>,
     ws_sender: broadcast::Sender<WsTickerUpdate>,
     #[allow(clippy::type_complexity)]
     ws_tasks: RwLock<HashMap<String, (tokio::task::JoinHandle<()>, tokio::task::JoinHandle<()>)>>,
     pub polling: PollingManager,
-    pub db_path: std::sync::RwLock<Option<std::path::PathBuf>>,
 }
 
 impl AppState {
-    pub fn new() -> Self {
+    pub fn new(db: Arc<DbPool>, registry: Arc<ProviderRegistry>, event_bus: broadcast::Sender<AppEvent>) -> Self {
         let (ws_sender, _) = broadcast::channel(256);
         Self {
-            providers: RwLock::new(HashMap::new()),
+            db,
+            registry,
+            event_bus,
             ws_sender,
             ws_tasks: RwLock::new(HashMap::new()),
             polling: PollingManager::new(),
-            db_path: std::sync::RwLock::new(None),
         }
     }
 
-    pub fn set_db_path(&self, path: std::path::PathBuf) {
-        *self.db_path.write().unwrap() = Some(path);
-    }
-
-    /// 創建一個用於 API server 的輕量級 clone（共享 polling 和 db_path）
+    /// 創建一個用於 API server 的輕量級 clone
     pub fn clone_for_api(&self) -> Self {
         Self {
-            providers: RwLock::new(HashMap::new()),
+            db: self.db.clone(),
+            registry: self.registry.clone(),
+            event_bus: self.event_bus.clone(),
             ws_sender: broadcast::channel(1).0,
             ws_tasks: RwLock::new(HashMap::new()),
             polling: self.polling.clone(),
-            db_path: std::sync::RwLock::new(self.db_path.read().unwrap().clone()),
         }
-    }
-
-    /// 從 DB 讀取 provider 的 api_key / api_secret / api_url
-    fn read_provider_settings(
-        db_path: &std::path::Path,
-        provider_id: &str,
-    ) -> (Option<String>, Option<String>, Option<String>) {
-        let conn = match rusqlite::Connection::open_with_flags(
-            db_path,
-            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
-        ) {
-            Ok(c) => c,
-            Err(_) => return (None, None, None),
-        };
-        let mut stmt = match conn.prepare(
-            "SELECT api_key, api_secret, api_url FROM provider_settings WHERE provider_id = ?1",
-        ) {
-            Ok(s) => s,
-            Err(_) => return (None, None, None),
-        };
-        match stmt.query_row([provider_id], |row| {
-            Ok((
-                row.get::<_, Option<String>>(0)?,
-                row.get::<_, Option<String>>(1)?,
-                row.get::<_, Option<String>>(2)?,
-            ))
-        }) {
-            Ok((key, secret, url)) => (
-                key.filter(|k| !k.is_empty()),
-                secret.filter(|s| !s.is_empty()),
-                url.filter(|u| !u.is_empty()),
-            ),
-            Err(_) => (None, None, None),
-        }
-    }
-
-    /// 取得或建立 provider instance（lazy，自動從 DB 讀取 API key）
-    async fn get_provider(
-        &self,
-        id: &str,
-        api_key: Option<String>,
-        api_secret: Option<String>,
-    ) -> Option<Arc<dyn DataProvider>> {
-        {
-            let p = self.providers.read().await;
-            if let Some(provider) = p.get(id) {
-                return Some(provider.clone());
-            }
-        }
-        // 如果呼叫者沒提供 key，嘗試從 DB 讀取
-        let (key, secret, url) = if api_key.is_none() {
-            if let Some(ref db_path) = *self.db_path.read().unwrap() {
-                Self::read_provider_settings(db_path, id)
-            } else {
-                (None, None, None)
-            }
-        } else {
-            (api_key, api_secret, None)
-        };
-        let provider = crate::providers::create_provider_with_url(id, key, secret, url)?;
-        self.providers
-            .write()
-            .await
-            .insert(id.to_string(), provider.clone());
-        Some(provider)
     }
 }
 
-// ── Tauri Commands ──────────────────────────────────────────────
+// ── Provider / Fetch Commands ───────────────────────────────────
 
 #[tauri::command]
 pub async fn fetch_asset_price(
@@ -121,7 +62,8 @@ pub async fn fetch_asset_price(
     symbol: String,
 ) -> Result<AssetData, String> {
     let p = state
-        .get_provider(&provider_id, None, None)
+        .registry
+        .get_or_create(&provider_id, &state.db)
         .await
         .ok_or_else(|| format!("找不到數據源: {}", provider_id))?;
     p.fetch_price(&symbol).await
@@ -133,11 +75,10 @@ pub async fn fetch_multiple_prices(
     provider_id: String,
     symbols: Vec<String>,
 ) -> Result<Vec<AssetData>, String> {
-    let p = state
-        .get_provider(&provider_id, None, None)
+    state
+        .registry
+        .fetch_with_limit(&provider_id, &symbols, &state.db)
         .await
-        .ok_or_else(|| format!("找不到數據源: {}", provider_id))?;
-    p.fetch_prices(&symbols).await
 }
 
 #[tauri::command]
@@ -152,16 +93,16 @@ pub async fn enable_provider(
     api_key: Option<String>,
     api_secret: Option<String>,
 ) -> Result<(), String> {
-    // 也從 DB 讀取 api_url，確保 DEX provider 能用自訂端點
-    let api_url = if let Some(ref db_path) = *state.db_path.read().unwrap() {
-        let (_, _, url) = AppState::read_provider_settings(db_path, &provider_id);
-        url
-    } else {
-        None
-    };
-    if let Some(p) = create_provider_with_url(&provider_id, api_key, api_secret, api_url) {
-        state.providers.write().await.insert(provider_id, p);
-    }
+    let api_url = state
+        .db
+        .get_provider_settings(&provider_id)
+        .ok()
+        .flatten()
+        .and_then(|s| s.api_url.filter(|u| !u.is_empty()));
+    state
+        .registry
+        .update_provider(&provider_id, api_key, api_secret, api_url)
+        .await;
     state.polling.reload();
     Ok(())
 }
@@ -204,16 +145,13 @@ pub async fn set_visible_subscriptions(
 
 #[tauri::command]
 pub async fn lookup_dex_pool(
-    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
     provider_id: String,
     pool_address: String,
 ) -> Result<DexPoolInfo, String> {
-    let db_path = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("無法取得 app 目錄: {}", e))?
-        .join("stockenboard.db");
-    let (api_key, _, api_url) = AppState::read_provider_settings(&db_path, &provider_id);
+    let settings = state.db.get_provider_settings(&provider_id).ok().flatten();
+    let api_key = settings.as_ref().and_then(|s| s.api_key.clone());
+    let api_url = settings.as_ref().and_then(|s| s.api_url.clone());
     let lookup = create_dex_lookup(&provider_id, api_key, api_url)
         .ok_or_else(|| format!("{} 不支援 pool 查詢", provider_id))?;
     lookup.lookup_pool(&pool_address).await
@@ -229,6 +167,249 @@ pub async fn get_cached_prices(
 #[tauri::command]
 pub async fn get_poll_ticks(state: tauri::State<'_, AppState>) -> Result<Vec<PollTick>, String> {
     Ok(state.polling.ticks.read().await.values().cloned().collect())
+}
+
+// ── Subscription Commands (NEW - 取代前端 SQL) ──────────────────
+
+#[tauri::command]
+pub async fn list_subscriptions(
+    state: tauri::State<'_, AppState>,
+    sub_type: String,
+) -> Result<Vec<Subscription>, String> {
+    state.db.list_subscriptions(&sub_type)
+}
+
+#[tauri::command]
+pub async fn add_subscription(
+    state: tauri::State<'_, AppState>,
+    sub_type: String,
+    symbol: String,
+    display_name: Option<String>,
+    provider_id: String,
+    asset_type: String,
+    pool_address: Option<String>,
+    token_from: Option<String>,
+    token_to: Option<String>,
+) -> Result<i64, String> {
+    let id = state.db.add_subscription(
+        &sub_type,
+        &symbol,
+        display_name.as_deref(),
+        &provider_id,
+        &asset_type,
+        pool_address.as_deref(),
+        token_from.as_deref(),
+        token_to.as_deref(),
+    )?;
+    state.polling.reload();
+    Ok(id)
+}
+
+#[derive(serde::Deserialize)]
+pub struct BatchAddItem {
+    pub symbol: String,
+    pub display_name: Option<String>,
+    pub provider_id: String,
+    pub asset_type: String,
+}
+
+#[derive(serde::Serialize)]
+pub struct BatchAddResult {
+    pub succeeded: Vec<String>,
+    pub failed: Vec<String>,
+    pub duplicates: Vec<String>,
+}
+
+#[tauri::command]
+pub async fn add_subscriptions_batch(
+    state: tauri::State<'_, AppState>,
+    items: Vec<BatchAddItem>,
+) -> Result<BatchAddResult, String> {
+    let mut succeeded = Vec::new();
+    let mut failed = Vec::new();
+    let mut duplicates = Vec::new();
+
+    for item in &items {
+        match state.db.add_subscription(
+            "asset",
+            &item.symbol,
+            item.display_name.as_deref(),
+            &item.provider_id,
+            &item.asset_type,
+            None,
+            None,
+            None,
+        ) {
+            Ok(_) => succeeded.push(item.symbol.clone()),
+            Err(e) if e.contains("已存在") => duplicates.push(item.symbol.clone()),
+            Err(_) => failed.push(item.symbol.clone()),
+        }
+    }
+
+    if !succeeded.is_empty() {
+        state.polling.reload();
+    }
+
+    Ok(BatchAddResult {
+        succeeded,
+        failed,
+        duplicates,
+    })
+}
+
+#[tauri::command]
+pub async fn update_subscription(
+    state: tauri::State<'_, AppState>,
+    id: i64,
+    symbol: String,
+    display_name: Option<String>,
+    provider_id: String,
+    asset_type: String,
+) -> Result<(), String> {
+    state
+        .db
+        .update_subscription(id, &symbol, display_name.as_deref(), &provider_id, &asset_type)?;
+    state.polling.reload();
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn remove_subscription(
+    state: tauri::State<'_, AppState>,
+    id: i64,
+) -> Result<(), String> {
+    state.db.remove_subscription(id)?;
+    state.polling.reload();
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn remove_subscriptions(
+    state: tauri::State<'_, AppState>,
+    ids: Vec<i64>,
+) -> Result<(), String> {
+    state.db.remove_subscriptions(&ids)?;
+    state.polling.reload();
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn has_api_key(
+    state: tauri::State<'_, AppState>,
+    provider_id: String,
+) -> Result<bool, String> {
+    Ok(state.db.has_api_key(&provider_id))
+}
+
+// ── Provider Settings Commands (NEW) ────────────────────────────
+
+#[tauri::command]
+pub async fn list_provider_settings(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<ProviderSettingsRow>, String> {
+    state.db.list_provider_settings()
+}
+
+#[tauri::command]
+pub async fn upsert_provider_settings(
+    state: tauri::State<'_, AppState>,
+    provider_id: String,
+    api_key: Option<String>,
+    api_secret: Option<String>,
+    api_url: Option<String>,
+    refresh_interval: Option<i64>,
+    connection_type: String,
+    record_from_hour: Option<i64>,
+    record_to_hour: Option<i64>,
+) -> Result<(), String> {
+    state.db.upsert_provider_settings(
+        &provider_id,
+        api_key.as_deref(),
+        api_secret.as_deref(),
+        api_url.as_deref(),
+        refresh_interval,
+        &connection_type,
+        record_from_hour,
+        record_to_hour,
+    )?;
+    // 同步 Rust 端 provider instance + 觸發 polling reload
+    state
+        .registry
+        .update_provider(
+            &provider_id,
+            api_key.filter(|k| !k.is_empty()),
+            api_secret.filter(|s| !s.is_empty()),
+            api_url.filter(|u| !u.is_empty()),
+        )
+        .await;
+    state.polling.reload();
+    Ok(())
+}
+
+// ── View Commands (NEW) ─────────────────────────────────────────
+
+#[tauri::command]
+pub async fn list_views(
+    state: tauri::State<'_, AppState>,
+    view_type: String,
+) -> Result<Vec<ViewRow>, String> {
+    state.db.list_views(&view_type)
+}
+
+#[tauri::command]
+pub async fn create_view(
+    state: tauri::State<'_, AppState>,
+    name: String,
+    view_type: String,
+) -> Result<i64, String> {
+    state.db.create_view(&name, &view_type)
+}
+
+#[tauri::command]
+pub async fn rename_view(
+    state: tauri::State<'_, AppState>,
+    id: i64,
+    name: String,
+) -> Result<(), String> {
+    state.db.rename_view(id, &name)
+}
+
+#[tauri::command]
+pub async fn delete_view(state: tauri::State<'_, AppState>, id: i64) -> Result<(), String> {
+    state.db.delete_view(id)
+}
+
+#[tauri::command]
+pub async fn get_view_sub_counts(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<ViewSubCount>, String> {
+    state.db.get_view_sub_counts()
+}
+
+#[tauri::command]
+pub async fn get_view_subscription_ids(
+    state: tauri::State<'_, AppState>,
+    view_id: i64,
+) -> Result<Vec<i64>, String> {
+    state.db.get_view_subscription_ids(view_id)
+}
+
+#[tauri::command]
+pub async fn add_sub_to_view(
+    state: tauri::State<'_, AppState>,
+    view_id: i64,
+    subscription_id: i64,
+) -> Result<(), String> {
+    state.db.add_sub_to_view(view_id, subscription_id)
+}
+
+#[tauri::command]
+pub async fn remove_sub_from_view(
+    state: tauri::State<'_, AppState>,
+    view_id: i64,
+    subscription_id: i64,
+) -> Result<(), String> {
+    state.db.remove_sub_from_view(view_id, subscription_id)
 }
 
 // ── WebSocket ───────────────────────────────────────────────────
@@ -337,7 +518,7 @@ pub async fn get_icons_dir(app: tauri::AppHandle) -> Result<String, String> {
     Ok(dir.to_string_lossy().to_string())
 }
 
-/// 讀取本地檔案並回傳 base64 data URL — 繞過 asset protocol，dev/prod 都能用
+/// 讀取本地檔案並回傳 base64 data URL
 #[tauri::command]
 pub async fn read_local_file_base64(path: String) -> Result<String, String> {
     let bytes = tokio::fs::read(&path)
@@ -345,7 +526,6 @@ pub async fn read_local_file_base64(path: String) -> Result<String, String> {
         .map_err(|e| format!("讀取失敗: {}", e))?;
     use base64::Engine;
     let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
-    // 根據副檔名推斷 MIME type
     let mime = if path.ends_with(".png") {
         "image/png"
     } else if path.ends_with(".jpg") || path.ends_with(".jpeg") {
@@ -380,8 +560,6 @@ pub async fn save_theme_bg(app: tauri::AppHandle, theme_id: String) -> Result<St
     tokio::fs::create_dir_all(&dir)
         .await
         .map_err(|e| format!("建立目錄失敗: {}", e))?;
-
-    // 取得原始副檔名，保留正確的 MIME type 讓 asset protocol 能正確回傳
     let ext = file
         .file_name()
         .rsplit('.')
@@ -389,13 +567,10 @@ pub async fn save_theme_bg(app: tauri::AppHandle, theme_id: String) -> Result<St
         .map(|e| e.to_lowercase())
         .filter(|e| matches!(e.as_str(), "png" | "jpg" | "jpeg" | "webp"))
         .unwrap_or_else(|| "png".to_string());
-
-    // 清除舊檔（可能是不同副檔名）
     for old_ext in &["png", "jpg", "jpeg", "webp", "img"] {
         let old = dir.join(format!("{}.{}", theme_id, old_ext));
         let _ = tokio::fs::remove_file(&old).await;
     }
-
     let dest = dir.join(format!("{}.{}", theme_id, ext));
     tokio::fs::write(&dest, file.read().await)
         .await
@@ -410,7 +585,6 @@ pub async fn remove_theme_bg(app: tauri::AppHandle, theme_id: String) -> Result<
         .app_data_dir()
         .map_err(|e| format!("無法取得 app 目錄: {}", e))?
         .join("theme_bg");
-    // 清除所有可能的副檔名
     for ext in &["png", "jpg", "jpeg", "webp", "img"] {
         let path = dir.join(format!("{}.{}", theme_id, ext));
         let _ = tokio::fs::remove_file(&path).await;
@@ -428,7 +602,6 @@ pub async fn get_theme_bg_path(
         .app_data_dir()
         .map_err(|e| format!("無法取得 app 目錄: {}", e))?
         .join("theme_bg");
-    // 搜尋所有支援的副檔名
     for ext in &["png", "jpg", "jpeg", "webp", "img"] {
         let path = dir.join(format!("{}.{}", theme_id, ext));
         if path.exists() {
@@ -463,23 +636,91 @@ pub async fn import_file() -> Result<String, String> {
     String::from_utf8(file.read().await).map_err(|e| format!("讀取失敗: {}", e))
 }
 
+#[tauri::command]
+pub async fn export_data(state: tauri::State<'_, AppState>) -> Result<ExportData, String> {
+    state.db.export_data()
+}
+
+#[tauri::command]
+pub async fn import_data(
+    state: tauri::State<'_, AppState>,
+    data: ExportData,
+) -> Result<(usize, usize), String> {
+    let result = state.db.import_data(&data)?;
+    state.polling.reload();
+    Ok(result)
+}
+
 // ── Price History ────────────────────────────────────────────────
 
-#[derive(serde::Serialize)]
-pub struct PriceHistoryRecord {
-    pub id: i64,
-    pub subscription_id: i64,
-    pub provider_id: String,
-    pub price: f64,
-    pub change_pct: Option<f64>,
-    pub volume: Option<f64>,
-    pub pre_price: Option<f64>,
-    pub post_price: Option<f64>,
-    pub recorded_at: i64,
+#[tauri::command]
+pub async fn toggle_record(
+    state: tauri::State<'_, AppState>,
+    subscription_id: i64,
+    enabled: bool,
+) -> Result<(), String> {
+    state.db.toggle_record(subscription_id, enabled)?;
+    state.polling.reload();
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn set_record_hours(
+    state: tauri::State<'_, AppState>,
+    subscription_id: i64,
+    from_hour: Option<i64>,
+    to_hour: Option<i64>,
+) -> Result<(), String> {
+    state
+        .db
+        .set_record_hours(subscription_id, from_hour, to_hour)
+}
+
+#[tauri::command]
+pub async fn set_provider_record_hours(
+    state: tauri::State<'_, AppState>,
+    provider_id: String,
+    from_hour: Option<i64>,
+    to_hour: Option<i64>,
+) -> Result<(), String> {
+    state
+        .db
+        .set_provider_record_hours(&provider_id, from_hour, to_hour)
+}
+
+#[tauri::command]
+pub async fn get_price_history(
+    state: tauri::State<'_, AppState>,
+    subscription_id: i64,
+    from_ts: i64,
+    to_ts: i64,
+    limit: Option<i64>,
+) -> Result<Vec<crate::db::PriceHistoryRow>, String> {
+    state
+        .db
+        .get_price_history(subscription_id, Some(from_ts), Some(to_ts), limit.unwrap_or(10000))
+}
+
+#[tauri::command]
+pub async fn get_history_stats(
+    state: tauri::State<'_, AppState>,
+    subscription_ids: Vec<i64>,
+) -> Result<Vec<HistoryStatsResult>, String> {
+    let mut results = Vec::new();
+    for sid in subscription_ids {
+        let stats = state.db.get_history_stats(sid)?;
+        results.push(HistoryStatsResult {
+            subscription_id: sid,
+            total_records: stats.total,
+            earliest: stats.oldest,
+            latest: stats.newest,
+        });
+    }
+    Ok(results)
 }
 
 #[derive(serde::Serialize)]
-pub struct HistoryStats {
+pub struct HistoryStatsResult {
     pub subscription_id: i64,
     pub total_records: i64,
     pub earliest: Option<i64>,
@@ -487,198 +728,26 @@ pub struct HistoryStats {
 }
 
 #[tauri::command]
-pub async fn toggle_record(
-    app: tauri::AppHandle,
-    state: tauri::State<'_, AppState>,
-    subscription_id: i64,
-    enabled: bool,
-) -> Result<(), String> {
-    let db_path = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("無法取得 app 目錄: {}", e))?
-        .join("stockenboard.db");
-    let _ = tokio::task::spawn_blocking(move || -> Result<(), String> {
-        let conn =
-            rusqlite::Connection::open(&db_path).map_err(|e| format!("開啟 DB 失敗: {}", e))?;
-        conn.execute(
-            "UPDATE subscriptions SET record_enabled = ?1 WHERE id = ?2",
-            rusqlite::params![if enabled { 1 } else { 0 }, subscription_id],
-        )
-        .map_err(|e| format!("更新失敗: {}", e))?;
-        Ok(())
-    })
-    .await
-    .map_err(|e| format!("spawn 失敗: {}", e))?;
-    // 通知 polling 重新載入，以更新 record_symbols
-    state.polling.reload();
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn set_record_hours(
-    app: tauri::AppHandle,
-    subscription_id: i64,
-    from_hour: Option<i64>,
-    to_hour: Option<i64>,
-) -> Result<(), String> {
-    let db_path = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("無法取得 app 目錄: {}", e))?
-        .join("stockenboard.db");
-    tokio::task::spawn_blocking(move || -> Result<(), String> {
-        let conn =
-            rusqlite::Connection::open(&db_path).map_err(|e| format!("開啟 DB 失敗: {}", e))?;
-        conn.execute(
-            "UPDATE subscriptions SET record_from_hour = ?1, record_to_hour = ?2 WHERE id = ?3",
-            rusqlite::params![from_hour, to_hour, subscription_id],
-        )
-        .map_err(|e| format!("更新失敗: {}", e))?;
-        Ok(())
-    })
-    .await
-    .map_err(|e| format!("spawn 失敗: {}", e))?
-}
-
-#[tauri::command]
-pub async fn set_provider_record_hours(
-    app: tauri::AppHandle,
-    provider_id: String,
-    from_hour: Option<i64>,
-    to_hour: Option<i64>,
-) -> Result<(), String> {
-    let db_path = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("無法取得 app 目錄: {}", e))?
-        .join("stockenboard.db");
-    tokio::task::spawn_blocking(move || -> Result<(), String> {
-        let conn = rusqlite::Connection::open(&db_path)
-            .map_err(|e| format!("開啟 DB 失敗: {}", e))?;
-        conn.execute(
-            "UPDATE provider_settings SET record_from_hour = ?1, record_to_hour = ?2 WHERE provider_id = ?3",
-            rusqlite::params![from_hour, to_hour, provider_id],
-        ).map_err(|e| format!("更新失敗: {}", e))?;
-        Ok(())
-    }).await.map_err(|e| format!("spawn 失敗: {}", e))?
-}
-
-#[tauri::command]
-pub async fn get_price_history(
-    app: tauri::AppHandle,
-    subscription_id: i64,
-    from_ts: i64,
-    to_ts: i64,
-    limit: Option<i64>,
-) -> Result<Vec<PriceHistoryRecord>, String> {
-    let db_path = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("無法取得 app 目錄: {}", e))?
-        .join("stockenboard.db");
-    tokio::task::spawn_blocking(move || {
-        let conn = rusqlite::Connection::open_with_flags(&db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
-            .map_err(|e| format!("開啟 DB 失敗: {}", e))?;
-        let lim = limit.unwrap_or(10000);
-        let mut stmt = conn.prepare(
-            "SELECT id, subscription_id, provider_id, price, change_pct, volume, pre_price, post_price, recorded_at \
-             FROM price_history WHERE subscription_id = ?1 AND recorded_at >= ?2 AND recorded_at <= ?3 \
-             ORDER BY recorded_at ASC LIMIT ?4"
-        ).map_err(|e| format!("查詢失敗: {}", e))?;
-        let rows = stmt.query_map(rusqlite::params![subscription_id, from_ts, to_ts, lim], |row| {
-            Ok(PriceHistoryRecord {
-                id: row.get(0)?,
-                subscription_id: row.get(1)?,
-                provider_id: row.get(2)?,
-                price: row.get(3)?,
-                change_pct: row.get(4)?,
-                volume: row.get(5)?,
-                pre_price: row.get(6)?,
-                post_price: row.get(7)?,
-                recorded_at: row.get(8)?,
-            })
-        }).map_err(|e| format!("讀取失敗: {}", e))?;
-        Ok(rows.filter_map(|r| r.ok()).collect())
-    }).await.map_err(|e| format!("spawn 失敗: {}", e))?
-}
-
-#[tauri::command]
-pub async fn get_history_stats(
-    app: tauri::AppHandle,
-    subscription_ids: Vec<i64>,
-) -> Result<Vec<HistoryStats>, String> {
-    let db_path = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("無法取得 app 目錄: {}", e))?
-        .join("stockenboard.db");
-    tokio::task::spawn_blocking(move || {
-        let conn = rusqlite::Connection::open_with_flags(&db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
-            .map_err(|e| format!("開啟 DB 失敗: {}", e))?;
-        let mut results = Vec::new();
-        for sid in &subscription_ids {
-            let mut stmt = conn.prepare_cached(
-                "SELECT COUNT(*), MIN(recorded_at), MAX(recorded_at) FROM price_history WHERE subscription_id = ?1"
-            ).map_err(|e| format!("查詢失敗: {}", e))?;
-            let stat = stmt.query_row([sid], |row| {
-                Ok(HistoryStats {
-                    subscription_id: *sid,
-                    total_records: row.get(0)?,
-                    earliest: row.get(1)?,
-                    latest: row.get(2)?,
-                })
-            }).map_err(|e| format!("讀取失敗: {}", e))?;
-            results.push(stat);
-        }
-        Ok(results)
-    }).await.map_err(|e| format!("spawn 失敗: {}", e))?
-}
-
-#[tauri::command]
 pub async fn cleanup_history(
-    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
     retention_days: Option<i64>,
 ) -> Result<i64, String> {
-    let db_path = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("無法取得 app 目錄: {}", e))?
-        .join("stockenboard.db");
     let days = retention_days.unwrap_or(90);
-    tokio::task::spawn_blocking(move || {
-        let conn =
-            rusqlite::Connection::open(&db_path).map_err(|e| format!("開啟 DB 失敗: {}", e))?;
-        let cutoff = chrono::Utc::now().timestamp() - (days * 86400);
-        let deleted = conn
-            .execute(
-                "DELETE FROM price_history WHERE recorded_at < ?1",
-                rusqlite::params![cutoff],
-            )
-            .map_err(|e| format!("清理失敗: {}", e))?;
-        Ok(deleted as i64)
-    })
-    .await
-    .map_err(|e| format!("spawn 失敗: {}", e))?
+    let cutoff = chrono::Utc::now().timestamp() - (days * 86400);
+    state.db.cleanup_history(cutoff)
 }
 
 #[tauri::command]
-pub async fn purge_all_history(app: tauri::AppHandle) -> Result<i64, String> {
-    let db_path = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("無法取得 app 目錄: {}", e))?
-        .join("stockenboard.db");
-    tokio::task::spawn_blocking(move || {
-        let conn =
-            rusqlite::Connection::open(&db_path).map_err(|e| format!("開啟 DB 失敗: {}", e))?;
-        let deleted = conn
-            .execute("DELETE FROM price_history", [])
-            .map_err(|e| format!("清除失敗: {}", e))?;
-        Ok(deleted as i64)
-    })
-    .await
-    .map_err(|e| format!("spawn 失敗: {}", e))?
+pub async fn purge_all_history(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    state.db.purge_all_history()
+}
+
+#[tauri::command]
+pub async fn delete_subscription_history(
+    state: tauri::State<'_, AppState>,
+    subscription_id: i64,
+) -> Result<i64, String> {
+    state.db.delete_history_for_subscription(subscription_id)
 }
 
 #[tauri::command]
@@ -688,7 +757,6 @@ pub async fn get_data_dir(app: tauri::AppHandle) -> Result<String, String> {
         .app_data_dir()
         .map_err(|e| format!("無法取得 app 目錄: {}", e))?;
 
-    // 使用 shell 插件打開資料夾
     #[cfg(target_os = "windows")]
     {
         let path_str = dir.to_string_lossy().to_string();
@@ -725,90 +793,32 @@ pub async fn get_data_dir(app: tauri::AppHandle) -> Result<String, String> {
 // ── API Settings ────────────────────────────────────────────────
 
 #[tauri::command]
-pub async fn get_api_port(app: tauri::AppHandle) -> Result<u16, String> {
-    let db_path = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("無法取得 app 目錄: {}", e))?
-        .join("stockenboard.db");
-
-    let conn =
-        rusqlite::Connection::open(&db_path).map_err(|e| format!("無法開啟資料庫: {}", e))?;
-
-    let port: String = conn
-        .query_row(
-            "SELECT value FROM app_settings WHERE key = 'api_port'",
-            [],
-            |row| row.get(0),
-        )
-        .unwrap_or_else(|_| "8080".to_string());
-
-    port.parse::<u16>()
+pub async fn get_api_port(state: tauri::State<'_, AppState>) -> Result<u16, String> {
+    let val = state.db.get_setting("api_port")?.unwrap_or("8080".into());
+    val.parse::<u16>()
         .map_err(|e| format!("無效的 port: {}", e))
 }
 
 #[tauri::command]
-pub async fn set_api_port(app: tauri::AppHandle, port: u16) -> Result<(), String> {
+pub async fn set_api_port(state: tauri::State<'_, AppState>, port: u16) -> Result<(), String> {
     if port < 1024 {
         return Err("Port 必須在 1024-65535 之間".to_string());
     }
-
-    let db_path = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("無法取得 app 目錄: {}", e))?
-        .join("stockenboard.db");
-
-    let conn =
-        rusqlite::Connection::open(&db_path).map_err(|e| format!("無法開啟資料庫: {}", e))?;
-
-    conn.execute(
-        "INSERT OR REPLACE INTO app_settings (key, value) VALUES ('api_port', ?1)",
-        [port.to_string()],
-    )
-    .map_err(|e| format!("無法儲存設定: {}", e))?;
-
-    Ok(())
+    state.db.set_setting("api_port", &port.to_string())
 }
 
 #[tauri::command]
-pub async fn get_api_enabled(app: tauri::AppHandle) -> Result<bool, String> {
-    let db_path = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("無法取得 app 目錄: {}", e))?
-        .join("stockenboard.db");
-
-    let conn =
-        rusqlite::Connection::open(&db_path).map_err(|e| format!("無法開啟資料庫: {}", e))?;
-
-    let enabled: String = conn
-        .query_row(
-            "SELECT value FROM app_settings WHERE key = 'api_enabled'",
-            [],
-            |row| row.get(0),
-        )
-        .unwrap_or_else(|_| "0".to_string());
-
-    Ok(enabled == "1")
+pub async fn get_api_enabled(state: tauri::State<'_, AppState>) -> Result<bool, String> {
+    let val = state.db.get_setting("api_enabled")?.unwrap_or("0".into());
+    Ok(val == "1")
 }
 
 #[tauri::command]
-pub async fn set_api_enabled(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
-    let db_path = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("無法取得 app 目錄: {}", e))?
-        .join("stockenboard.db");
-
-    let conn =
-        rusqlite::Connection::open(&db_path).map_err(|e| format!("無法開啟資料庫: {}", e))?;
-
-    conn.execute(
-        "INSERT OR REPLACE INTO app_settings (key, value) VALUES ('api_enabled', ?1)",
-        [if enabled { "1" } else { "0" }],
-    )
-    .map_err(|e| format!("無法儲存設定: {}", e))?;
-
-    Ok(())
+pub async fn set_api_enabled(
+    state: tauri::State<'_, AppState>,
+    enabled: bool,
+) -> Result<(), String> {
+    state
+        .db
+        .set_setting("api_enabled", if enabled { "1" } else { "0" })
 }

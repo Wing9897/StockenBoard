@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { ProviderSettings, ProviderInfo } from '../types';
-import { getDb } from '../lib/db';
 import { silentLog } from '../lib/errorLog';
 
 export function useProviders() {
@@ -16,10 +15,7 @@ export function useProviders() {
 
   const loadSettings = useCallback(async () => {
     try {
-      const db = await getDb();
-      const rows = await db.select<ProviderSettings[]>(
-        'SELECT provider_id, api_key, api_secret, refresh_interval, connection_type, api_url, record_from_hour, record_to_hour FROM provider_settings'
-      );
+      const rows = await invoke<ProviderSettings[]>('list_provider_settings');
       const map = new Map<string, ProviderSettings>();
       for (const row of rows) map.set(row.provider_id, row);
       setSettings(map);
@@ -48,29 +44,15 @@ export function useProviders() {
     record_to_hour?: number | null;
   }) {
     try {
-      const db = await getDb();
-
-      await db.execute(
-        `INSERT INTO provider_settings (provider_id, api_key, api_secret, refresh_interval, connection_type, api_url, record_from_hour, record_to_hour)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         ON CONFLICT(provider_id) DO UPDATE SET
-           api_key = $2, api_secret = $3, refresh_interval = $4, connection_type = $5, api_url = $6, record_from_hour = $7, record_to_hour = $8`,
-        [
-          providerId,
-          updates.api_key || null,
-          updates.api_secret || null,
-          updates.refresh_interval ?? null,
-          updates.connection_type || 'rest',
-          updates.api_url || null,
-          updates.record_from_hour ?? null,
-          updates.record_to_hour ?? null,
-        ]
-      );
-      // 同步 Rust 端 provider instance + 觸發 polling reload
-      await invoke('enable_provider', {
+      await invoke('upsert_provider_settings', {
         providerId,
         apiKey: updates.api_key || null,
         apiSecret: updates.api_secret || null,
+        apiUrl: updates.api_url || null,
+        refreshInterval: updates.refresh_interval ?? null,
+        connectionType: updates.connection_type || 'rest',
+        recordFromHour: updates.record_from_hour ?? null,
+        recordToHour: updates.record_to_hour ?? null,
       });
       await loadSettings();
     } catch (e) {

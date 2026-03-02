@@ -778,6 +778,7 @@ fn pi(
 ) -> ProviderInfo {
     // Providers that work without key but benefit from having one
     let opt_key = matches!(id, "coingecko" | "cryptocompare");
+
     ProviderInfo {
         id: id.to_string(),
         name: name.to_string(),

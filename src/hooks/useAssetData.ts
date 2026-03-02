@@ -4,7 +4,7 @@ import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import type { AssetData, Subscription, ProviderInfo, WsTickerUpdate } from '../types';
 import { priceStore } from '../lib/priceStore';
 import * as api from '../lib/subscriptionApi';
-import { getDb } from '../lib/db';
+
 import { silentLog } from '../lib/errorLog';
 
 // ── React hooks for subscribing to PriceStore ──
@@ -87,11 +87,8 @@ export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
       // WebSocket 連線（僅 asset）
       if (subType === 'asset') {
         try {
-          const db = await getDb();
-          const settings = await db.select<{ provider_id: string }[]>(
-            "SELECT provider_id FROM provider_settings WHERE connection_type = 'websocket'"
-          );
-          const wsProviders = new Set(settings.map(s => s.provider_id));
+          const allSettings = await invoke<{ provider_id: string; connection_type: string }[]>('list_provider_settings');
+          const wsProviders = new Set(allSettings.filter(s => s.connection_type === 'websocket').map(s => s.provider_id));
           const groups: Record<string, string[]> = {};
           for (const sub of subs) {
             if (wsProviders.has(sub.selected_provider_id)) {

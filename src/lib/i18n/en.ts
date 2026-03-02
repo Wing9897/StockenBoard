@@ -247,6 +247,10 @@ const en: Locale = {
     apiUrlPlaceholder: 'Leave empty for default',
     boostRate: 'Boost rate',
     settingsSaved: 'Settings saved',
+    rateLimitLabel: 'Rate Limit & Queue Info',
+    rateLimitDesc: (baseRate: number, keyRate?: number) => keyRate
+      ? `Concurrency Queue: Max ${baseRate} simultaneous requests (up to ${keyRate} with API Key). Managed automatically by Semaphore to prevent rate limits.`
+      : `Concurrency Queue: Max ${baseRate} simultaneous requests. Managed automatically by Semaphore to prevent rate limits.`,
   },
   settings: {
     theme: 'Theme',

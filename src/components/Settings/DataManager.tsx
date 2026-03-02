@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Subscription, View } from '../../types';
-import { getDb } from '../../lib/db';
+import { View } from '../../types';
 import { useConfirm } from '../../hooks/useConfirm';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { ConfirmDialog } from '../ConfirmDialog/ConfirmDialog';
@@ -30,6 +29,21 @@ interface ExportData {
   views: { name: string; view_type: string; subscriptions: string[] }[];
 }
 
+// Rust 端匯出格式
+interface RustExportData {
+  subscriptions: {
+    symbol: string;
+    display_name: string | null;
+    selected_provider_id: string;
+    asset_type: string;
+    sub_type: string;
+    pool_address: string | null;
+    token_from_address: string | null;
+    token_to_address: string | null;
+  }[];
+  views: { name: string; view_type: string; symbols: string[] }[];
+}
+
 export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ subs: number; views: number; skipped: number } | null>(null);
@@ -44,11 +58,11 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
 
   const openExportPicker = async () => {
     try {
-      const db = await getDb();
-      const rows = await db.select<{ id: number; name: string; view_type: string; is_default: number }[]>(
-        'SELECT id, name, view_type, is_default FROM views ORDER BY id'
-      );
-      const loaded = rows.map(r => ({ id: r.id, name: r.name, view_type: r.view_type as 'asset' | 'dex', is_default: r.is_default === 1 }));
+      const assetViews = await invoke<{ id: number; name: string; view_type: string; is_default: boolean }[]>('list_views', { viewType: 'asset' });
+      const dexViews = await invoke<{ id: number; name: string; view_type: string; is_default: boolean }[]>('list_views', { viewType: 'dex' });
+      const loaded = [...assetViews, ...dexViews].map(r => ({
+        id: r.id, name: r.name, view_type: r.view_type as 'asset' | 'dex', is_default: r.is_default
+      }));
       setAllViews(loaded);
       setSelectedViewIds(new Set(loaded.filter(v => !v.is_default).map(v => v.id)));
     } catch {
@@ -71,45 +85,33 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
   const selectNone = () => setSelectedViewIds(new Set());
 
   const handleExport = async () => {
-    const db = await getDb();
-
-    const allSubs = await db.select<Subscription[]>(
-      'SELECT id, sub_type, symbol, display_name, selected_provider_id, asset_type, pool_address, token_from_address, token_to_address, sort_order, record_enabled, record_from_hour, record_to_hour FROM subscriptions ORDER BY sort_order, id'
-    );
-
-    const viewsToExport = customViews.filter(v => selectedViewIds.has(v.id));
-    const viewExports: ExportData['views'] = [];
-
-    for (const view of viewsToExport) {
-      const rows = await db.select<{ subscription_id: number }[]>(
-        'SELECT subscription_id FROM view_subscriptions WHERE view_id = $1',
-        [view.id]
-      );
-      const syms = rows
-        .map(r => allSubs.find(s => s.id === r.subscription_id)?.symbol)
-        .filter((s): s is string => !!s);
-      viewExports.push({ name: view.name, view_type: view.view_type, subscriptions: syms });
-    }
-
-    const data: ExportData = {
-      version: 1,
-      exported_at: new Date().toISOString(),
-      subscriptions: allSubs.map(s => ({
-        sub_type: s.sub_type as 'asset' | 'dex',
-        symbol: s.symbol,
-        display_name: s.display_name || null,
-        provider: s.selected_provider_id,
-        asset_type: s.asset_type,
-        ...(s.sub_type === 'dex' ? {
-          pool_address: s.pool_address,
-          token_from_address: s.token_from_address,
-          token_to_address: s.token_to_address,
-        } : {}),
-      })),
-      views: viewExports,
-    };
-
+    // 使用 Rust 端匯出，然後在前端格式化
     try {
+      const rustData = await invoke<RustExportData>('export_data');
+      const data: ExportData = {
+        version: 1,
+        exported_at: new Date().toISOString(),
+        subscriptions: rustData.subscriptions.map(s => ({
+          sub_type: s.sub_type as 'asset' | 'dex',
+          symbol: s.symbol,
+          display_name: s.display_name,
+          provider: s.selected_provider_id,
+          asset_type: s.asset_type,
+          ...(s.sub_type === 'dex' ? {
+            pool_address: s.pool_address || undefined,
+            token_from_address: s.token_from_address || undefined,
+            token_to_address: s.token_to_address || undefined,
+          } : {}),
+        })),
+        views: rustData.views
+          .filter(v => {
+            // 找到對應的 view ID 來判斷是否被選取
+            const matchedView = allViews.find(av => av.name === v.name && av.view_type === v.view_type);
+            return matchedView ? selectedViewIds.has(matchedView.id) : false;
+          })
+          .map(v => ({ name: v.name, view_type: v.view_type, subscriptions: v.symbols })),
+      };
+
       await invoke('export_file', {
         filename: `stockenboard_${new Date().toISOString().slice(0, 10)}.json`,
         content: JSON.stringify(data, null, 2),
@@ -159,77 +161,34 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
     if (!confirmed) return;
 
     setImporting(true);
-    const db = await getDb();
-    const existingRows = await db.select<{ symbol: string; selected_provider_id: string }[]>(
-      'SELECT symbol, selected_provider_id FROM subscriptions'
-    );
-    const existingKeys = new Set(existingRows.map(r => `${r.selected_provider_id}:${r.symbol}`));
-    let subsAdded = 0;
-    let skipped = 0;
 
-    await db.execute('BEGIN TRANSACTION', []);
-    for (const sub of data.subscriptions) {
-      const isDex = sub.sub_type === 'dex';
-      const storedSymbol = isDex ? sub.symbol : sub.symbol.toUpperCase();
-      const key = `${sub.provider}:${storedSymbol}`;
-      if (existingKeys.has(key)) { skipped++; continue; }
-      try {
-        if (isDex) {
-          await db.execute(
-            'INSERT INTO subscriptions (sub_type, symbol, display_name, selected_provider_id, asset_type, pool_address, token_from_address, token_to_address) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
-            [
-              'dex', storedSymbol, sub.display_name || null, sub.provider, sub.asset_type || 'crypto',
-              sub.pool_address || null, sub.token_from_address || null, sub.token_to_address || null,
-            ]
-          );
-        } else {
-          await db.execute(
-            'INSERT INTO subscriptions (sub_type, symbol, display_name, selected_provider_id, asset_type) VALUES ($1, $2, $3, $4, $5)',
-            ['asset', storedSymbol, sub.display_name || null, sub.provider, sub.asset_type || 'crypto']
-          );
-        }
-        existingKeys.add(key);
-        subsAdded++;
-      } catch { skipped++; }
-    }
+    // 轉換為 Rust 端格式，透過 IPC 匯入
+    const rustImportData: RustExportData = {
+      subscriptions: data.subscriptions.map(s => ({
+        symbol: s.sub_type === 'dex' ? s.symbol : s.symbol.toUpperCase(),
+        display_name: s.display_name,
+        selected_provider_id: s.provider,
+        asset_type: s.asset_type || 'crypto',
+        sub_type: s.sub_type || 'asset',
+        pool_address: s.pool_address || null,
+        token_from_address: s.token_from_address || null,
+        token_to_address: s.token_to_address || null,
+      })),
+      views: (data.views || []).map(v => ({
+        name: v.name,
+        view_type: v.view_type || 'asset',
+        symbols: v.subscriptions || [],
+      })),
+    };
 
-    let viewsAdded = 0;
-    if (data.views && Array.isArray(data.views)) {
-      const existingViewRows = await db.select<{ name: string; view_type: string }[]>(
-        'SELECT name, view_type FROM views'
-      );
-      const existingViews = new Set(existingViewRows.map(v => `${v.view_type}:${v.name.toLowerCase()}`));
-      for (const v of data.views) {
-        const viewType = v.view_type || 'asset';
-        if (existingViews.has(`${viewType}:${v.name.toLowerCase()}`)) { continue; }
-        try {
-          const result = await db.execute(
-            'INSERT INTO views (name, view_type, is_default) VALUES ($1, $2, 0)',
-            [v.name, viewType]
-          );
-          const newViewId = result.lastInsertId;
-          if (v.subscriptions && newViewId) {
-            const allSubs = await db.select<{ id: number; symbol: string }[]>('SELECT id, symbol FROM subscriptions');
-            const symMapExact = new Map(allSubs.map(s => [s.symbol, s.id]));
-            const symMapUpper = new Map(allSubs.map(s => [s.symbol.toUpperCase(), s.id]));
-            for (const sym of v.subscriptions) {
-              const subId = symMapExact.get(sym) ?? symMapUpper.get(sym.toUpperCase());
-              if (subId) {
-                await db.execute(
-                  'INSERT OR IGNORE INTO view_subscriptions (view_id, subscription_id) VALUES ($1, $2)',
-                  [newViewId, subId]
-                );
-              }
-            }
-          }
-          viewsAdded++;
-        } catch { /* skip */ }
-      }
+    try {
+      const [imported, skipped] = await invoke<[number, number]>('import_data', { data: rustImportData });
+      setImportResult({ subs: imported, views: data.views?.length || 0, skipped });
+    } catch (e) {
+      onToast?.('error', t.settings.importFailed, String(e));
     }
-    await db.execute('COMMIT', []);
 
     setImporting(false);
-    setImportResult({ subs: subsAdded, views: viewsAdded, skipped });
     onRefresh();
   };
 

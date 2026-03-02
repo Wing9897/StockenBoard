@@ -8,7 +8,6 @@ use axum::{
     routing::get,
     Router,
 };
-use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -111,83 +110,64 @@ async fn get_price_by_key(
     }
 }
 
-/// GET /api/history - 查詢歷史數據（從 SQL）
+/// GET /api/history - 查詢歷史數據（使用 DbPool）
 async fn get_history(
     State(state): State<Arc<AppState>>,
     Query(params): Query<HistoryQuery>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let db_path = state.db_path.read().unwrap().clone().ok_or((
-        StatusCode::INTERNAL_SERVER_ERROR,
-        "DB path not set".to_string(),
-    ))?;
-
-    let conn = Connection::open(&db_path)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    // 構建查詢
-    let mut sql = String::from(
-        "SELECT ph.price, ph.change_pct, ph.volume, ph.pre_price, ph.post_price, ph.recorded_at, 
-                s.symbol, s.selected_provider_id, s.sub_type
-         FROM price_history ph
-         JOIN subscriptions s ON ph.subscription_id = s.id
-         WHERE 1=1",
-    );
-    let mut conditions = Vec::new();
-
+    // 如果有 subscription_id，直接查
     if let Some(sub_id) = params.subscription_id {
-        sql.push_str(" AND ph.subscription_id = ?");
-        conditions.push(sub_id.to_string());
-    }
-    if let Some(ref symbol) = params.symbol {
-        sql.push_str(" AND s.symbol = ?");
-        conditions.push(symbol.clone());
-    }
-    if let Some(ref provider) = params.provider {
-        sql.push_str(" AND s.selected_provider_id = ?");
-        conditions.push(provider.clone());
-    }
-    if let Some(from) = params.from {
-        sql.push_str(" AND ph.recorded_at >= ?");
-        conditions.push(from.to_string());
-    }
-    if let Some(to) = params.to {
-        sql.push_str(" AND ph.recorded_at <= ?");
-        conditions.push(to.to_string());
+        let records = state
+            .db
+            .get_price_history(sub_id, params.from, params.to, params.limit)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+        return Ok(Json(serde_json::json!({
+            "records": records,
+            "count": records.len(),
+            "query": {
+                "subscription_id": sub_id,
+                "from": params.from,
+                "to": params.to,
+                "limit": params.limit
+            }
+        })));
     }
 
-    sql.push_str(" ORDER BY ph.recorded_at DESC LIMIT ?");
-    conditions.push(params.limit.to_string());
+    // 否則先找 subscription_id by symbol/provider
+    let subs = state
+        .db
+        .list_all_subscriptions()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
-    let mut stmt = conn
-        .prepare(&sql)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    let params_refs: Vec<&dyn rusqlite::ToSql> = conditions
+    let matching: Vec<_> = subs
         .iter()
-        .map(|s| s as &dyn rusqlite::ToSql)
+        .filter(|s| {
+            if let Some(ref sym) = params.symbol {
+                if s.symbol != *sym {
+                    return false;
+                }
+            }
+            if let Some(ref prov) = params.provider {
+                if s.selected_provider_id != *prov {
+                    return false;
+                }
+            }
+            true
+        })
         .collect();
 
-    let records: Result<Vec<_>, _> = stmt
-        .query_map(params_refs.as_slice(), |row| {
-            Ok(serde_json::json!({
-                "price": row.get::<_, f64>(0)?,
-                "change_pct": row.get::<_, Option<f64>>(1)?,
-                "volume": row.get::<_, Option<f64>>(2)?,
-                "pre_price": row.get::<_, Option<f64>>(3)?,
-                "post_price": row.get::<_, Option<f64>>(4)?,
-                "recorded_at": row.get::<_, i64>(5)?,
-                "symbol": row.get::<_, String>(6)?,
-                "provider": row.get::<_, String>(7)?,
-                "type": row.get::<_, String>(8)?
-            }))
-        })
-        .and_then(|rows| rows.collect());
-
-    let records = records.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let mut all_records = Vec::new();
+    for sub in &matching {
+        let records = state
+            .db
+            .get_price_history(sub.id, params.from, params.to, params.limit)
+            .unwrap_or_default();
+        all_records.extend(records);
+    }
 
     Ok(Json(serde_json::json!({
-        "records": records,
-        "count": records.len(),
+        "records": all_records,
+        "count": all_records.len(),
         "query": {
             "symbol": params.symbol,
             "provider": params.provider,
@@ -198,45 +178,31 @@ async fn get_history(
     })))
 }
 
-/// GET /api/subscriptions - 獲取所有訂閱
+/// GET /api/subscriptions - 獲取所有訂閱（使用 DbPool）
 async fn get_subscriptions(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let db_path = state.db_path.read().unwrap().clone().ok_or((
-        StatusCode::INTERNAL_SERVER_ERROR,
-        "DB path not set".to_string(),
-    ))?;
+    let subs = state
+        .db
+        .list_all_subscriptions()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
-    let conn = Connection::open(&db_path)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, sub_type, symbol, display_name, selected_provider_id, asset_type, record_enabled 
-             FROM subscriptions 
-             ORDER BY sort_order, id"
-        )
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    let subs: Result<Vec<_>, _> = stmt
-        .query_map([], |row| {
-            Ok(ApiSubscription {
-                id: row.get(0)?,
-                sub_type: row.get(1)?,
-                symbol: row.get(2)?,
-                display_name: row.get(3)?,
-                provider: row.get(4)?,
-                asset_type: row.get(5)?,
-                recording_enabled: row.get::<_, i64>(6)? != 0,
-            })
+    let api_subs: Vec<ApiSubscription> = subs
+        .iter()
+        .map(|s| ApiSubscription {
+            id: s.id,
+            sub_type: s.sub_type.clone(),
+            symbol: s.symbol.clone(),
+            display_name: s.display_name.clone(),
+            provider: s.selected_provider_id.clone(),
+            asset_type: s.asset_type.clone(),
+            recording_enabled: s.record_enabled != 0,
         })
-        .and_then(|rows| rows.collect());
-
-    let subs = subs.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .collect();
 
     Ok(Json(serde_json::json!({
-        "subscriptions": subs,
-        "count": subs.len()
+        "subscriptions": api_subs,
+        "count": api_subs.len()
     })))
 }
 
