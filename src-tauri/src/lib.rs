@@ -14,7 +14,7 @@ use commands::{
     get_view_subscription_ids, has_api_key, import_data, import_file, list_provider_settings,
     list_subscriptions, list_views, lookup_dex_pool, purge_all_history, read_local_file_base64,
     reload_polling, remove_icon, remove_sub_from_view, remove_subscription,
-    remove_subscriptions, remove_theme_bg, rename_view, save_theme_bg, set_api_enabled,
+    remove_subscriptions, remove_theme_bg, rename_view, reset_all_data, save_theme_bg, set_api_enabled,
     set_api_port, set_icon, set_provider_record_hours, set_record_hours,
     set_unattended_polling, set_visible_subscriptions, start_ws_stream, stop_ws_stream,
     toggle_record, update_subscription, upsert_provider_settings, AppState,
@@ -113,6 +113,7 @@ pub fn run() {
             cleanup_history,
             purge_all_history,
             delete_subscription_history,
+            reset_all_data,
             // Misc
             get_data_dir,
             get_api_port,

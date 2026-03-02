@@ -12,6 +12,7 @@ export function ApiGuide() {
   const [editingPort, setEditingPort] = useState(false);
   const [tempPort, setTempPort] = useState('8080');
   const [apiEnabled, setApiEnabled] = useState(false);
+  const [activeModal, setActiveModal] = useState<'python' | 'history' | 'curl' | null>(null);
 
   useEffect(() => {
     loadApiSettings();
@@ -46,7 +47,7 @@ export function ApiGuide() {
       alert(t.api.portRange);
       return;
     }
-    
+
     try {
       await invoke('set_api_port', { port });
       setApiPort(port);
@@ -107,10 +108,91 @@ curl ${apiBase}/prices
 # ${t.api.priceEndpoint}
 curl ${apiBase}/prices/binance/BTCUSDT`;
 
+  const renderModal = () => {
+    if (!activeModal) return null;
+
+    let title = '';
+    let code = '';
+    let response = '';
+
+    if (activeModal === 'python') {
+      title = t.api.pythonExample;
+      code = pythonExample;
+      response = `{\n  "prices": [\n    {\n      "symbol": "BTCUSDT",\n      "price": 65000.0,\n      "change_24h": 2.5,\n      "volume": 1200.5,\n      "provider": "binance",\n      "last_updated": 1700000000\n    }\n  ]\n}`;
+    } else if (activeModal === 'history') {
+      title = t.api.historyExample;
+      code = historyExample;
+      response = `{\n  "records": [\n    {\n      "id": 1,\n      "symbol": "BTCUSDT",\n      "price": 64500.0,\n      "volume": 0.0,\n      "timestamp": 1700000000,\n      "provider_id": "binance"\n    }\n  ]\n}`;
+    } else if (activeModal === 'curl') {
+      title = t.api.curlExample;
+      code = curlExample;
+      response = `{\n  "status": "ok",\n  "version": "0.1.0",\n  "uptime": 3600,\n  "active_providers": 3\n}`;
+    }
+
+    return (
+      <div className="modal-backdrop dm-picker-backdrop" onClick={() => setActiveModal(null)} style={{ zIndex: 1000 }}>
+        <div className="modal-container dm-picker-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '700px', width: '90%' }}>
+          <div className="dm-picker-header">
+            <h4 className="dm-picker-title">{title}</h4>
+            <button className="vsm-close" onClick={() => setActiveModal(null)}>✕</button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px', maxHeight: '70vh', overflowY: 'auto' }}>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <div style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--text)' }}>{activeModal === 'python' || activeModal === 'history' ? 'Python Script' : 'Bash / Curl'}</div>
+                <button
+                  onClick={() => copyCode(code, 'modal-code')}
+                  style={{
+                    padding: '4px 10px',
+                    background: 'var(--surface0)',
+                    border: '1px solid var(--surface1)',
+                    borderRadius: '4px',
+                    color: 'var(--text)',
+                    cursor: 'pointer',
+                    fontSize: '11px'
+                  }}
+                >
+                  {copied === 'modal-code' ? t.api.copied : t.api.copy}
+                </button>
+              </div>
+              <pre style={{ margin: 0, padding: '14px', background: 'var(--mantle)', borderRadius: '6px', overflow: 'auto', fontSize: '12px', lineHeight: '1.5', color: 'var(--text)' }}>
+                {code}
+              </pre>
+            </div>
+
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <div style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--text)' }}>{t.api.responseExample}</div>
+                <button
+                  onClick={() => copyCode(response, 'modal-resp')}
+                  style={{
+                    padding: '4px 10px',
+                    background: 'var(--surface0)',
+                    border: '1px solid var(--surface1)',
+                    borderRadius: '4px',
+                    color: 'var(--text)',
+                    cursor: 'pointer',
+                    fontSize: '11px'
+                  }}
+                >
+                  {copied === 'modal-resp' ? t.api.copied : t.api.copy}
+                </button>
+              </div>
+              <pre style={{ margin: 0, padding: '14px', background: 'var(--base)', border: '1px solid var(--surface1)', borderRadius: '6px', overflow: 'auto', fontSize: '12px', lineHeight: '1.5', color: 'var(--green)' }}>
+                {response}
+              </pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="ps-section">
+      {renderModal()}
       <h3 className="ps-title">{t.api.title}</h3>
-      
+
       <div style={{ padding: '20px', background: 'var(--surface0)', borderRadius: '12px', border: '1px solid var(--surface1)' }}>
         {/* 啟用開關 */}
         <div style={{ marginBottom: '20px', padding: '14px', background: 'var(--mantle)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -158,7 +240,7 @@ curl ${apiBase}/prices/binance/BTCUSDT`;
         <p style={{ margin: '0 0 16px 0', color: 'var(--text)', lineHeight: '1.6', opacity: apiEnabled ? 1 : 0.5 }}>
           {t.api.description}
         </p>
-        
+
         {/* API 地址 */}
         <div style={{ marginBottom: '24px', padding: '12px', background: 'var(--mantle)', borderRadius: '8px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
@@ -271,111 +353,45 @@ curl ${apiBase}/prices/binance/BTCUSDT`;
         </div>
 
         {/* Python 範例 */}
-        <div style={{ marginBottom: '20px' }}>
-          <h4 style={{ margin: '0 0 10px 0', fontSize: '15px', color: 'var(--text)' }}>🐍 {t.api.pythonExample}</h4>
-          <div style={{ position: 'relative' }}>
-            <pre style={{ 
-              margin: 0, 
-              padding: '14px', 
-              background: 'var(--mantle)', 
-              borderRadius: '6px', 
-              overflow: 'auto',
-              fontSize: '12px',
-              lineHeight: '1.5',
-              color: 'var(--text)'
-            }}>
-              {pythonExample}
-            </pre>
-            <button 
-              onClick={() => copyCode(pythonExample, 'python')}
-              style={{
-                position: 'absolute',
-                top: '8px',
-                right: '8px',
-                padding: '4px 10px',
-                background: 'var(--surface0)',
-                border: '1px solid var(--surface1)',
-                borderRadius: '4px',
-                color: 'var(--text)',
-                cursor: 'pointer',
-                fontSize: '11px'
-              }}
-            >
-              {copied === 'python' ? t.api.copied : t.api.copy}
-            </button>
+        <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'var(--mantle)', borderRadius: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '16px' }}>🐍</span>
+            <span style={{ fontSize: '14px', color: 'var(--text)', fontWeight: '500' }}>{t.api.pythonExample}</span>
           </div>
+          <button
+            onClick={() => setActiveModal('python')}
+            style={{ padding: '6px 14px', background: 'var(--blue)', color: 'var(--base)', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '500' }}
+          >
+            {t.api.viewExample || '查看指令與回傳範例'}
+          </button>
         </div>
 
         {/* 歷史數據範例 */}
-        <div style={{ marginBottom: '20px' }}>
-          <h4 style={{ margin: '0 0 10px 0', fontSize: '15px', color: 'var(--text)' }}>📈 {t.api.historyExample}</h4>
-          <div style={{ position: 'relative' }}>
-            <pre style={{ 
-              margin: 0, 
-              padding: '14px', 
-              background: 'var(--mantle)', 
-              borderRadius: '6px', 
-              overflow: 'auto',
-              fontSize: '12px',
-              lineHeight: '1.5',
-              color: 'var(--text)'
-            }}>
-              {historyExample}
-            </pre>
-            <button 
-              onClick={() => copyCode(historyExample, 'history')}
-              style={{
-                position: 'absolute',
-                top: '8px',
-                right: '8px',
-                padding: '4px 10px',
-                background: 'var(--surface0)',
-                border: '1px solid var(--surface1)',
-                borderRadius: '4px',
-                color: 'var(--text)',
-                cursor: 'pointer',
-                fontSize: '11px'
-              }}
-            >
-              {copied === 'history' ? t.api.copied : t.api.copy}
-            </button>
+        <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'var(--mantle)', borderRadius: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '16px' }}>📈</span>
+            <span style={{ fontSize: '14px', color: 'var(--text)', fontWeight: '500' }}>{t.api.historyExample}</span>
           </div>
+          <button
+            onClick={() => setActiveModal('history')}
+            style={{ padding: '6px 14px', background: 'var(--blue)', color: 'var(--base)', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '500' }}
+          >
+            {t.api.viewExample || '查看指令與回傳範例'}
+          </button>
         </div>
 
         {/* curl 範例 */}
-        <div style={{ marginBottom: '20px' }}>
-          <h4 style={{ margin: '0 0 10px 0', fontSize: '15px', color: 'var(--text)' }}>💻 {t.api.curlExample}</h4>
-          <div style={{ position: 'relative' }}>
-            <pre style={{ 
-              margin: 0, 
-              padding: '14px', 
-              background: 'var(--mantle)', 
-              borderRadius: '6px', 
-              overflow: 'auto',
-              fontSize: '12px',
-              lineHeight: '1.5',
-              color: 'var(--text)'
-            }}>
-              {curlExample}
-            </pre>
-            <button 
-              onClick={() => copyCode(curlExample, 'curl')}
-              style={{
-                position: 'absolute',
-                top: '8px',
-                right: '8px',
-                padding: '4px 10px',
-                background: 'var(--surface0)',
-                border: '1px solid var(--surface1)',
-                borderRadius: '4px',
-                color: 'var(--text)',
-                cursor: 'pointer',
-                fontSize: '11px'
-              }}
-            >
-              {copied === 'curl' ? t.api.copied : t.api.copy}
-            </button>
+        <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'var(--mantle)', borderRadius: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '16px' }}>💻</span>
+            <span style={{ fontSize: '14px', color: 'var(--text)', fontWeight: '500' }}>{t.api.curlExample}</span>
           </div>
+          <button
+            onClick={() => setActiveModal('curl')}
+            style={{ padding: '6px 14px', background: 'var(--blue)', color: 'var(--base)', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '500' }}
+          >
+            {t.api.viewExample || '查看指令與回傳範例'}
+          </button>
         </div>
 
         {/* 注意事項 */}

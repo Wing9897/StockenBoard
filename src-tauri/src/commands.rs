@@ -346,6 +346,15 @@ pub async fn upsert_provider_settings(
     Ok(())
 }
 
+#[tauri::command]
+pub async fn reset_all_data(
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    state.db.reset_all_data()?;
+    state.polling.reload();
+    Ok(())
+}
+
 // ── View Commands (NEW) ─────────────────────────────────────────
 
 #[tauri::command]

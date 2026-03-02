@@ -1,0 +1,8 @@
+    Checking stockenboard v0.1.0 (C:\Users\Wing\Desktop\Github_USING\StockenBoard\src-tauri)
+error: cannot find macro `__cmd__reset_all_data` in this scope
+   --> src\lib.rs:116:13
+    |
+116 |             reset_all_data,
+    |             ^^^^^^^^^^^^^^
+
+error: could not compile `stockenboard` (lib) due to 1 previous error

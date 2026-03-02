@@ -25,6 +25,10 @@ interface ExportData {
     pool_address?: string;
     token_from_address?: string;
     token_to_address?: string;
+    record_enabled?: boolean;
+    record_from_hour?: number | null;
+    record_to_hour?: number | null;
+    sort_order?: number;
   }[];
   views: { name: string; view_type: string; subscriptions: string[] }[];
 }
@@ -40,6 +44,10 @@ interface RustExportData {
     pool_address: string | null;
     token_from_address: string | null;
     token_to_address: string | null;
+    record_enabled: boolean | null;
+    record_from_hour: number | null;
+    record_to_hour: number | null;
+    sort_order: number | null;
   }[];
   views: { name: string; view_type: string; symbols: string[] }[];
 }
@@ -97,6 +105,10 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
           display_name: s.display_name,
           provider: s.selected_provider_id,
           asset_type: s.asset_type,
+          record_enabled: s.record_enabled !== null ? s.record_enabled : undefined,
+          record_from_hour: s.record_from_hour,
+          record_to_hour: s.record_to_hour,
+          sort_order: s.sort_order !== null ? s.sort_order : undefined,
           ...(s.sub_type === 'dex' ? {
             pool_address: s.pool_address || undefined,
             token_from_address: s.token_from_address || undefined,
@@ -143,6 +155,10 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
           pool_address: s.pool_address,
           token_from_address: s.token_from_address,
           token_to_address: s.token_to_address,
+          record_enabled: s.record_enabled,
+          record_from_hour: s.record_from_hour,
+          record_to_hour: s.record_to_hour,
+          sort_order: s.sort_order,
         })),
         views: (parsed.views || []).map((v: ExportData['views'][0]) => ({
           name: v.name,
@@ -173,6 +189,10 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
         pool_address: s.pool_address || null,
         token_from_address: s.token_from_address || null,
         token_to_address: s.token_to_address || null,
+        record_enabled: s.record_enabled ?? null,
+        record_from_hour: s.record_from_hour ?? null,
+        record_to_hour: s.record_to_hour ?? null,
+        sort_order: s.sort_order ?? null,
       })),
       views: (data.views || []).map(v => ({
         name: v.name,
@@ -192,6 +212,21 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
     onRefresh();
   };
 
+  const handleReset = async () => {
+    const confirmed = await requestConfirm(t.settings.factoryResetConfirm);
+    if (!confirmed) return;
+
+    try {
+      await invoke('reset_all_data');
+      onToast?.('success', t.settings.factoryResetSuccess);
+      onRefresh();
+      // Reload the page to ensure all state is wiped clean globally
+      setTimeout(() => window.location.reload(), 500);
+    } catch (err) {
+      onToast?.('error', t.settings.factoryResetFailed, String(err));
+    }
+  };
+
   return (
     <div className="settings-section">
       <h3>{t.settings.dataManager}</h3>
@@ -201,6 +236,9 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
         </button>
         <button className="dm-btn import" onClick={handleImport} disabled={importing}>
           {importing ? t.settings.importing : t.settings.import}
+        </button>
+        <button className="dm-btn import" style={{ background: 'var(--red)', borderColor: 'var(--red)', color: 'var(--base)' }} onClick={handleReset}>
+          {t.settings.factoryReset || '恢復出廠設定'}
         </button>
       </div>
       {importResult && (
