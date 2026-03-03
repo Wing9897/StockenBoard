@@ -50,8 +50,8 @@ pub mod polymarket;
 pub mod ws_binance;
 
 pub use traits::{
-    get_all_provider_info, AssetData, DataProvider, DexPoolInfo, DexPoolLookup, ProviderInfo,
-    WebSocketProvider, WsTickerUpdate,
+    get_all_provider_info, normalize_symbol, AssetData, DataProvider, DexPoolInfo, DexPoolLookup,
+    ProviderInfo, WebSocketProvider, WsTickerUpdate,
 };
 
 use std::sync::Arc;

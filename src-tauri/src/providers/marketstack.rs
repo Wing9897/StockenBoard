@@ -96,7 +96,9 @@ impl DataProvider for MarketstackProvider {
             ))
             .send()
             .await
-            .map_err(|e| format!("Marketstack 批量連接失敗: {}", e))?;
+            .map_err(|e| format!("Marketstack 批量連接失敗: {}", e))?
+            .error_for_status()
+            .map_err(|e| format!("Marketstack 批量 API 錯誤: {}", e))?;
 
         let body = resp
             .text()

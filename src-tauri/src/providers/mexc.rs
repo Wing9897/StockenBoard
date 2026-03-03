@@ -78,6 +78,8 @@ impl DataProvider for MexcProvider {
             .send()
             .await
             .map_err(|e| format!("MEXC 批量連接失敗: {}", e))?
+            .error_for_status()
+            .map_err(|e| format!("MEXC 批量 API 錯誤: {}", e))?
             .json()
             .await
             .map_err(|e| format!("MEXC 批量解析失敗: {}", e))?;

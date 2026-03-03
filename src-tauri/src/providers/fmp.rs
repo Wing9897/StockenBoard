@@ -155,7 +155,9 @@ impl DataProvider for FMPProvider {
         ))
         .send()
         .await
-        .map_err(|e| format!("FMP 批量連接失敗: {}", e))?;
+        .map_err(|e| format!("FMP 批量連接失敗: {}", e))?
+        .error_for_status()
+        .map_err(|e| format!("FMP 批量 API 錯誤: {}", e))?;
 
     let body = resp
         .text()

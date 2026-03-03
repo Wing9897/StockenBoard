@@ -38,6 +38,8 @@ impl DataProvider for FcsApiProvider {
             .send()
             .await
             .map_err(|e| format!("FCS API 連接失敗: {}", e))?
+            .error_for_status()
+            .map_err(|e| format!("FCS API 錯誤 (請確認 API Key 有效): {}", e))?
             .json()
             .await
             .map_err(|e| format!("FCS API 解析失敗: {}", e))?;
@@ -74,6 +76,8 @@ impl DataProvider for FcsApiProvider {
             .send()
             .await
             .map_err(|e| format!("FCS API 批量連接失敗: {}", e))?
+            .error_for_status()
+            .map_err(|e| format!("FCS API 批量錯誤 (請確認 API Key 有效): {}", e))?
             .json()
             .await
             .map_err(|e| format!("FCS API 批量解析失敗: {}", e))?;

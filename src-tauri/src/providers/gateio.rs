@@ -83,6 +83,8 @@ impl DataProvider for GateioProvider {
             .send()
             .await
             .map_err(|e| format!("Gate.io 批量連接失敗: {}", e))?
+            .error_for_status()
+            .map_err(|e| format!("Gate.io 批量 API 錯誤: {}", e))?
             .json()
             .await
             .map_err(|e| format!("Gate.io 批量解析失敗: {}", e))?;

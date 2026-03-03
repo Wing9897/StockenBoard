@@ -126,7 +126,16 @@ impl ProviderRegistry {
                 .write()
                 .await
                 .insert(id.to_string(), provider);
-            self.ensure_limiter(id, has_key).await;
+            // 強制更新 limiter（key 狀態可能改變了並發上限）
+            let limit = if has_key {
+                KEYED_CONCURRENT_REQUESTS
+            } else {
+                DEFAULT_CONCURRENT_REQUESTS
+            };
+            self.limiters
+                .write()
+                .await
+                .insert(id.to_string(), Arc::new(Semaphore::new(limit)));
         }
     }
 

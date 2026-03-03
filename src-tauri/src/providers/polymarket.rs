@@ -79,6 +79,8 @@ impl DataProvider for PolymarketProvider {
                         .send()
                         .await
                         .map_err(|e| format!("Polymarket: {}", e))?
+                        .error_for_status()
+                        .map_err(|e| format!("Polymarket API 錯誤: {}", e))?
                         .json()
                         .await
                         .map_err(|e| format!("Polymarket: {}", e))?;

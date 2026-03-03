@@ -237,9 +237,9 @@ impl DataProvider for SubgraphProvider {
 
                 let json_req = serde_json::json!({ "query": query });
 
-                let resp = match client.post(&api_url).json(&json_req).send().await {
+                let resp = match client.post(&api_url).json(&json_req).send().await.and_then(|r| r.error_for_status()) {
                     Ok(r) => r,
-                    Err(_) => return None,
+                    Err(e) => { eprintln!("Subgraph 連接失敗: {}", e); return None; },
                 };
 
                 let graph_resp: GraphResponse = match resp.json().await {

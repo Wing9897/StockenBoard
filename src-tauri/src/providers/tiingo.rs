@@ -145,7 +145,7 @@ impl DataProvider for TiingoProvider {
                             "https://api.tiingo.com/tiingo/crypto/top?tickers={}&token={}",
                             tiingo_sym, key
                         );
-                        match c.get(&url).send().await {
+                        match c.get(&url).send().await.and_then(|r| r.error_for_status()) {
                             Ok(resp) => match resp.json::<serde_json::Value>().await {
                                 Ok(data) => {
                                     let top = &data[0]["topOfBookData"][0];

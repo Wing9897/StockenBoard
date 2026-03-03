@@ -700,6 +700,31 @@ pub fn parse_crypto_symbol(symbol: &str) -> (String, String) {
     (s, "USD".to_string())
 }
 
+/// 將用戶輸入的 symbol 統一化，避免同一資產因格式不同產生重複訂閱。
+///
+/// 規則：
+/// - crypto: 提取 base symbol；若 quote 是非穩定幣（如 EUR、BTC），保留為 `BASE-QUOTE`
+///   例：`ETHUSDT` / `ETH-USD` / `ETH/USDT` → `ETH`
+///   例：`ETH-BTC` / `ETH-EUR` → `ETH-BTC` / `ETH-EUR`
+/// - stock / forex / etf: 轉大寫
+/// - dex / 其他: 原樣保留
+pub fn normalize_symbol(symbol: &str, asset_type: &str) -> String {
+    match asset_type {
+        "crypto" => {
+            let (base, quote) = parse_crypto_symbol(symbol);
+            // 穩定幣 quote → 只保留 base
+            const STABLE: &[&str] = &["USD", "USDT", "USDC", "BUSD", "DAI", "TUSD", "FDUSD"];
+            if STABLE.contains(&quote.as_str()) {
+                base
+            } else {
+                format!("{}-{}", base, quote)
+            }
+        }
+        "stock" | "forex" | "etf" | "index" => symbol.trim().to_uppercase(),
+        _ => symbol.to_string(), // dex / pool address 保持原樣
+    }
+}
+
 /// Convert symbol to Binance format: BTCUSDT
 pub fn to_binance_symbol(symbol: &str) -> String {
     let s = symbol.trim().to_uppercase();
@@ -720,40 +745,6 @@ pub fn to_coinbase_symbol(symbol: &str) -> String {
     let (base, quote) = parse_crypto_symbol(symbol);
     let q = if quote == "USDT" { "USD" } else { &quote };
     format!("{}-{}", base, q)
-}
-
-/// Convert symbol to CoinGecko format: bitcoin, ethereum
-/// This is a best-effort mapping for common coins
-pub fn to_coingecko_id(symbol: &str) -> String {
-    let (base, _) = parse_crypto_symbol(symbol);
-    match base.as_str() {
-        "BTC" => "bitcoin".to_string(),
-        "ETH" => "ethereum".to_string(),
-        "BNB" => "binancecoin".to_string(),
-        "SOL" => "solana".to_string(),
-        "XRP" => "ripple".to_string(),
-        "ADA" => "cardano".to_string(),
-        "DOGE" => "dogecoin".to_string(),
-        "DOT" => "polkadot".to_string(),
-        "AVAX" => "avalanche-2".to_string(),
-        "MATIC" | "POL" => "matic-network".to_string(),
-        "LINK" => "chainlink".to_string(),
-        "UNI" => "uniswap".to_string(),
-        "ATOM" => "cosmos".to_string(),
-        "LTC" => "litecoin".to_string(),
-        "SHIB" => "shiba-inu".to_string(),
-        "TRX" => "tron".to_string(),
-        "NEAR" => "near".to_string(),
-        "APT" => "aptos".to_string(),
-        "ARB" => "arbitrum".to_string(),
-        "OP" => "optimism".to_string(),
-        "SUI" => "sui".to_string(),
-        "PEPE" => "pepe".to_string(),
-        "FIL" => "filecoin".to_string(),
-        "AAVE" => "aave".to_string(),
-        "MKR" => "maker".to_string(),
-        _ => symbol.to_lowercase(), // fallback: user might already pass coingecko id
-    }
 }
 
 /// Convert symbol to CoinMarketCap / CryptoCompare format: BTC, ETH

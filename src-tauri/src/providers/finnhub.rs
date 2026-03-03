@@ -114,6 +114,8 @@ impl DataProvider for FinnhubProvider {
                         .send()
                         .await
                         .map_err(|e| format!("Finnhub: {}", e))?
+                        .error_for_status()
+                        .map_err(|e| format!("Finnhub API 錯誤: {}", e))?
                         .json()
                         .await
                         .map_err(|e| format!("Finnhub: {}", e))?;

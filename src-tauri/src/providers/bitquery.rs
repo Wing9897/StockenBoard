@@ -110,6 +110,8 @@ impl DataProvider for BitqueryProvider {
                         .send()
                         .await
                         .map_err(|e| format!("Bitquery: {}", e))?
+                        .error_for_status()
+                        .map_err(|e| format!("Bitquery API 錯誤: {}", e))?
                         .json()
                         .await
                         .map_err(|e| format!("Bitquery: {}", e))?;

@@ -62,7 +62,7 @@ impl DataProvider for CoinbaseProvider {
                 async move {
                     let pair = to_coinbase_symbol(&sym);
                     let url = format!("https://api.coinbase.com/v2/prices/{}/spot", pair);
-                    match client.get(&url).send().await {
+                    match client.get(&url).send().await.and_then(|r| r.error_for_status()) {
                         Ok(resp) => match resp.json::<serde_json::Value>().await {
                             Ok(data) => {
                                 let price = data["data"]["amount"]

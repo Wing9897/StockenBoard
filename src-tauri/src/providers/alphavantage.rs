@@ -94,6 +94,7 @@ impl DataProvider for AlphaVantageProvider {
                 let data_res: Result<serde_json::Value, _> = c
                     .get(format!("https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={}&apikey={}", sym, key))
                     .send().await.map_err(|e| format!("AlphaVantage: {}", e))?
+                    .error_for_status().map_err(|e| format!("AlphaVantage API 錯誤: {}", e))?
                     .json().await.map_err(|e| format!("AlphaVantage: {}", e));
                 
                 let data = match data_res {

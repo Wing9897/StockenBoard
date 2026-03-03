@@ -191,9 +191,15 @@ pub async fn add_subscription(
     token_from: Option<String>,
     token_to: Option<String>,
 ) -> Result<i64, String> {
+    use crate::providers::normalize_symbol;
+    let normalized = if sub_type == "dex" {
+        symbol.clone()
+    } else {
+        normalize_symbol(&symbol, &asset_type)
+    };
     let id = state.db.add_subscription(
         &sub_type,
-        &symbol,
+        &normalized,
         display_name.as_deref(),
         &provider_id,
         &asset_type,
@@ -230,9 +236,11 @@ pub async fn add_subscriptions_batch(
     let mut duplicates = Vec::new();
 
     for item in &items {
+        use crate::providers::normalize_symbol;
+        let normalized = normalize_symbol(&item.symbol, &item.asset_type);
         match state.db.add_subscription(
             "asset",
-            &item.symbol,
+            &normalized,
             item.display_name.as_deref(),
             &item.provider_id,
             &item.asset_type,
@@ -240,9 +248,9 @@ pub async fn add_subscriptions_batch(
             None,
             None,
         ) {
-            Ok(_) => succeeded.push(item.symbol.clone()),
-            Err(e) if e.contains("已存在") => duplicates.push(item.symbol.clone()),
-            Err(_) => failed.push(item.symbol.clone()),
+            Ok(_) => succeeded.push(normalized),
+            Err(e) if e.contains("已存在") => duplicates.push(normalized),
+            Err(_) => failed.push(normalized),
         }
     }
 
@@ -266,9 +274,11 @@ pub async fn update_subscription(
     provider_id: String,
     asset_type: String,
 ) -> Result<(), String> {
+    use crate::providers::normalize_symbol;
+    let normalized = normalize_symbol(&symbol, &asset_type);
     state
         .db
-        .update_subscription(id, &symbol, display_name.as_deref(), &provider_id, &asset_type)?;
+        .update_subscription(id, &normalized, display_name.as_deref(), &provider_id, &asset_type)?;
     state.polling.reload();
     Ok(())
 }
