@@ -30,6 +30,7 @@ const ko: Locale = {
     providers: '데이터 소스',
     settings: '설정',
     history: '기록',
+    notifications: '알림',
     pageSwitch: '페이지 전환',
     dexPageSwitch: 'DEX 페이지 전환',
   },
@@ -458,6 +459,19 @@ const ko: Locale = {
     okx_dex: 'API Key 필수 (OKX Web3 Portal 무료); 멀티체인 DEX 애그리게이터',
     raydium: 'API Key 필수; Solana DEX AMM',
     subgraph: 'API Key 필수 (The Graph); EVM DEX 애그리게이터',
+  },
+  notifications: {
+    rules: '규칙 목록',
+    channels: '채널 설정',
+    history: '기록',
+    addRule: '규칙 추가',
+    addChannel: '채널 추가',
+    noRules: '알림 규칙 없음',
+    noChannels: '알림 채널 없음',
+    noHistory: '알림 기록 없음',
+    testSuccess: '테스트 성공',
+    testFailed: '테스트 실패',
+    deleteConfirm: '삭제하시겠습니까?',
   },
 };
 

@@ -30,6 +30,7 @@ const ja: Locale = {
     providers: 'データソース',
     settings: '設定',
     history: '記録',
+    notifications: '通知',
     pageSwitch: 'ページ切替',
     dexPageSwitch: 'DEX ページ切替',
   },
@@ -458,6 +459,19 @@ const ja: Locale = {
     okx_dex: 'API Key必須 (OKX Web3 Portal 無料); マルチチェーン DEX アグリゲーター',
     raydium: 'API Key必須; Solana DEX AMM',
     subgraph: 'API Key必須 (The Graph); EVM DEX アグリゲーター',
+  },
+  notifications: {
+    rules: 'ルール一覧',
+    channels: 'チャンネル設定',
+    history: '履歴',
+    addRule: 'ルール追加',
+    addChannel: 'チャンネル追加',
+    noRules: '通知ルールなし',
+    noChannels: '通知チャンネルなし',
+    noHistory: '通知履歴なし',
+    testSuccess: 'テスト成功',
+    testFailed: 'テスト失敗',
+    deleteConfirm: '削除してもよろしいですか？',
   },
 };
 

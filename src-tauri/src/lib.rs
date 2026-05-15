@@ -2,22 +2,28 @@ mod api_server;
 mod commands;
 mod db;
 mod events;
+mod notifications;
 mod polling;
 mod providers;
 
 use commands::{
     add_sub_to_view, add_subscription, add_subscriptions_batch, cleanup_history, create_view,
+    create_notification_rule, delete_notification_channel, delete_notification_rule,
     delete_subscription_history, delete_view, enable_provider, export_data, export_file,
     fetch_asset_price, fetch_multiple_prices, get_all_providers, get_api_enabled, get_api_port,
-    get_cached_prices, get_data_dir, get_history_stats, get_icons_dir, get_poll_ticks,
+    get_cached_prices, get_data_dir, get_history_stats, get_icons_dir,
+    get_notification_history, get_poll_ticks,
     get_price_history, get_theme_bg_path, get_unattended_polling, get_view_sub_counts,
-    get_view_subscription_ids, has_api_key, import_data, import_file, list_provider_settings,
+    get_view_subscription_ids, has_api_key, import_data, import_file, list_notification_channels,
+    list_notification_rules, list_provider_settings,
     list_subscriptions, list_views, lookup_dex_pool, purge_all_history, read_local_file_base64,
     reload_polling, remove_icon, remove_sub_from_view, remove_subscription,
-    remove_subscriptions, remove_theme_bg, rename_view, reset_all_data, save_theme_bg, set_api_enabled,
+    remove_subscriptions, remove_theme_bg, rename_view, reset_all_data, save_notification_channel,
+    save_theme_bg, set_api_enabled,
     set_api_port, set_icon, set_provider_record_hours, set_record_hours,
     set_unattended_polling, set_visible_subscriptions, start_ws_stream, stop_ws_stream,
-    toggle_record, update_subscription, upsert_provider_settings, AppState,
+    test_notification_channel, toggle_notification_rule, toggle_record, update_notification_rule,
+    update_subscription, upsert_provider_settings, AppState,
 };
 use db::DbPool;
 use events::AppEvent;
@@ -31,7 +37,7 @@ use tokio::sync::broadcast;
 fn ensure_clean_db(app_dir: &std::path::Path) {
     let db_path = app_dir.join("stockenboard.db");
     let marker = app_dir.join(".schema_v");
-    const SCHEMA_VER: &str = "7"; // Bumped for architecture refactor
+    const SCHEMA_VER: &str = "8"; // Bumped for push notifications tables
     let current = std::fs::read_to_string(&marker).unwrap_or_default();
     if current.trim() != SCHEMA_VER {
         eprintln!(
@@ -120,6 +126,17 @@ pub fn run() {
             set_api_port,
             get_api_enabled,
             set_api_enabled,
+            // Notifications
+            create_notification_rule,
+            list_notification_rules,
+            update_notification_rule,
+            delete_notification_rule,
+            toggle_notification_rule,
+            save_notification_channel,
+            list_notification_channels,
+            delete_notification_channel,
+            test_notification_channel,
+            get_notification_history,
         ])
         .setup(|app| {
             if let Ok(app_dir) = app.path().app_data_dir() {
@@ -238,6 +255,14 @@ pub fn run() {
                 });
 
                 app.manage(state);
+
+                // 啟動 Notification Engine
+                let notification_engine = notifications::engine::NotificationEngine::new(db.clone());
+                let notification_event_rx = event_bus.subscribe();
+                tauri::async_runtime::spawn(async move {
+                    notification_engine.reload_rules().await;
+                    notification_engine.start(notification_event_rx);
+                });
 
                 // 啟動 API Server
                 let app_handle = app.handle().clone();

@@ -34,14 +34,15 @@ import './App.css';
 // Lazy-loaded pages — 非活躍 tab 按需載入以減少初始 bundle
 const DexPage = lazy(() => import('./components/DexPage/DexPage').then(m => ({ default: m.DexPage })));
 const HistoryPage = lazy(() => import('./components/HistoryPage/HistoryPage').then(m => ({ default: m.HistoryPage })));
+const NotificationPage = lazy(() => import('./components/NotificationPage/NotificationPage').then(m => ({ default: m.NotificationPage })));
 
-type Tab = 'dashboard' | 'dex' | 'history' | 'providers' | 'settings';
+type Tab = 'dashboard' | 'dex' | 'history' | 'notifications' | 'providers' | 'settings';
 
 function App() {
   useLocale();
   const [activeTab, setActiveTabRaw] = useState<Tab>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.ACTIVE_TAB) as Tab | null;
-    if (saved === 'dashboard' || saved === 'dex' || saved === 'history' || saved === 'providers' || saved === 'settings') return saved;
+    if (saved === 'dashboard' || saved === 'dex' || saved === 'history' || saved === 'notifications' || saved === 'providers' || saved === 'settings') return saved;
     return 'dashboard';
   });
   const setActiveTab = useCallback((tab: Tab) => { setActiveTabRaw(tab); localStorage.setItem(STORAGE_KEYS.ACTIVE_TAB, tab); }, []);
@@ -138,6 +139,7 @@ function App() {
           <button className={`nav-btn ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>{t.nav.dashboard}</button>
           <button className={`nav-btn ${activeTab === 'dex' ? 'active' : ''}`} onClick={() => setActiveTab('dex')}>{t.nav.dex}</button>
           <button className={`nav-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>{t.nav.history}</button>
+          <button className={`nav-btn ${activeTab === 'notifications' ? 'active' : ''}`} onClick={() => setActiveTab('notifications')}>通知</button>
           <button className={`nav-btn ${activeTab === 'providers' ? 'active' : ''}`} onClick={() => setActiveTab('providers')}>{t.nav.providers}</button>
           <button className={`nav-btn ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>{t.nav.settings}</button>
         </nav>
@@ -188,6 +190,7 @@ function App() {
 
         {activeTab === 'dex' && <Suspense fallback={<div className="loading">{t.common.loading}</div>}><DexPage onToast={toast} /></Suspense>}
         {activeTab === 'history' && <Suspense fallback={<div className="loading">{t.common.loading}</div>}><HistoryPage onToast={toast} /></Suspense>}
+        {activeTab === 'notifications' && <Suspense fallback={<div className="loading">{t.common.loading}</div>}><NotificationPage /></Suspense>}
         {activeTab === 'providers' && (
           <div className="providers-page">
             <ProviderSettings onSaved={() => toast.success(t.providers.settingsSaved)} />

@@ -841,3 +841,189 @@ pub async fn set_api_enabled(
         .db
         .set_setting("api_enabled", if enabled { "1" } else { "0" })
 }
+
+// ── Notification Rule Commands ──────────────────────────────────
+
+#[tauri::command]
+pub async fn create_notification_rule(
+    state: tauri::State<'_, AppState>,
+    rule: crate::notifications::models::CreateRuleRequest,
+) -> Result<i64, String> {
+    let channel_ids_json = serde_json::to_string(&rule.channel_ids)
+        .map_err(|e| format!("序列化 channel_ids 失敗: {}", e))?;
+    let cooldown = rule.cooldown_secs.unwrap_or(300) as i64;
+    state.db.create_notification_rule(
+        &rule.name,
+        rule.subscription_id,
+        &rule.condition_type,
+        rule.threshold,
+        &channel_ids_json,
+        cooldown,
+    )
+}
+
+#[tauri::command]
+pub async fn list_notification_rules(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<crate::db::NotificationRuleRow>, String> {
+    state.db.list_notification_rules()
+}
+
+#[tauri::command]
+pub async fn update_notification_rule(
+    state: tauri::State<'_, AppState>,
+    id: i64,
+    rule: crate::notifications::models::UpdateRuleRequest,
+) -> Result<(), String> {
+    let channel_ids_json = rule.channel_ids
+        .as_ref()
+        .map(|ids| serde_json::to_string(ids))
+        .transpose()
+        .map_err(|e| format!("序列化 channel_ids 失敗: {}", e))?;
+
+    state.db.update_notification_rule(
+        id,
+        rule.name.as_deref(),
+        rule.condition_type.as_deref(),
+        rule.threshold,
+        channel_ids_json.as_deref(),
+        rule.cooldown_secs.map(|s| s as i64),
+    )
+}
+
+#[tauri::command]
+pub async fn delete_notification_rule(
+    state: tauri::State<'_, AppState>,
+    id: i64,
+) -> Result<(), String> {
+    state.db.delete_notification_rule(id)
+}
+
+#[tauri::command]
+pub async fn toggle_notification_rule(
+    state: tauri::State<'_, AppState>,
+    id: i64,
+    enabled: bool,
+) -> Result<(), String> {
+    state.db.toggle_notification_rule(id, enabled)
+}
+
+// ── Notification Channel Commands ───────────────────────────────
+
+#[tauri::command]
+pub async fn save_notification_channel(
+    state: tauri::State<'_, AppState>,
+    channel: crate::notifications::models::SaveChannelRequest,
+) -> Result<i64, String> {
+    // Validate config based on channel_type
+    match channel.channel_type.as_str() {
+        "telegram" => {
+            let config: crate::notifications::models::TelegramConfig =
+                serde_json::from_str(&channel.config)
+                    .map_err(|e| format!("Telegram 設定格式無效: {}", e))?;
+            if config.bot_token.is_empty() || config.chat_id.is_empty() {
+                return Err("Bot Token 和 Chat ID 不可為空".to_string());
+            }
+            // Encrypt bot_token before storing
+            let encrypted_token = crate::notifications::crypto::encrypt_token(&config.bot_token)?;
+            let stored_config = serde_json::json!({
+                "bot_token": encrypted_token,
+                "chat_id": config.chat_id,
+            });
+            state.db.create_notification_channel(
+                &channel.channel_type,
+                &channel.name,
+                &stored_config.to_string(),
+            )
+        }
+        "webhook" => {
+            let config: crate::notifications::models::WebhookConfig =
+                serde_json::from_str(&channel.config)
+                    .map_err(|e| format!("Webhook 設定格式無效: {}", e))?;
+            if config.url.is_empty() {
+                return Err("Webhook URL 不可為空".to_string());
+            }
+            state.db.create_notification_channel(
+                &channel.channel_type,
+                &channel.name,
+                &channel.config,
+            )
+        }
+        _ => Err(format!("不支援的通道類型: {}", channel.channel_type)),
+    }
+}
+
+#[tauri::command]
+pub async fn list_notification_channels(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<crate::db::NotificationChannelRow>, String> {
+    state.db.list_notification_channels()
+}
+
+#[tauri::command]
+pub async fn delete_notification_channel(
+    state: tauri::State<'_, AppState>,
+    id: i64,
+) -> Result<(), String> {
+    state.db.delete_notification_channel(id)
+}
+
+#[tauri::command]
+pub async fn test_notification_channel(
+    state: tauri::State<'_, AppState>,
+    id: i64,
+) -> Result<(), String> {
+    let channels = state.db.list_notification_channels()?;
+    let channel = channels.iter().find(|c| c.id == id)
+        .ok_or_else(|| format!("通道 {} 不存在", id))?;
+
+    let client = reqwest::Client::new();
+
+    match channel.channel_type.as_str() {
+        "telegram" => {
+            let stored_config: serde_json::Value = serde_json::from_str(&channel.config)
+                .map_err(|e| format!("設定解析失敗: {}", e))?;
+            let encrypted_token = stored_config["bot_token"].as_str()
+                .ok_or("缺少 bot_token")?;
+            let chat_id = stored_config["chat_id"].as_str()
+                .ok_or("缺少 chat_id")?;
+            let bot_token = crate::notifications::crypto::decrypt_token(encrypted_token)?;
+            let config = crate::notifications::models::TelegramConfig {
+                bot_token,
+                chat_id: chat_id.to_string(),
+            };
+            let test_message = "🔔 StockenBoard 測試通知\n\n這是一則測試訊息，確認 Telegram 通道設定正確。";
+            crate::notifications::telegram::send_telegram(&client, &config, test_message).await
+        }
+        "webhook" => {
+            let config: crate::notifications::models::WebhookConfig =
+                serde_json::from_str(&channel.config)
+                    .map_err(|e| format!("設定解析失敗: {}", e))?;
+            let test_data = crate::notifications::models::NotificationData {
+                symbol: "TEST/USD".to_string(),
+                provider: "test".to_string(),
+                price: 100.0,
+                condition_type: crate::notifications::models::ConditionType::PriceAbove,
+                threshold: 99.0,
+                rule_name: "測試規則".to_string(),
+                triggered_at: chrono::Utc::now(),
+            };
+            crate::notifications::webhook::send_webhook(&client, &config, &test_data).await
+        }
+        _ => Err(format!("不支援的通道類型: {}", channel.channel_type)),
+    }
+}
+
+
+// ── Notification History Commands ───────────────────────────────
+
+#[tauri::command]
+pub async fn get_notification_history(
+    state: tauri::State<'_, AppState>,
+    rule_id: Option<i64>,
+    from: Option<i64>,
+    to: Option<i64>,
+    limit: Option<i64>,
+) -> Result<Vec<crate::db::NotificationHistoryRow>, String> {
+    state.db.query_notification_history(rule_id, from, to, limit)
+}

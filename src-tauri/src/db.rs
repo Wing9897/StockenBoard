@@ -89,6 +89,50 @@ WHEN NEW.sort_order = 0
 BEGIN
     UPDATE subscriptions SET sort_order = NEW.id WHERE id = NEW.id;
 END;
+
+-- 通知通道設定
+CREATE TABLE IF NOT EXISTS notification_channels (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    channel_type TEXT NOT NULL,
+    name         TEXT NOT NULL,
+    config       TEXT NOT NULL,
+    created_at   INTEGER NOT NULL
+);
+
+-- 通知規則
+CREATE TABLE IF NOT EXISTS notification_rules (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    name            TEXT NOT NULL,
+    subscription_id INTEGER NOT NULL,
+    condition_type  TEXT NOT NULL,
+    threshold       REAL NOT NULL,
+    channel_ids     TEXT NOT NULL,
+    cooldown_secs   INTEGER NOT NULL DEFAULT 300,
+    enabled         INTEGER NOT NULL DEFAULT 1,
+    created_at      INTEGER NOT NULL,
+    updated_at      INTEGER NOT NULL,
+    FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE
+);
+
+-- 通知歷史
+CREATE TABLE IF NOT EXISTS notification_history (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    rule_id     INTEGER NOT NULL,
+    channel_id  INTEGER NOT NULL,
+    status      TEXT NOT NULL,
+    price       REAL NOT NULL,
+    message     TEXT NOT NULL,
+    error       TEXT,
+    sent_at     INTEGER NOT NULL,
+    FOREIGN KEY (rule_id) REFERENCES notification_rules(id) ON DELETE CASCADE,
+    FOREIGN KEY (channel_id) REFERENCES notification_channels(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_notification_history_rule_time
+    ON notification_history (rule_id, sent_at);
+
+CREATE INDEX IF NOT EXISTS idx_notification_rules_sub
+    ON notification_rules (subscription_id);
 "#;
 
 // ── Data types ──────────────────────────────────────────────────
@@ -154,6 +198,43 @@ pub struct HistoryStats {
     pub total: i64,
     pub oldest: Option<i64>,
     pub newest: Option<i64>,
+}
+
+// ── Notification types ───────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NotificationChannelRow {
+    pub id: i64,
+    pub channel_type: String,
+    pub name: String,
+    pub config: String,       // JSON string
+    pub created_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NotificationRuleRow {
+    pub id: i64,
+    pub name: String,
+    pub subscription_id: i64,
+    pub condition_type: String,
+    pub threshold: f64,
+    pub channel_ids: String,  // JSON array string
+    pub cooldown_secs: i64,
+    pub enabled: bool,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NotificationHistoryRow {
+    pub id: i64,
+    pub rule_id: i64,
+    pub channel_id: i64,
+    pub status: String,
+    pub price: f64,
+    pub message: String,
+    pub error: Option<String>,
+    pub sent_at: i64,
 }
 
 // ── Export/Import types ─────────────────────────────────────────
@@ -964,5 +1045,290 @@ impl DbPool {
             })
             .map_err(|e| e.to_string())?;
         Ok(rows.filter_map(|r| r.ok()).collect())
+    }
+
+    // ── Notification Channels ───────────────────────────────────
+
+    pub fn create_notification_channel(
+        &self,
+        channel_type: &str,
+        name: &str,
+        config: &str,
+    ) -> Result<i64, String> {
+        let conn = self.conn.lock().unwrap();
+        let now = chrono::Utc::now().timestamp();
+        conn.execute(
+            "INSERT INTO notification_channels (channel_type, name, config, created_at) VALUES (?1, ?2, ?3, ?4)",
+            params![channel_type, name, config, now],
+        )
+        .map_err(|e| format!("建立通知通道失敗: {}", e))?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    pub fn list_notification_channels(&self) -> Result<Vec<NotificationChannelRow>, String> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn
+            .prepare("SELECT id, channel_type, name, config, created_at FROM notification_channels ORDER BY id")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(NotificationChannelRow {
+                    id: row.get(0)?,
+                    channel_type: row.get(1)?,
+                    name: row.get(2)?,
+                    config: row.get(3)?,
+                    created_at: row.get(4)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    }
+
+    pub fn delete_notification_channel(&self, id: i64) -> Result<(), String> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute("DELETE FROM notification_channels WHERE id = ?1", [id])
+            .map_err(|e| format!("刪除通知通道失敗: {}", e))?;
+        Ok(())
+    }
+
+    // ── Notification Rules ──────────────────────────────────────
+
+    pub fn create_notification_rule(
+        &self,
+        name: &str,
+        subscription_id: i64,
+        condition_type: &str,
+        threshold: f64,
+        channel_ids: &str,
+        cooldown_secs: i64,
+    ) -> Result<i64, String> {
+        let conn = self.conn.lock().unwrap();
+        let now = chrono::Utc::now().timestamp();
+        conn.execute(
+            "INSERT INTO notification_rules (name, subscription_id, condition_type, threshold, channel_ids, cooldown_secs, enabled, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, ?7)",
+            params![name, subscription_id, condition_type, threshold, channel_ids, cooldown_secs, now],
+        )
+        .map_err(|e| format!("建立通知規則失敗: {}", e))?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    pub fn list_notification_rules(&self) -> Result<Vec<NotificationRuleRow>, String> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, name, subscription_id, condition_type, threshold, channel_ids, cooldown_secs, enabled, created_at, updated_at
+                 FROM notification_rules ORDER BY id",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(NotificationRuleRow {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    subscription_id: row.get(2)?,
+                    condition_type: row.get(3)?,
+                    threshold: row.get(4)?,
+                    channel_ids: row.get(5)?,
+                    cooldown_secs: row.get(6)?,
+                    enabled: row.get::<_, i64>(7)? != 0,
+                    created_at: row.get(8)?,
+                    updated_at: row.get(9)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    }
+
+    pub fn update_notification_rule(
+        &self,
+        id: i64,
+        name: Option<&str>,
+        condition_type: Option<&str>,
+        threshold: Option<f64>,
+        channel_ids: Option<&str>,
+        cooldown_secs: Option<i64>,
+    ) -> Result<(), String> {
+        let conn = self.conn.lock().unwrap();
+        let now = chrono::Utc::now().timestamp();
+        let mut sets = vec!["updated_at = ?1".to_string()];
+        let mut idx = 2u32;
+
+        // Build dynamic SET clause
+        if name.is_some() {
+            sets.push(format!("name = ?{}", idx));
+            idx += 1;
+        }
+        if condition_type.is_some() {
+            sets.push(format!("condition_type = ?{}", idx));
+            idx += 1;
+        }
+        if threshold.is_some() {
+            sets.push(format!("threshold = ?{}", idx));
+            idx += 1;
+        }
+        if channel_ids.is_some() {
+            sets.push(format!("channel_ids = ?{}", idx));
+            idx += 1;
+        }
+        if cooldown_secs.is_some() {
+            sets.push(format!("cooldown_secs = ?{}", idx));
+            idx += 1;
+        }
+
+        let sql = format!(
+            "UPDATE notification_rules SET {} WHERE id = ?{}",
+            sets.join(", "),
+            idx
+        );
+
+        let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+
+        // Bind parameters dynamically
+        let mut param_idx = 1u32;
+        stmt.raw_bind_parameter(param_idx as usize, now)
+            .map_err(|e| e.to_string())?;
+        param_idx += 1;
+
+        if let Some(v) = name {
+            stmt.raw_bind_parameter(param_idx as usize, v)
+                .map_err(|e| e.to_string())?;
+            param_idx += 1;
+        }
+        if let Some(v) = condition_type {
+            stmt.raw_bind_parameter(param_idx as usize, v)
+                .map_err(|e| e.to_string())?;
+            param_idx += 1;
+        }
+        if let Some(v) = threshold {
+            stmt.raw_bind_parameter(param_idx as usize, v)
+                .map_err(|e| e.to_string())?;
+            param_idx += 1;
+        }
+        if let Some(v) = channel_ids {
+            stmt.raw_bind_parameter(param_idx as usize, v)
+                .map_err(|e| e.to_string())?;
+            param_idx += 1;
+        }
+        if let Some(v) = cooldown_secs {
+            stmt.raw_bind_parameter(param_idx as usize, v)
+                .map_err(|e| e.to_string())?;
+            param_idx += 1;
+        }
+
+        // Bind the WHERE id parameter
+        stmt.raw_bind_parameter(param_idx as usize, id)
+            .map_err(|e| e.to_string())?;
+
+        stmt.raw_execute().map_err(|e| format!("更新通知規則失敗: {}", e))?;
+        Ok(())
+    }
+
+    pub fn delete_notification_rule(&self, id: i64) -> Result<(), String> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute("DELETE FROM notification_rules WHERE id = ?1", [id])
+            .map_err(|e| format!("刪除通知規則失敗: {}", e))?;
+        Ok(())
+    }
+
+    pub fn toggle_notification_rule(&self, id: i64, enabled: bool) -> Result<(), String> {
+        let conn = self.conn.lock().unwrap();
+        let now = chrono::Utc::now().timestamp();
+        conn.execute(
+            "UPDATE notification_rules SET enabled = ?1, updated_at = ?2 WHERE id = ?3",
+            params![enabled as i64, now, id],
+        )
+        .map_err(|e| format!("切換通知規則狀態失敗: {}", e))?;
+        Ok(())
+    }
+
+    // ── Notification History ────────────────────────────────────
+
+    pub fn insert_notification_history(
+        &self,
+        rule_id: i64,
+        channel_id: i64,
+        status: &str,
+        price: f64,
+        message: &str,
+        error: Option<&str>,
+    ) -> Result<i64, String> {
+        let conn = self.conn.lock().unwrap();
+        let now = chrono::Utc::now().timestamp();
+        conn.execute(
+            "INSERT INTO notification_history (rule_id, channel_id, status, price, message, error, sent_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![rule_id, channel_id, status, price, message, error, now],
+        )
+        .map_err(|e| format!("寫入通知歷史失敗: {}", e))?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    pub fn query_notification_history(
+        &self,
+        rule_id: Option<i64>,
+        from: Option<i64>,
+        to: Option<i64>,
+        limit: Option<i64>,
+    ) -> Result<Vec<NotificationHistoryRow>, String> {
+        let conn = self.conn.lock().unwrap();
+        let mut conditions = Vec::new();
+        let mut param_values: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+        let mut idx = 1u32;
+
+        if let Some(rid) = rule_id {
+            conditions.push(format!("rule_id = ?{}", idx));
+            param_values.push(Box::new(rid));
+            idx += 1;
+        }
+        if let Some(f) = from {
+            conditions.push(format!("sent_at >= ?{}", idx));
+            param_values.push(Box::new(f));
+            idx += 1;
+        }
+        if let Some(t) = to {
+            conditions.push(format!("sent_at <= ?{}", idx));
+            param_values.push(Box::new(t));
+            idx += 1;
+        }
+
+        let where_clause = if conditions.is_empty() {
+            String::new()
+        } else {
+            format!("WHERE {}", conditions.join(" AND "))
+        };
+
+        let actual_limit = limit.unwrap_or(100);
+        let sql = format!(
+            "SELECT id, rule_id, channel_id, status, price, message, error, sent_at
+             FROM notification_history {} ORDER BY sent_at DESC LIMIT ?{}",
+            where_clause, idx
+        );
+
+        let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+
+        // Bind all parameters
+        for (i, val) in param_values.iter().enumerate() {
+            stmt.raw_bind_parameter((i + 1) as usize, val.as_ref())
+                .map_err(|e| e.to_string())?;
+        }
+        stmt.raw_bind_parameter(idx as usize, actual_limit)
+            .map_err(|e| e.to_string())?;
+
+        let mut result = Vec::new();
+        let mut rows = stmt.raw_query();
+        while let Some(row) = rows.next().map_err(|e| e.to_string())? {
+            result.push(NotificationHistoryRow {
+                id: row.get(0).map_err(|e| e.to_string())?,
+                rule_id: row.get(1).map_err(|e| e.to_string())?,
+                channel_id: row.get(2).map_err(|e| e.to_string())?,
+                status: row.get(3).map_err(|e| e.to_string())?,
+                price: row.get(4).map_err(|e| e.to_string())?,
+                message: row.get(5).map_err(|e| e.to_string())?,
+                error: row.get(6).map_err(|e| e.to_string())?,
+                sent_at: row.get(7).map_err(|e| e.to_string())?,
+            });
+        }
+        Ok(result)
     }
 }

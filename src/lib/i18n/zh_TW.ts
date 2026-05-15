@@ -32,6 +32,7 @@ const zh_TW = {
     providers: '數據源',
     settings: '設定',
     history: '紀錄',
+    notifications: '通知',
     pageSwitch: '頁面切換',
     dexPageSwitch: 'DEX 頁面切換',
   },
@@ -461,6 +462,19 @@ const zh_TW = {
     okx_dex: '需 API Key (OKX Web3 Portal 免費)；多鏈 DEX 聚合器',
     raydium: '需 API Key；Solana DEX AMM',
     subgraph: '需 API Key (The Graph)；EVM DEX 聚合器',
+  },
+  notifications: {
+    rules: '規則列表',
+    channels: '通道設定',
+    history: '歷史紀錄',
+    addRule: '新增規則',
+    addChannel: '新增通道',
+    noRules: '尚無通知規則',
+    noChannels: '尚無通知通道',
+    noHistory: '尚無通知紀錄',
+    testSuccess: '測試成功',
+    testFailed: '測試失敗',
+    deleteConfirm: '確定要刪除？',
   },
 };
 

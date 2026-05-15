@@ -30,6 +30,7 @@ const zh_CN: Locale = {
     providers: '数据源',
     settings: '设置',
     history: '记录',
+    notifications: '通知',
     pageSwitch: '页面切换',
     dexPageSwitch: 'DEX 页面切换',
   },
@@ -458,6 +459,19 @@ const zh_CN: Locale = {
     okx_dex: '需 API Key (OKX Web3 Portal 免费)；多链 DEX 聚合器',
     raydium: '需 API Key；Solana DEX AMM',
     subgraph: '需 API Key (The Graph)；EVM DEX 聚合器',
+  },
+  notifications: {
+    rules: '规则列表',
+    channels: '通道设置',
+    history: '历史记录',
+    addRule: '新增规则',
+    addChannel: '新增通道',
+    noRules: '暂无通知规则',
+    noChannels: '暂无通知通道',
+    noHistory: '暂无通知记录',
+    testSuccess: '测试成功',
+    testFailed: '测试失败',
+    deleteConfirm: '确定要删除？',
   },
 };
 
