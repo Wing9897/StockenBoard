@@ -21,6 +21,8 @@ pub struct AppState {
     pub registry: Arc<ProviderRegistry>,
     /// Event Bus（解耦 Polling ↔ DB ↔ 前端）
     pub event_bus: broadcast::Sender<AppEvent>,
+    /// 推播通知引擎（規則 CRUD 後需 reload）
+    pub notification_engine: Arc<crate::notifications::engine::NotificationEngine>,
     ws_sender: broadcast::Sender<WsTickerUpdate>,
     #[allow(clippy::type_complexity)]
     ws_tasks: RwLock<HashMap<String, (tokio::task::JoinHandle<()>, tokio::task::JoinHandle<()>)>>,
@@ -28,12 +30,13 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(db: Arc<DbPool>, registry: Arc<ProviderRegistry>, event_bus: broadcast::Sender<AppEvent>) -> Self {
+    pub fn new(db: Arc<DbPool>, registry: Arc<ProviderRegistry>, event_bus: broadcast::Sender<AppEvent>, notification_engine: Arc<crate::notifications::engine::NotificationEngine>) -> Self {
         let (ws_sender, _) = broadcast::channel(256);
         Self {
             db,
             registry,
             event_bus,
+            notification_engine,
             ws_sender,
             ws_tasks: RwLock::new(HashMap::new()),
             polling: PollingManager::new(),
@@ -46,6 +49,7 @@ impl AppState {
             db: self.db.clone(),
             registry: self.registry.clone(),
             event_bus: self.event_bus.clone(),
+            notification_engine: self.notification_engine.clone(),
             ws_sender: broadcast::channel(1).0,
             ws_tasks: RwLock::new(HashMap::new()),
             polling: self.polling.clone(),
@@ -852,14 +856,16 @@ pub async fn create_notification_rule(
     let channel_ids_json = serde_json::to_string(&rule.channel_ids)
         .map_err(|e| format!("序列化 channel_ids 失敗: {}", e))?;
     let cooldown = rule.cooldown_secs.unwrap_or(300) as i64;
-    state.db.create_notification_rule(
+    let id = state.db.create_notification_rule(
         &rule.name,
         rule.subscription_id,
         &rule.condition_type,
         rule.threshold,
         &channel_ids_json,
         cooldown,
-    )
+    )?;
+    state.notification_engine.reload_rules().await;
+    Ok(id)
 }
 
 #[tauri::command]
@@ -888,7 +894,9 @@ pub async fn update_notification_rule(
         rule.threshold,
         channel_ids_json.as_deref(),
         rule.cooldown_secs.map(|s| s as i64),
-    )
+    )?;
+    state.notification_engine.reload_rules().await;
+    Ok(())
 }
 
 #[tauri::command]
@@ -896,7 +904,9 @@ pub async fn delete_notification_rule(
     state: tauri::State<'_, AppState>,
     id: i64,
 ) -> Result<(), String> {
-    state.db.delete_notification_rule(id)
+    state.db.delete_notification_rule(id)?;
+    state.notification_engine.reload_rules().await;
+    Ok(())
 }
 
 #[tauri::command]
@@ -905,7 +915,9 @@ pub async fn toggle_notification_rule(
     id: i64,
     enabled: bool,
 ) -> Result<(), String> {
-    state.db.toggle_notification_rule(id, enabled)
+    state.db.toggle_notification_rule(id, enabled)?;
+    state.notification_engine.reload_rules().await;
+    Ok(())
 }
 
 // ── Notification Channel Commands ───────────────────────────────

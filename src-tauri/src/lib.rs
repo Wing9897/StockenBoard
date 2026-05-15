@@ -155,7 +155,12 @@ pub fn run() {
                 // 建立 Event Bus（解耦 Polling ↔ DB ↔ 前端）
                 let (event_bus, _) = broadcast::channel::<AppEvent>(512);
 
-                let state = AppState::new(db.clone(), registry.clone(), event_bus.clone());
+                // 建立 Notification Engine
+                let notification_engine = Arc::new(
+                    notifications::engine::NotificationEngine::new(db.clone())
+                );
+
+                let state = AppState::new(db.clone(), registry.clone(), event_bus.clone(), notification_engine.clone());
                 state.polling.start(
                     app.handle().clone(),
                     db.clone(),
@@ -257,11 +262,11 @@ pub fn run() {
                 app.manage(state);
 
                 // 啟動 Notification Engine
-                let notification_engine = notifications::engine::NotificationEngine::new(db.clone());
+                let engine_for_start = notification_engine.clone();
                 let notification_event_rx = event_bus.subscribe();
                 tauri::async_runtime::spawn(async move {
-                    notification_engine.reload_rules().await;
-                    notification_engine.start(notification_event_rx);
+                    engine_for_start.reload_rules().await;
+                    engine_for_start.start(notification_event_rx);
                 });
 
                 // 啟動 API Server
