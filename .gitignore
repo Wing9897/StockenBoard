@@ -48,3 +48,18 @@ src-tauri/gen/schemas/
 *.py
 __pycache__/
 *.pyc
+
+# Debug / temporary files
+build_out.txt
+error_tsc.txt
+mcptest.db
+src-tauri/binance_test.txt
+src-tauri/build_err.txt
+src-tauri/check.json
+src-tauri/clippy.txt
+src-tauri/clippy_pedantic.txt
+src-tauri/error.txt
+src-tauri/error2.txt
+src-tauri/error_cargo.txt
+src-tauri/error_log.txt
+*.db

@@ -1,3 +1,0 @@
-    Blocking waiting for file lock on build directory
-    Checking stockenboard v0.1.0 (C:\Users\Wing\Desktop\Github_USING\StockenBoard\src-tauri)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.16s
