@@ -5,7 +5,6 @@ use crate::providers::traits::{
 };
 use serde::Deserialize;
 
-
 pub struct SubgraphProvider {
     client: reqwest::Client,
     api_key: Option<String>,
@@ -217,36 +216,50 @@ impl DataProvider for SubgraphProvider {
 
         for symbol in symbols.to_vec() {
             let sem = semaphore.clone();
-            
+
             // pre-compute information before spawning the task to avoid lifetime/borrow issues
             let (protocol, pool_address, token_from, token_to) = match Self::parse_symbol(&symbol) {
-                Ok(t) => (t.0.to_string(), t.1.to_string(), t.2.to_string(), t.3.to_string()),
+                Ok(t) => (
+                    t.0.to_string(),
+                    t.1.to_string(),
+                    t.2.to_string(),
+                    t.3.to_string(),
+                ),
                 Err(_) => continue,
             };
-            
+
             let api_url = match self.get_subgraph_url(&protocol) {
                 Ok(u) => u,
                 Err(_) => continue,
             };
-            
+
             let query = Self::build_query(&pool_address);
             let client = self.client.clone();
-            
+
             tasks.spawn(async move {
                 let _permit = sem.acquire().await;
 
                 let json_req = serde_json::json!({ "query": query });
 
-                let resp = match client.post(&api_url).json(&json_req).send().await.and_then(|r| r.error_for_status()) {
+                let resp = match client
+                    .post(&api_url)
+                    .json(&json_req)
+                    .send()
+                    .await
+                    .and_then(|r| r.error_for_status())
+                {
                     Ok(r) => r,
-                    Err(e) => { eprintln!("Subgraph 連接失敗: {}", e); return None; },
+                    Err(e) => {
+                        eprintln!("Subgraph 連接失敗: {}", e);
+                        return None;
+                    }
                 };
 
                 let graph_resp: GraphResponse = match resp.json().await {
                     Ok(b) => b,
                     Err(_) => return None,
                 };
-                
+
                 if let Some(errors) = &graph_resp.errors {
                     eprintln!("Subgraph query error for {}: {:?}", symbol, errors);
                     return None;
@@ -255,7 +268,10 @@ impl DataProvider for SubgraphProvider {
                 let pool = match graph_resp.data.and_then(|d| d.pool) {
                     Some(p) => p,
                     None => {
-                        eprintln!("Subgraph: pool {} not found for symbol {}", pool_address, symbol);
+                        eprintln!(
+                            "Subgraph: pool {} not found for symbol {}",
+                            pool_address, symbol
+                        );
                         return None;
                     }
                 };
@@ -271,25 +287,61 @@ impl DataProvider for SubgraphProvider {
                     .and_then(|t| t.id.as_deref())
                     .unwrap_or("");
 
-                let (price, currency_symbol, reverse_price) = if token_from.eq_ignore_ascii_case(token0_id) {
-                    (
-                        pool.token1_price.as_deref().unwrap_or("0").parse::<f64>().unwrap_or(0.0),
-                        pool.token1.as_ref().and_then(|t| t.symbol.as_deref()).unwrap_or("?"),
-                        pool.token0_price.as_deref().unwrap_or("0").parse::<f64>().unwrap_or(0.0)
-                    )
-                } else if token_from.eq_ignore_ascii_case(token1_id) {
-                    (
-                        pool.token0_price.as_deref().unwrap_or("0").parse::<f64>().unwrap_or(0.0),
-                        pool.token0.as_ref().and_then(|t| t.symbol.as_deref()).unwrap_or("?"),
-                        pool.token1_price.as_deref().unwrap_or("0").parse::<f64>().unwrap_or(0.0)
-                    )
-                } else {
-                    eprintln!("Subgraph: token_from {} not matching token0 or token1 for symbol {}", token_from, symbol);
-                    return None;
-                };
-                
-                let volume: f64 = pool.volume_usd.as_deref().unwrap_or("0").parse().unwrap_or(0.0);
-                let tvl: f64 = pool.total_value_locked_usd.as_deref().unwrap_or("0").parse().unwrap_or(0.0);
+                let (price, currency_symbol, reverse_price) =
+                    if token_from.eq_ignore_ascii_case(token0_id) {
+                        (
+                            pool.token1_price
+                                .as_deref()
+                                .unwrap_or("0")
+                                .parse::<f64>()
+                                .unwrap_or(0.0),
+                            pool.token1
+                                .as_ref()
+                                .and_then(|t| t.symbol.as_deref())
+                                .unwrap_or("?"),
+                            pool.token0_price
+                                .as_deref()
+                                .unwrap_or("0")
+                                .parse::<f64>()
+                                .unwrap_or(0.0),
+                        )
+                    } else if token_from.eq_ignore_ascii_case(token1_id) {
+                        (
+                            pool.token0_price
+                                .as_deref()
+                                .unwrap_or("0")
+                                .parse::<f64>()
+                                .unwrap_or(0.0),
+                            pool.token0
+                                .as_ref()
+                                .and_then(|t| t.symbol.as_deref())
+                                .unwrap_or("?"),
+                            pool.token1_price
+                                .as_deref()
+                                .unwrap_or("0")
+                                .parse::<f64>()
+                                .unwrap_or(0.0),
+                        )
+                    } else {
+                        eprintln!(
+                            "Subgraph: token_from {} not matching token0 or token1 for symbol {}",
+                            token_from, symbol
+                        );
+                        return None;
+                    };
+
+                let volume: f64 = pool
+                    .volume_usd
+                    .as_deref()
+                    .unwrap_or("0")
+                    .parse()
+                    .unwrap_or(0.0);
+                let tvl: f64 = pool
+                    .total_value_locked_usd
+                    .as_deref()
+                    .unwrap_or("0")
+                    .parse()
+                    .unwrap_or(0.0);
 
                 let protocol_name = match protocol.as_str() {
                     "uniswap_v3" => "Uniswap V3",
@@ -298,18 +350,20 @@ impl DataProvider for SubgraphProvider {
                     _ => &protocol,
                 };
 
-                Some(AssetDataBuilder::new(&symbol, "subgraph")
-                    .price(price)
-                    .currency(currency_symbol)
-                    .volume(Some(volume))
-                    .extra_f64("pool_tvl", Some(tvl))
-                    .extra_f64("volume_24h", Some(volume))
-                    .extra_f64("reverse_price", Some(reverse_price))
-                    .extra_str("token_from", Some(&token_from))
-                    .extra_str("token_to", Some(&token_to))
-                    .extra_str("route_path", Some(&format!("{} Direct", protocol_name)))
-                    .extra_str("gas_estimate", Some("~0.005 ETH"))
-                    .build())
+                Some(
+                    AssetDataBuilder::new(&symbol, "subgraph")
+                        .price(price)
+                        .currency(currency_symbol)
+                        .volume(Some(volume))
+                        .extra_f64("pool_tvl", Some(tvl))
+                        .extra_f64("volume_24h", Some(volume))
+                        .extra_f64("reverse_price", Some(reverse_price))
+                        .extra_str("token_from", Some(&token_from))
+                        .extra_str("token_to", Some(&token_to))
+                        .extra_str("route_path", Some(&format!("{} Direct", protocol_name)))
+                        .extra_str("gas_estimate", Some("~0.005 ETH"))
+                        .build(),
+                )
             });
         }
 

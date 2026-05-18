@@ -7,14 +7,19 @@
 //! - dispatcher: 通知派發（含重試）
 //! - telegram: Telegram Bot 發送器
 //! - webhook: Webhook 發送器
+//! - crypto: 加密/解密工具
+//! - ai_evaluator: AI 評估器（prompt 組裝、API 呼叫、回應解析）
+//! - ai_scheduler: AI 排程器（管理 AI 規則的定期評估 task）
 
-pub mod models;
+pub mod ai_evaluator;
+pub mod ai_scheduler;
+pub mod crypto;
+pub mod dispatcher;
 pub mod engine;
 pub mod evaluator;
-pub mod dispatcher;
+pub mod models;
 pub mod telegram;
 pub mod webhook;
-pub mod crypto;
 
 #[cfg(test)]
 mod tests;

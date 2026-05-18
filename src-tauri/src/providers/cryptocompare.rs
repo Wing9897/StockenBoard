@@ -93,20 +93,20 @@ impl DataProvider for CryptoCompareProvider {
         );
 
         let resp = self
-        .build_request(&url)
-        .send()
-        .await
-        .map_err(|e| format!("CryptoCompare 批量連接失敗: {}", e))?
-        .error_for_status()
-        .map_err(|e| format!("CryptoCompare 批量 API 錯誤: {}", e))?;
+            .build_request(&url)
+            .send()
+            .await
+            .map_err(|e| format!("CryptoCompare 批量連接失敗: {}", e))?
+            .error_for_status()
+            .map_err(|e| format!("CryptoCompare 批量 API 錯誤: {}", e))?;
 
-    let body = resp
-        .text()
-        .await
-        .map_err(|e| format!("CryptoCompare 批量讀取失敗: {}", e))?;
+        let body = resp
+            .text()
+            .await
+            .map_err(|e| format!("CryptoCompare 批量讀取失敗: {}", e))?;
 
-    let data: serde_json::Value = serde_json::from_str(&body)
-        .map_err(|_| "CryptoCompare 批量解析失敗".to_string())?;
+        let data: serde_json::Value =
+            serde_json::from_str(&body).map_err(|_| "CryptoCompare 批量解析失敗".to_string())?;
 
         let mut results = Vec::new();
         for (symbol, base) in &mappings {

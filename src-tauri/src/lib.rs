@@ -7,23 +7,22 @@ mod polling;
 mod providers;
 
 use commands::{
-    add_sub_to_view, add_subscription, add_subscriptions_batch, cleanup_history, create_view,
-    create_notification_rule, delete_notification_channel, delete_notification_rule,
+    add_sub_to_view, add_subscription, add_subscriptions_batch, cleanup_history,
+    create_notification_rule, create_view, delete_notification_channel, delete_notification_rule,
     delete_subscription_history, delete_view, enable_provider, export_data, export_file,
-    fetch_asset_price, fetch_multiple_prices, get_all_providers, get_api_enabled, get_api_port,
-    get_cached_prices, get_data_dir, get_history_stats, get_icons_dir,
-    get_notification_history, get_poll_ticks,
-    get_price_history, get_theme_bg_path, get_unattended_polling, get_view_sub_counts,
-    get_view_subscription_ids, has_api_key, import_data, import_file, list_notification_channels,
-    list_notification_rules, list_provider_settings,
-    list_subscriptions, list_views, lookup_dex_pool, purge_all_history, read_local_file_base64,
-    reload_polling, remove_icon, remove_sub_from_view, remove_subscription,
-    remove_subscriptions, remove_theme_bg, rename_view, reset_all_data, save_notification_channel,
-    save_theme_bg, set_api_enabled,
-    set_api_port, set_icon, set_provider_record_hours, set_record_hours,
-    set_unattended_polling, set_visible_subscriptions, start_ws_stream, stop_ws_stream,
-    test_notification_channel, toggle_notification_rule, toggle_record, update_notification_rule,
-    update_subscription, upsert_provider_settings, AppState,
+    fetch_asset_price, fetch_multiple_prices, get_ai_provider_config, get_all_providers,
+    get_api_enabled, get_api_port, get_cached_prices, get_data_dir, get_history_stats,
+    get_icons_dir, get_notification_history, get_poll_ticks, get_price_history, get_theme_bg_path,
+    get_unattended_polling, get_view_sub_counts, get_view_subscription_ids, has_api_key,
+    import_data, import_file, list_notification_channels, list_notification_rules,
+    list_provider_settings, list_subscriptions, list_views, lookup_dex_pool, purge_all_history,
+    read_local_file_base64, reload_polling, remove_icon, remove_sub_from_view, remove_subscription,
+    remove_subscriptions, remove_theme_bg, rename_view, reset_all_data, save_ai_provider_config,
+    save_notification_channel, save_theme_bg, set_api_enabled, set_api_port, set_icon,
+    set_provider_record_hours, set_record_hours, set_unattended_polling, set_visible_subscriptions,
+    start_ws_stream, stop_ws_stream, test_ai_connection, list_ai_models, test_notification_channel,
+    toggle_notification_rule, toggle_record, update_notification_rule, update_subscription,
+    upsert_provider_settings, AppState,
 };
 use db::DbPool;
 use events::AppEvent;
@@ -137,6 +136,11 @@ pub fn run() {
             delete_notification_channel,
             test_notification_channel,
             get_notification_history,
+            // AI Provider Config
+            save_ai_provider_config,
+            get_ai_provider_config,
+            test_ai_connection,
+            list_ai_models,
         ])
         .setup(|app| {
             if let Ok(app_dir) = app.path().app_data_dir() {
@@ -145,9 +149,7 @@ pub fn run() {
                 let db_path = app_dir.join("stockenboard.db");
 
                 // 建立統一的 DbPool（WAL mode + busy_timeout）
-                let db = Arc::new(
-                    DbPool::open(&db_path).expect("無法開啟資料庫"),
-                );
+                let db = Arc::new(DbPool::open(&db_path).expect("無法開啟資料庫"));
 
                 // 建立共享 Provider Registry（含 rate limiting）
                 let registry = Arc::new(ProviderRegistry::new());
@@ -156,11 +158,20 @@ pub fn run() {
                 let (event_bus, _) = broadcast::channel::<AppEvent>(512);
 
                 // 建立 Notification Engine
-                let notification_engine = Arc::new(
-                    notifications::engine::NotificationEngine::new(db.clone())
-                );
+                let notification_engine =
+                    Arc::new(notifications::engine::NotificationEngine::new(db.clone()));
 
-                let state = AppState::new(db.clone(), registry.clone(), event_bus.clone(), notification_engine.clone());
+                // 建立 AI Scheduler
+                let ai_scheduler =
+                    Arc::new(notifications::ai_scheduler::AiScheduler::new(db.clone()));
+
+                let state = AppState::new(
+                    db.clone(),
+                    registry.clone(),
+                    event_bus.clone(),
+                    notification_engine.clone(),
+                    ai_scheduler.clone(),
+                );
                 state.polling.start(
                     app.handle().clone(),
                     db.clone(),
@@ -267,6 +278,12 @@ pub fn run() {
                 tauri::async_runtime::spawn(async move {
                     engine_for_start.reload_rules().await;
                     engine_for_start.start(notification_event_rx);
+                });
+
+                // 啟動 AI Scheduler（載入所有已啟用的 AI 規則並啟動定期評估）
+                let ai_scheduler_for_start = ai_scheduler.clone();
+                tauri::async_runtime::spawn(async move {
+                    ai_scheduler_for_start.start().await;
                 });
 
                 // 啟動 API Server

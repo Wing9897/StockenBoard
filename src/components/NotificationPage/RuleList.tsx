@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { t } from '../../lib/i18n';
 
 interface NotificationRuleRow {
   id: number;
@@ -10,12 +11,14 @@ interface NotificationRuleRow {
   channel_ids: string;
   cooldown_secs: number;
   enabled: boolean;
+  ai_config: string | null;
   created_at: number;
   updated_at: number;
 }
 
 interface RuleListProps {
   onAddRule?: () => void;
+  onEditRule?: (rule: NotificationRuleRow) => void;
 }
 
 function formatCondition(conditionType: string, threshold: number): string {
@@ -28,7 +31,22 @@ function formatCondition(conditionType: string, threshold: number): string {
   }
 }
 
-export function RuleList({ onAddRule }: RuleListProps) {
+function getAiPromptSummary(aiConfig: string | null): string {
+  if (!aiConfig) return 'AI 規則';
+  try {
+    const config = JSON.parse(aiConfig) as { prompt?: string };
+    const prompt = config.prompt || '';
+    if (prompt.length > 50) {
+      return prompt.slice(0, 50) + '…';
+    }
+    return prompt || 'AI 規則';
+  } catch {
+    return 'AI 規則';
+  }
+}
+
+
+export function RuleList({ onAddRule, onEditRule }: RuleListProps) {
   const [rules, setRules] = useState<NotificationRuleRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -55,7 +73,7 @@ export function RuleList({ onAddRule }: RuleListProps) {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('確定要刪除此規則？')) return;
+    if (!confirm(t.notifications.deleteConfirm)) return;
     try {
       await invoke('delete_notification_rule', { id });
       setRules(prev => prev.filter(r => r.id !== id));
@@ -64,25 +82,35 @@ export function RuleList({ onAddRule }: RuleListProps) {
     }
   };
 
-  if (loading) return <div className="notification-placeholder"><p>載入中...</p></div>;
+  if (loading) return <div className="notification-placeholder"><p>{t.common.loading}</p></div>;
 
   return (
     <div className="rule-list">
       <div className="rule-list-header">
-        <h3>通知規則</h3>
-        {onAddRule && <button className="btn-add-rule" onClick={onAddRule}>+ 新增規則</button>}
+        <h3>{t.notifications.rules}</h3>
+        {onAddRule && <button className="btn-add-rule" onClick={onAddRule}>+ {t.notifications.addRule}</button>}
       </div>
       {rules.length === 0 ? (
-        <div className="notification-placeholder"><p>尚無通知規則</p></div>
+        <div className="notification-placeholder"><p>{t.notifications.noRules}</p></div>
       ) : (
         <div className="rule-items">
           {rules.map(rule => (
             <div key={rule.id} className={`rule-item ${!rule.enabled ? 'disabled' : ''}`}>
               <div className="rule-info">
-                <span className="rule-name">{rule.name}</span>
-                <span className="rule-condition">{formatCondition(rule.condition_type, rule.threshold)}</span>
+                <span className="rule-name">
+                  {rule.name}
+                  {rule.condition_type === 'ai' && <span className="ai-badge">AI</span>}
+                </span>
+                <span className="rule-condition">
+                  {rule.condition_type === 'ai'
+                    ? getAiPromptSummary(rule.ai_config)
+                    : formatCondition(rule.condition_type, rule.threshold)}
+                </span>
               </div>
               <div className="rule-actions">
+                {onEditRule && (
+                  <button className="btn-edit-rule" onClick={() => onEditRule(rule)} title="編輯">✏️</button>
+                )}
                 <label className="toggle-switch">
                   <input type="checkbox" checked={rule.enabled} onChange={() => handleToggle(rule.id, rule.enabled)} />
                   <span className="toggle-slider"></span>

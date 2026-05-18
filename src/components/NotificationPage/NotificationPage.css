@@ -6,7 +6,7 @@
   display: flex;
   gap: 0.5rem;
   margin-bottom: 1rem;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--surface0);
   padding-bottom: 0.5rem;
 }
 
@@ -14,7 +14,7 @@
   padding: 0.5rem 1rem;
   border: none;
   background: none;
-  color: var(--text-secondary);
+  color: var(--overlay0);
   cursor: pointer;
   border-radius: 4px 4px 0 0;
   font-size: 0.9rem;
@@ -22,13 +22,13 @@
 }
 
 .notification-tab:hover {
-  color: var(--text-primary);
-  background: var(--bg-hover);
+  color: var(--text);
+  background: var(--surface0);
 }
 
 .notification-tab.active {
-  color: var(--accent);
-  border-bottom: 2px solid var(--accent);
+  color: var(--blue);
+  border-bottom: 2px solid var(--blue);
   font-weight: 500;
 }
 
@@ -41,7 +41,7 @@
   align-items: center;
   justify-content: center;
   min-height: 200px;
-  color: var(--text-secondary);
+  color: var(--overlay0);
 }
 
 /* RuleList styles */
@@ -59,16 +59,16 @@
 
 .btn-add-rule {
   padding: 0.4rem 0.8rem;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--blue);
   background: transparent;
-  color: var(--accent);
+  color: var(--blue);
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.85rem;
 }
 
 .btn-add-rule:hover {
-  background: var(--accent);
+  background: var(--blue);
   color: white;
 }
 
@@ -83,8 +83,8 @@
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 1rem;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
+  background: var(--base);
+  border: 1px solid var(--surface0);
   border-radius: 6px;
 }
 
@@ -100,12 +100,12 @@
 
 .rule-name {
   font-weight: 500;
-  color: var(--text-primary);
+  color: var(--text);
 }
 
 .rule-condition {
   font-size: 0.85rem;
-  color: var(--text-secondary);
+  color: var(--overlay0);
 }
 
 .rule-actions {
@@ -131,7 +131,7 @@
   position: absolute;
   cursor: pointer;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: var(--bg-hover);
+  background: var(--surface0);
   border-radius: 20px;
   transition: background 0.2s;
 }
@@ -149,7 +149,7 @@
 }
 
 .toggle-switch input:checked + .toggle-slider {
-  background: var(--accent);
+  background: var(--blue);
 }
 
 .toggle-switch input:checked + .toggle-slider::before {
@@ -171,8 +171,8 @@
 
 /* RuleForm styles */
 .rule-form-modal {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
+  background: var(--base);
+  border: 1px solid var(--surface0);
   border-radius: 8px;
   padding: 1.5rem;
   width: 90%;
@@ -197,7 +197,7 @@
   border: none;
   font-size: 1.2rem;
   cursor: pointer;
-  color: var(--text-secondary);
+  color: var(--overlay0);
 }
 
 .rule-form {
@@ -222,22 +222,27 @@
 
 .form-field span {
   font-size: 0.85rem;
-  color: var(--text-secondary);
+  color: var(--overlay0);
 }
 
 .form-field input,
 .form-field select {
   padding: 0.5rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--surface0);
   border-radius: 4px;
-  background: var(--bg-input, var(--bg-card));
-  color: var(--text-primary);
+  background: var(--surface0);
+  color: var(--text);
   font-size: 0.9rem;
+}
+
+.form-field select option {
+  background: var(--surface0);
+  color: var(--text);
 }
 
 .form-hint {
   font-size: 0.8rem;
-  color: var(--text-secondary);
+  color: var(--overlay0);
   margin: 0;
 }
 
@@ -264,9 +269,9 @@
 
 .btn-cancel {
   padding: 0.5rem 1rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--surface0);
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--overlay0);
   border-radius: 4px;
   cursor: pointer;
 }
@@ -274,7 +279,7 @@
 .btn-save {
   padding: 0.5rem 1rem;
   border: none;
-  background: var(--accent);
+  background: var(--blue);
   color: white;
   border-radius: 4px;
   cursor: pointer;
@@ -292,23 +297,23 @@
   gap: 0.75rem;
   margin-top: 1rem;
   padding: 1rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--surface0);
   border-radius: 6px;
-  background: var(--bg-card);
+  background: var(--base);
 }
 
 .btn-test {
   padding: 0.3rem 0.6rem;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--blue);
   background: transparent;
-  color: var(--accent);
+  color: var(--blue);
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.8rem;
 }
 
 .btn-test:hover {
-  background: var(--accent);
+  background: var(--blue);
   color: white;
 }
 
@@ -343,30 +348,30 @@
 
 .filter-field span {
   font-size: 0.8rem;
-  color: var(--text-secondary);
+  color: var(--overlay0);
 }
 
 .filter-field input {
   padding: 0.4rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--surface0);
   border-radius: 4px;
-  background: var(--bg-input, var(--bg-card));
-  color: var(--text-primary);
+  background: var(--surface0);
+  color: var(--text);
   font-size: 0.85rem;
 }
 
 .btn-filter {
   padding: 0.4rem 0.8rem;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--blue);
   background: transparent;
-  color: var(--accent);
+  color: var(--blue);
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.85rem;
 }
 
 .btn-filter:hover {
-  background: var(--accent);
+  background: var(--blue);
   color: white;
 }
 
@@ -378,8 +383,8 @@
 
 .history-item {
   padding: 0.6rem 0.8rem;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
+  background: var(--base);
+  border: 1px solid var(--surface0);
   border-radius: 6px;
 }
 
@@ -408,16 +413,227 @@
 
 .history-time {
   font-size: 0.8rem;
-  color: var(--text-secondary);
+  color: var(--overlay0);
 }
 
 .history-price {
   font-size: 0.85rem;
-  color: var(--text-primary);
+  color: var(--text);
+}
+
+.history-message {
+  margin-top: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--overlay0);
+  white-space: pre-wrap;
+  line-height: 1.4;
 }
 
 .history-error {
   margin-top: 0.4rem;
   font-size: 0.8rem;
   color: #e74c3c;
+}
+
+/* Rule Mode Toggle */
+.rule-mode-toggle {
+  display: flex;
+  border: 1px solid var(--surface0);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.mode-btn {
+  flex: 1;
+  padding: 0.5rem 1rem;
+  border: none;
+  background: transparent;
+  color: var(--overlay0);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.mode-btn:not(:last-child) {
+  border-right: 1px solid var(--surface0);
+}
+
+.mode-btn.active {
+  background: var(--blue);
+  color: white;
+}
+
+.mode-btn:hover:not(.active) {
+  background: var(--surface0);
+}
+
+/* AI Rule Form fields */
+.ai-prompt-textarea {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--surface0);
+  border-radius: 4px;
+  background: var(--surface0);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 80px;
+  line-height: 1.4;
+}
+
+.ai-prompt-textarea:focus {
+  outline: none;
+  border-color: var(--blue);
+}
+
+.ai-prompt-counter {
+  font-size: 0.75rem;
+  color: var(--overlay0);
+  text-align: right;
+  margin-top: 0.2rem;
+}
+
+.ai-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.ai-slider {
+  flex: 1;
+  height: 4px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--surface0);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.ai-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--blue);
+  cursor: pointer;
+}
+
+.ai-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--blue);
+  cursor: pointer;
+  border: none;
+}
+
+.ai-slider-value {
+  min-width: 2.5rem;
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--surface0);
+  border: 1px solid var(--surface0);
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+}
+
+/* AI Settings styles */
+.ai-settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--surface0);
+  border-radius: 6px;
+  background: var(--base);
+  max-width: 480px;
+}
+
+.ai-settings-success {
+  color: #27ae60;
+  font-size: 0.85rem;
+  padding: 0.5rem;
+  background: rgba(39, 174, 96, 0.1);
+  border-radius: 4px;
+}
+
+/* AI Badge in RuleList */
+.ai-badge {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: white;
+  background: #7c3aed;
+  border-radius: 9999px;
+  vertical-align: middle;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+}
+
+/* AI Provider Warning */
+.ai-provider-warning {
+  font-size: 0.85rem;
+  color: #e67e22;
+  padding: 0.5rem 0.75rem;
+  background: rgba(230, 126, 34, 0.1);
+  border: 1px solid rgba(230, 126, 34, 0.3);
+  border-radius: 4px;
+}
+
+/* Edit Rule button */
+.btn-edit-rule {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.btn-edit-rule:hover {
+  opacity: 1;
+}
+
+/* AI Model select row */
+.ai-model-select-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.ai-model-select-row select {
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid var(--surface0);
+  border-radius: 4px;
+  background: var(--surface0);
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.ai-model-select-row select option {
+  background: var(--surface0);
+  color: var(--text);
+}
+
+.btn-refresh {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--surface0);
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.2s;
+}
+
+.btn-refresh:hover {
+  background: var(--surface0);
 }

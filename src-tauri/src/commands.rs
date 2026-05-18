@@ -2,8 +2,7 @@ use crate::db::{DbPool, ExportData, ProviderSettingsRow, Subscription, ViewRow, 
 use crate::events::AppEvent;
 use crate::polling::{PollTick, PollingManager};
 use crate::providers::{
-    create_dex_lookup, create_ws_provider, get_all_provider_info,
-    registry::ProviderRegistry,
+    create_dex_lookup, create_ws_provider, get_all_provider_info, registry::ProviderRegistry,
     AssetData, DexPoolInfo, ProviderInfo, WsTickerUpdate,
 };
 use std::collections::HashMap;
@@ -23,6 +22,8 @@ pub struct AppState {
     pub event_bus: broadcast::Sender<AppEvent>,
     /// 推播通知引擎（規則 CRUD 後需 reload）
     pub notification_engine: Arc<crate::notifications::engine::NotificationEngine>,
+    /// AI 排程器（管理 AI 規則的定期評估 task）
+    pub ai_scheduler: Arc<crate::notifications::ai_scheduler::AiScheduler>,
     ws_sender: broadcast::Sender<WsTickerUpdate>,
     #[allow(clippy::type_complexity)]
     ws_tasks: RwLock<HashMap<String, (tokio::task::JoinHandle<()>, tokio::task::JoinHandle<()>)>>,
@@ -30,13 +31,20 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(db: Arc<DbPool>, registry: Arc<ProviderRegistry>, event_bus: broadcast::Sender<AppEvent>, notification_engine: Arc<crate::notifications::engine::NotificationEngine>) -> Self {
+    pub fn new(
+        db: Arc<DbPool>,
+        registry: Arc<ProviderRegistry>,
+        event_bus: broadcast::Sender<AppEvent>,
+        notification_engine: Arc<crate::notifications::engine::NotificationEngine>,
+        ai_scheduler: Arc<crate::notifications::ai_scheduler::AiScheduler>,
+    ) -> Self {
         let (ws_sender, _) = broadcast::channel(256);
         Self {
             db,
             registry,
             event_bus,
             notification_engine,
+            ai_scheduler,
             ws_sender,
             ws_tasks: RwLock::new(HashMap::new()),
             polling: PollingManager::new(),
@@ -50,6 +58,7 @@ impl AppState {
             registry: self.registry.clone(),
             event_bus: self.event_bus.clone(),
             notification_engine: self.notification_engine.clone(),
+            ai_scheduler: self.ai_scheduler.clone(),
             ws_sender: broadcast::channel(1).0,
             ws_tasks: RwLock::new(HashMap::new()),
             polling: self.polling.clone(),
@@ -280,18 +289,19 @@ pub async fn update_subscription(
 ) -> Result<(), String> {
     use crate::providers::normalize_symbol;
     let normalized = normalize_symbol(&symbol, &asset_type);
-    state
-        .db
-        .update_subscription(id, &normalized, display_name.as_deref(), &provider_id, &asset_type)?;
+    state.db.update_subscription(
+        id,
+        &normalized,
+        display_name.as_deref(),
+        &provider_id,
+        &asset_type,
+    )?;
     state.polling.reload();
     Ok(())
 }
 
 #[tauri::command]
-pub async fn remove_subscription(
-    state: tauri::State<'_, AppState>,
-    id: i64,
-) -> Result<(), String> {
+pub async fn remove_subscription(state: tauri::State<'_, AppState>, id: i64) -> Result<(), String> {
     state.db.remove_subscription(id)?;
     state.polling.reload();
     Ok(())
@@ -361,9 +371,7 @@ pub async fn upsert_provider_settings(
 }
 
 #[tauri::command]
-pub async fn reset_all_data(
-    state: tauri::State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn reset_all_data(state: tauri::State<'_, AppState>) -> Result<(), String> {
     state.db.reset_all_data()?;
     state.polling.reload();
     Ok(())
@@ -719,9 +727,12 @@ pub async fn get_price_history(
     to_ts: i64,
     limit: Option<i64>,
 ) -> Result<Vec<crate::db::PriceHistoryRow>, String> {
-    state
-        .db
-        .get_price_history(subscription_id, Some(from_ts), Some(to_ts), limit.unwrap_or(10000))
+    state.db.get_price_history(
+        subscription_id,
+        Some(from_ts),
+        Some(to_ts),
+        limit.unwrap_or(10000),
+    )
 }
 
 #[tauri::command]
@@ -853,18 +864,44 @@ pub async fn create_notification_rule(
     state: tauri::State<'_, AppState>,
     rule: crate::notifications::models::CreateRuleRequest,
 ) -> Result<i64, String> {
+    // Validate AI config when condition_type is "ai"
+    let threshold = if rule.condition_type == "ai" {
+        // ai_config is required for AI rules
+        let ai_config = rule
+            .ai_config
+            .as_ref()
+            .ok_or_else(|| "ai_config is required when condition_type is \"ai\"".to_string())?;
+        // Validate ai_config fields
+        ai_config.validate()?;
+        // AI rules use threshold 0.0
+        0.0
+    } else {
+        rule.threshold
+    };
+
     let channel_ids_json = serde_json::to_string(&rule.channel_ids)
         .map_err(|e| format!("序列化 channel_ids 失敗: {}", e))?;
     let cooldown = rule.cooldown_secs.unwrap_or(300) as i64;
+    let ai_config_json = rule
+        .ai_config
+        .as_ref()
+        .map(|cfg| serde_json::to_string(cfg))
+        .transpose()
+        .map_err(|e| format!("序列化 ai_config 失敗: {}", e))?;
     let id = state.db.create_notification_rule(
         &rule.name,
         rule.subscription_id,
         &rule.condition_type,
-        rule.threshold,
+        threshold,
         &channel_ids_json,
         cooldown,
+        ai_config_json.as_deref(),
     )?;
     state.notification_engine.reload_rules().await;
+    // Notify AI scheduler to pick up the new rule if it's an AI rule
+    if rule.condition_type == "ai" {
+        state.ai_scheduler.upsert_rule(id).await;
+    }
     Ok(id)
 }
 
@@ -881,21 +918,83 @@ pub async fn update_notification_rule(
     id: i64,
     rule: crate::notifications::models::UpdateRuleRequest,
 ) -> Result<(), String> {
-    let channel_ids_json = rule.channel_ids
+    // Validate AI config if provided
+    if let Some(Some(ref ai_config)) = rule.ai_config {
+        ai_config.validate()?;
+    }
+
+    // If switching to AI type, ensure ai_config is provided
+    if let Some(ref ct) = rule.condition_type {
+        if ct == "ai" {
+            match &rule.ai_config {
+                Some(Some(_)) => {} // ai_config provided, OK
+                _ => return Err("ai_config is required when condition_type is \"ai\"".to_string()),
+            }
+        }
+    }
+
+    let channel_ids_json = rule
+        .channel_ids
         .as_ref()
         .map(|ids| serde_json::to_string(ids))
         .transpose()
         .map_err(|e| format!("序列化 channel_ids 失敗: {}", e))?;
 
+    // ai_config: Option<Option<AiConfig>> -> Option<Option<String>>
+    // Some(Some(cfg)) => set ai_config to JSON string
+    // Some(None) => set ai_config to NULL
+    // None => don't update ai_config
+    let ai_config_json: Option<Option<String>> = match &rule.ai_config {
+        Some(Some(cfg)) => {
+            let json =
+                serde_json::to_string(cfg).map_err(|e| format!("序列化 ai_config 失敗: {}", e))?;
+            Some(Some(json))
+        }
+        Some(None) => Some(None),
+        None => None,
+    };
+
+    // If switching to AI type, set threshold to 0.0
+    let threshold = if rule.condition_type.as_deref() == Some("ai") {
+        Some(0.0)
+    } else {
+        rule.threshold
+    };
+
     state.db.update_notification_rule(
         id,
         rule.name.as_deref(),
         rule.condition_type.as_deref(),
-        rule.threshold,
+        threshold,
         channel_ids_json.as_deref(),
         rule.cooldown_secs.map(|s| s as i64),
+        ai_config_json.as_ref().map(|opt| opt.as_deref()),
     )?;
     state.notification_engine.reload_rules().await;
+
+    // Notify AI scheduler about the update
+    // If switching to AI or updating AI config, upsert the rule
+    // If switching away from AI (ai_config set to None), remove the rule
+    match &rule.ai_config {
+        Some(None) => {
+            // Clearing ai_config - remove from scheduler
+            state.ai_scheduler.remove_rule(id).await;
+        }
+        Some(Some(_)) => {
+            // AI config updated or switching to AI - upsert
+            state.ai_scheduler.upsert_rule(id).await;
+        }
+        None => {
+            // ai_config not being updated, but condition_type might have changed
+            if let Some(ref ct) = rule.condition_type {
+                if ct != "ai" {
+                    // Switching away from AI type
+                    state.ai_scheduler.remove_rule(id).await;
+                }
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -906,6 +1005,8 @@ pub async fn delete_notification_rule(
 ) -> Result<(), String> {
     state.db.delete_notification_rule(id)?;
     state.notification_engine.reload_rules().await;
+    // Notify AI scheduler to stop any running task for this rule
+    state.ai_scheduler.remove_rule(id).await;
     Ok(())
 }
 
@@ -917,6 +1018,14 @@ pub async fn toggle_notification_rule(
 ) -> Result<(), String> {
     state.db.toggle_notification_rule(id, enabled)?;
     state.notification_engine.reload_rules().await;
+    // Notify AI scheduler about the toggle
+    if enabled {
+        // Re-enable: upsert will start the task if it's an AI rule
+        state.ai_scheduler.upsert_rule(id).await;
+    } else {
+        // Disable: remove the task from scheduler
+        state.ai_scheduler.remove_rule(id).await;
+    }
     Ok(())
 }
 
@@ -986,7 +1095,9 @@ pub async fn test_notification_channel(
     id: i64,
 ) -> Result<(), String> {
     let channels = state.db.list_notification_channels()?;
-    let channel = channels.iter().find(|c| c.id == id)
+    let channel = channels
+        .iter()
+        .find(|c| c.id == id)
         .ok_or_else(|| format!("通道 {} 不存在", id))?;
 
     let client = reqwest::Client::new();
@@ -995,16 +1106,17 @@ pub async fn test_notification_channel(
         "telegram" => {
             let stored_config: serde_json::Value = serde_json::from_str(&channel.config)
                 .map_err(|e| format!("設定解析失敗: {}", e))?;
-            let encrypted_token = stored_config["bot_token"].as_str()
+            let encrypted_token = stored_config["bot_token"]
+                .as_str()
                 .ok_or("缺少 bot_token")?;
-            let chat_id = stored_config["chat_id"].as_str()
-                .ok_or("缺少 chat_id")?;
+            let chat_id = stored_config["chat_id"].as_str().ok_or("缺少 chat_id")?;
             let bot_token = crate::notifications::crypto::decrypt_token(encrypted_token)?;
             let config = crate::notifications::models::TelegramConfig {
                 bot_token,
                 chat_id: chat_id.to_string(),
             };
-            let test_message = "🔔 StockenBoard 測試通知\n\n這是一則測試訊息，確認 Telegram 通道設定正確。";
+            let test_message =
+                "🔔 StockenBoard 測試通知\n\n這是一則測試訊息，確認 Telegram 通道設定正確。";
             crate::notifications::telegram::send_telegram(&client, &config, test_message).await
         }
         "webhook" => {
@@ -1026,7 +1138,6 @@ pub async fn test_notification_channel(
     }
 }
 
-
 // ── Notification History Commands ───────────────────────────────
 
 #[tauri::command]
@@ -1037,5 +1148,156 @@ pub async fn get_notification_history(
     to: Option<i64>,
     limit: Option<i64>,
 ) -> Result<Vec<crate::db::NotificationHistoryRow>, String> {
-    state.db.query_notification_history(rule_id, from, to, limit)
+    state
+        .db
+        .query_notification_history(rule_id, from, to, limit)
+}
+
+// ── AI Provider Config Commands ─────────────────────────────────
+
+#[tauri::command]
+pub async fn save_ai_provider_config(
+    state: tauri::State<'_, AppState>,
+    base_url: String,
+    model: String,
+    api_key: Option<String>,
+) -> Result<(), String> {
+    state
+        .db
+        .save_ai_provider_config(&base_url, &model, api_key.as_deref())?;
+    state.ai_scheduler.reload().await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_ai_provider_config(
+    state: tauri::State<'_, AppState>,
+) -> Result<Option<crate::notifications::models::AiProviderConfigResponse>, String> {
+    let config = state.db.load_ai_provider_config()?;
+    Ok(
+        config.map(|c| crate::notifications::models::AiProviderConfigResponse {
+            base_url: c.base_url,
+            model: c.model,
+            has_api_key: c.api_key.is_some(),
+        }),
+    )
+}
+
+#[tauri::command]
+pub async fn test_ai_connection(state: tauri::State<'_, AppState>) -> Result<String, String> {
+    // 1. Load AI provider config from DB
+    let config = state
+        .db
+        .load_ai_provider_config()?
+        .ok_or_else(|| "AI provider 尚未設定，請先設定 base_url 和 model".to_string())?;
+
+    // 2. Build the test request URL
+    let url = format!("{}/chat/completions", config.base_url.trim_end_matches('/'));
+
+    // 3. Build the request body
+    let body = serde_json::json!({
+        "model": config.model,
+        "messages": [{"role": "user", "content": "Hello"}],
+        "max_tokens": 5
+    });
+
+    // 4. Create HTTP client with 10s timeout and send request
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("建立 HTTP client 失敗: {}", e))?;
+
+    let mut request = client.post(&url).json(&body);
+
+    // Include Authorization header if api_key is set
+    if let Some(ref api_key) = config.api_key {
+        request = request.header("Authorization", format!("Bearer {}", api_key));
+    }
+
+    let response = request
+        .send()
+        .await
+        .map_err(|e| format!("連線失敗: {}", e))?;
+
+    // 5. Check response status
+    let status = response.status();
+    if !status.is_success() {
+        let error_body = response.text().await.unwrap_or_default();
+        return Err(format!(
+            "AI API 回傳錯誤 (HTTP {}): {}",
+            status.as_u16(),
+            error_body
+        ));
+    }
+
+    // 6. Parse response to extract model name
+    let resp_json: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| format!("解析回應失敗: {}", e))?;
+
+    let model_name = resp_json
+        .get("model")
+        .and_then(|v| v.as_str())
+        .unwrap_or(&config.model);
+
+    Ok(format!("連線成功！模型: {}", model_name))
+}
+
+#[tauri::command]
+pub async fn list_ai_models(base_url: String, api_key: Option<String>) -> Result<Vec<String>, String> {
+    // Try Ollama-style /api/tags endpoint first, then OpenAI-style /models
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("建立 HTTP client 失敗: {}", e))?;
+
+    let trimmed_url = base_url.trim_end_matches('/');
+
+    // Try Ollama native API: {base_url without /v1}/api/tags
+    let ollama_base = trimmed_url.trim_end_matches("/v1");
+    let ollama_url = format!("{}/api/tags", ollama_base);
+
+    if let Ok(resp) = client.get(&ollama_url).send().await {
+        if resp.status().is_success() {
+            if let Ok(json) = resp.json::<serde_json::Value>().await {
+                if let Some(models) = json.get("models").and_then(|m| m.as_array()) {
+                    let names: Vec<String> = models
+                        .iter()
+                        .filter_map(|m| m.get("name").and_then(|n| n.as_str()).map(|s| s.to_string()))
+                        .collect();
+                    if !names.is_empty() {
+                        return Ok(names);
+                    }
+                }
+            }
+        }
+    }
+
+    // Try OpenAI-compatible /models endpoint
+    let openai_url = format!("{}/models", trimmed_url);
+    let mut req = client.get(&openai_url);
+    if let Some(ref key) = api_key {
+        if !key.is_empty() {
+            req = req.header("Authorization", format!("Bearer {}", key));
+        }
+    }
+
+    if let Ok(resp) = req.send().await {
+        if resp.status().is_success() {
+            if let Ok(json) = resp.json::<serde_json::Value>().await {
+                if let Some(data) = json.get("data").and_then(|d| d.as_array()) {
+                    let names: Vec<String> = data
+                        .iter()
+                        .filter_map(|m| m.get("id").and_then(|n| n.as_str()).map(|s| s.to_string()))
+                        .collect();
+                    if !names.is_empty() {
+                        return Ok(names);
+                    }
+                }
+            }
+        }
+    }
+
+    Err("無法取得模型列表，請確認 URL 是否正確".to_string())
 }

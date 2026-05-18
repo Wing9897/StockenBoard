@@ -76,6 +76,9 @@ export function NotificationHistory() {
                 <span className="history-time">{formatTime(item.sent_at)}</span>
                 <span className="history-price">${item.price.toLocaleString()}</span>
               </div>
+              {item.message && (
+                <div className="history-message">{item.message}</div>
+              )}
               {item.status === 'failed' && item.error && (
                 <div className="history-error">{item.error}</div>
               )}

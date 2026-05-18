@@ -3,7 +3,7 @@
 /// 所有 SQLite 操作集中在此模組，前端不再直接操作 SQL。
 /// 使用 `Mutex<Connection>` 確保寫入操作序列化，搭配 WAL mode 允許並行讀取。
 use chrono::Timelike;
-use rusqlite::{params, Connection};
+use rusqlite::{params, types::Null, Connection};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -109,6 +109,7 @@ CREATE TABLE IF NOT EXISTS notification_rules (
     channel_ids     TEXT NOT NULL,
     cooldown_secs   INTEGER NOT NULL DEFAULT 300,
     enabled         INTEGER NOT NULL DEFAULT 1,
+    ai_config       TEXT,
     created_at      INTEGER NOT NULL,
     updated_at      INTEGER NOT NULL,
     FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE
@@ -207,7 +208,7 @@ pub struct NotificationChannelRow {
     pub id: i64,
     pub channel_type: String,
     pub name: String,
-    pub config: String,       // JSON string
+    pub config: String, // JSON string
     pub created_at: i64,
 }
 
@@ -218,9 +219,10 @@ pub struct NotificationRuleRow {
     pub subscription_id: i64,
     pub condition_type: String,
     pub threshold: f64,
-    pub channel_ids: String,  // JSON array string
+    pub channel_ids: String, // JSON array string
     pub cooldown_secs: i64,
     pub enabled: bool,
+    pub ai_config: Option<String>, // JSON string for AI rules
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -287,6 +289,11 @@ impl DbPool {
         // 初始化 schema
         conn.execute_batch(SCHEMA)
             .map_err(|e| format!("初始化 schema 失敗: {}", e))?;
+
+        // ── Migrations（為既有資料庫新增欄位）──────────────────────
+        // ALTER TABLE 無 IF NOT EXISTS，忽略 "duplicate column" 錯誤即可
+        let _ = conn.execute_batch("ALTER TABLE notification_rules ADD COLUMN ai_config TEXT;");
+
         Ok(Self {
             conn: Mutex::new(conn),
         })
@@ -315,6 +322,108 @@ impl DbPool {
         Ok(())
     }
 
+    /// 儲存 AI Provider Config 至 settings 表
+    ///
+    /// 將 base_url、model 存為明文，api_key 加密後儲存。
+    /// 若 api_key 為 None 或空字串，則儲存空字串。
+    pub fn save_ai_provider_config(
+        &self,
+        base_url: &str,
+        model: &str,
+        api_key: Option<&str>,
+    ) -> Result<(), String> {
+        // 驗證必要欄位
+        if base_url.trim().is_empty() {
+            return Err("base_url must not be empty".to_string());
+        }
+        if model.trim().is_empty() {
+            return Err("model must not be empty".to_string());
+        }
+
+        // 加密 api_key（若有提供且非空）
+        let encrypted_key = match api_key {
+            Some(key) if !key.is_empty() => crate::notifications::crypto::encrypt_token(key)?,
+            _ => String::new(),
+        };
+
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO app_settings (key, value) VALUES ('ai_base_url', ?1) ON CONFLICT(key) DO UPDATE SET value = ?1",
+            params![base_url],
+        )
+        .map_err(|e| format!("儲存 ai_base_url 失敗: {}", e))?;
+
+        conn.execute(
+            "INSERT INTO app_settings (key, value) VALUES ('ai_model', ?1) ON CONFLICT(key) DO UPDATE SET value = ?1",
+            params![model],
+        )
+        .map_err(|e| format!("儲存 ai_model 失敗: {}", e))?;
+
+        conn.execute(
+            "INSERT INTO app_settings (key, value) VALUES ('ai_api_key', ?1) ON CONFLICT(key) DO UPDATE SET value = ?1",
+            params![encrypted_key],
+        )
+        .map_err(|e| format!("儲存 ai_api_key 失敗: {}", e))?;
+
+        Ok(())
+    }
+
+    /// 從 settings 表載入 AI Provider Config
+    ///
+    /// 若 base_url 或 model 未設定，回傳 None。
+    /// api_key 會自動解密；若為空字串則回傳 None。
+    pub fn load_ai_provider_config(
+        &self,
+    ) -> Result<Option<crate::notifications::models::AiProviderConfig>, String> {
+        let conn = self.conn.lock().unwrap();
+
+        let base_url: Option<String> = conn
+            .query_row(
+                "SELECT value FROM app_settings WHERE key = 'ai_base_url'",
+                [],
+                |row| row.get(0),
+            )
+            .ok();
+
+        let model: Option<String> = conn
+            .query_row(
+                "SELECT value FROM app_settings WHERE key = 'ai_model'",
+                [],
+                |row| row.get(0),
+            )
+            .ok();
+
+        let encrypted_key: Option<String> = conn
+            .query_row(
+                "SELECT value FROM app_settings WHERE key = 'ai_api_key'",
+                [],
+                |row| row.get(0),
+            )
+            .ok();
+
+        // 若 base_url 或 model 未設定，視為尚未設定
+        let base_url = match base_url {
+            Some(ref u) if !u.is_empty() => u.clone(),
+            _ => return Ok(None),
+        };
+        let model = match model {
+            Some(ref m) if !m.is_empty() => m.clone(),
+            _ => return Ok(None),
+        };
+
+        // 解密 api_key
+        let api_key = match encrypted_key {
+            Some(ref k) if !k.is_empty() => Some(crate::notifications::crypto::decrypt_token(k)?),
+            _ => None,
+        };
+
+        Ok(Some(crate::notifications::models::AiProviderConfig {
+            base_url,
+            model,
+            api_key,
+        }))
+    }
+
     pub fn reset_all_data(&self) -> Result<(), String> {
         let conn = self.conn.lock().unwrap();
         // 刪除所有資料
@@ -324,8 +433,9 @@ impl DbPool {
              DELETE FROM subscriptions;
              DELETE FROM views;
              DELETE FROM provider_settings;
-             DELETE FROM app_settings;"
-        ).map_err(|e| format!("刪除所有資料失敗: {}", e))?;
+             DELETE FROM app_settings;",
+        )
+        .map_err(|e| format!("刪除所有資料失敗: {}", e))?;
 
         // 重新插入預設 Views
         conn.execute_batch(
@@ -369,7 +479,8 @@ impl DbPool {
                 })
             })
             .map_err(|e| e.to_string())?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
     }
 
     pub fn list_all_subscriptions(&self) -> Result<Vec<Subscription>, String> {
@@ -401,7 +512,8 @@ impl DbPool {
                 })
             })
             .map_err(|e| e.to_string())?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
     }
 
     /// 新增訂閱，回傳新 ID。使用 INSERT OR IGNORE 避免重複。
@@ -459,10 +571,18 @@ impl DbPool {
             return Ok(());
         }
         let conn = self.conn.lock().unwrap();
-        let placeholders: Vec<String> = ids.iter().enumerate().map(|(i, _)| format!("?{}", i + 1)).collect();
-        let sql = format!("DELETE FROM subscriptions WHERE id IN ({})", placeholders.join(","));
+        let placeholders: Vec<String> = ids
+            .iter()
+            .enumerate()
+            .map(|(i, _)| format!("?{}", i + 1))
+            .collect();
+        let sql = format!(
+            "DELETE FROM subscriptions WHERE id IN ({})",
+            placeholders.join(",")
+        );
         let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
-        let params_refs: Vec<&dyn rusqlite::ToSql> = ids.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
+        let params_refs: Vec<&dyn rusqlite::ToSql> =
+            ids.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
         stmt.execute(params_refs.as_slice())
             .map_err(|e| format!("批量刪除失敗: {}", e))?;
         Ok(())
@@ -478,7 +598,12 @@ impl DbPool {
         Ok(())
     }
 
-    pub fn set_record_hours(&self, id: i64, from: Option<i64>, to: Option<i64>) -> Result<(), String> {
+    pub fn set_record_hours(
+        &self,
+        id: i64,
+        from: Option<i64>,
+        to: Option<i64>,
+    ) -> Result<(), String> {
         let conn = self.conn.lock().unwrap();
         conn.execute(
             "UPDATE subscriptions SET record_from_hour = ?1, record_to_hour = ?2 WHERE id = ?3",
@@ -509,10 +634,14 @@ impl DbPool {
                 })
             })
             .map_err(|e| e.to_string())?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
     }
 
-    pub fn get_provider_settings(&self, provider_id: &str) -> Result<Option<ProviderSettingsRow>, String> {
+    pub fn get_provider_settings(
+        &self,
+        provider_id: &str,
+    ) -> Result<Option<ProviderSettingsRow>, String> {
         let conn = self.conn.lock().unwrap();
         let result = conn.query_row(
             "SELECT provider_id, api_key, api_secret, api_url, refresh_interval, connection_type, record_from_hour, record_to_hour FROM provider_settings WHERE provider_id = ?1",
@@ -607,7 +736,8 @@ impl DbPool {
                 })
             })
             .map_err(|e| e.to_string())?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
     }
 
     pub fn create_view(&self, name: &str, view_type: &str) -> Result<i64, String> {
@@ -622,8 +752,11 @@ impl DbPool {
 
     pub fn rename_view(&self, id: i64, name: &str) -> Result<(), String> {
         let conn = self.conn.lock().unwrap();
-        conn.execute("UPDATE views SET name = ?1 WHERE id = ?2", params![name, id])
-            .map_err(|e| e.to_string())?;
+        conn.execute(
+            "UPDATE views SET name = ?1 WHERE id = ?2",
+            params![name, id],
+        )
+        .map_err(|e| e.to_string())?;
         Ok(())
     }
 
@@ -647,7 +780,8 @@ impl DbPool {
                 })
             })
             .map_err(|e| e.to_string())?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
     }
 
     pub fn get_view_subscription_ids(&self, view_id: i64) -> Result<Vec<i64>, String> {
@@ -658,7 +792,8 @@ impl DbPool {
         let rows = stmt
             .query_map([view_id], |row| row.get(0))
             .map_err(|e| e.to_string())?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
     }
 
     pub fn add_sub_to_view(&self, view_id: i64, subscription_id: i64) -> Result<(), String> {
@@ -686,7 +821,14 @@ impl DbPool {
     pub fn write_price_history(
         &self,
         provider_id: &str,
-        data: &[(String, f64, Option<f64>, Option<f64>, Option<f64>, Option<f64>)],
+        data: &[(
+            String,
+            f64,
+            Option<f64>,
+            Option<f64>,
+            Option<f64>,
+            Option<f64>,
+        )],
     ) {
         let conn = self.conn.lock().unwrap();
         let now = chrono::Utc::now().timestamp();
@@ -807,7 +949,8 @@ impl DbPool {
                 })
             })
             .map_err(|e| e.to_string())?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
     }
 
     pub fn get_history_stats(&self, subscription_id: i64) -> Result<HistoryStats, String> {
@@ -829,7 +972,10 @@ impl DbPool {
     pub fn cleanup_history(&self, before_ts: i64) -> Result<i64, String> {
         let conn = self.conn.lock().unwrap();
         let deleted = conn
-            .execute("DELETE FROM price_history WHERE recorded_at < ?1", [before_ts])
+            .execute(
+                "DELETE FROM price_history WHERE recorded_at < ?1",
+                [before_ts],
+            )
             .map_err(|e| e.to_string())?;
         Ok(deleted as i64)
     }
@@ -864,7 +1010,9 @@ impl DbPool {
                 .prepare("SELECT id, name, view_type, is_default FROM views ORDER BY id")
                 .map_err(|e| e.to_string())?;
             let view_rows: Vec<(i64, String, String, i64)> = stmt
-                .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)))
+                .query_map([], |row| {
+                    Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+                })
                 .map_err(|e| e.to_string())?
                 .filter_map(|r| r.ok())
                 .collect();
@@ -1020,7 +1168,10 @@ impl DbPool {
             .map_err(|e| e.to_string())?;
         let all: Vec<(i64, String, String, bool)> = rows.filter_map(|r| r.ok()).collect();
         Ok(match visible_ids {
-            Some(ids) => all.into_iter().filter(|(id, _, _, _)| ids.contains(id)).collect(),
+            Some(ids) => all
+                .into_iter()
+                .filter(|(id, _, _, _)| ids.contains(id))
+                .collect(),
             None => all,
         })
     }
@@ -1029,7 +1180,10 @@ impl DbPool {
     pub fn read_polling_provider_settings(
         &self,
     ) -> Result<
-        std::collections::HashMap<String, (Option<String>, Option<String>, Option<String>, Option<i64>)>,
+        std::collections::HashMap<
+            String,
+            (Option<String>, Option<String>, Option<String>, Option<i64>),
+        >,
         String,
     > {
         let conn = self.conn.lock().unwrap();
@@ -1040,7 +1194,12 @@ impl DbPool {
             .query_map([], |row| {
                 Ok((
                     row.get::<_, String>(0)?,
-                    (row.get(1)?, row.get(2)?, row.get(3).ok().flatten(), row.get(4)?),
+                    (
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3).ok().flatten(),
+                        row.get(4)?,
+                    ),
                 ))
             })
             .map_err(|e| e.to_string())?;
@@ -1081,7 +1240,8 @@ impl DbPool {
                 })
             })
             .map_err(|e| e.to_string())?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
     }
 
     pub fn delete_notification_channel(&self, id: i64) -> Result<(), String> {
@@ -1101,13 +1261,14 @@ impl DbPool {
         threshold: f64,
         channel_ids: &str,
         cooldown_secs: i64,
+        ai_config: Option<&str>,
     ) -> Result<i64, String> {
         let conn = self.conn.lock().unwrap();
         let now = chrono::Utc::now().timestamp();
         conn.execute(
-            "INSERT INTO notification_rules (name, subscription_id, condition_type, threshold, channel_ids, cooldown_secs, enabled, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, ?7)",
-            params![name, subscription_id, condition_type, threshold, channel_ids, cooldown_secs, now],
+            "INSERT INTO notification_rules (name, subscription_id, condition_type, threshold, channel_ids, cooldown_secs, enabled, ai_config, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, ?8, ?8)",
+            params![name, subscription_id, condition_type, threshold, channel_ids, cooldown_secs, ai_config, now],
         )
         .map_err(|e| format!("建立通知規則失敗: {}", e))?;
         Ok(conn.last_insert_rowid())
@@ -1117,7 +1278,7 @@ impl DbPool {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn
             .prepare(
-                "SELECT id, name, subscription_id, condition_type, threshold, channel_ids, cooldown_secs, enabled, created_at, updated_at
+                "SELECT id, name, subscription_id, condition_type, threshold, channel_ids, cooldown_secs, enabled, ai_config, created_at, updated_at
                  FROM notification_rules ORDER BY id",
             )
             .map_err(|e| e.to_string())?;
@@ -1132,12 +1293,43 @@ impl DbPool {
                     channel_ids: row.get(5)?,
                     cooldown_secs: row.get(6)?,
                     enabled: row.get::<_, i64>(7)? != 0,
-                    created_at: row.get(8)?,
-                    updated_at: row.get(9)?,
+                    ai_config: row.get(8)?,
+                    created_at: row.get(9)?,
+                    updated_at: row.get(10)?,
                 })
             })
             .map_err(|e| e.to_string())?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
+    }
+
+    pub fn get_notification_rule(&self, id: i64) -> Result<Option<NotificationRuleRow>, String> {
+        let conn = self.conn.lock().unwrap();
+        let result = conn.query_row(
+            "SELECT id, name, subscription_id, condition_type, threshold, channel_ids, cooldown_secs, enabled, ai_config, created_at, updated_at
+             FROM notification_rules WHERE id = ?1",
+            [id],
+            |row| {
+                Ok(NotificationRuleRow {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    subscription_id: row.get(2)?,
+                    condition_type: row.get(3)?,
+                    threshold: row.get(4)?,
+                    channel_ids: row.get(5)?,
+                    cooldown_secs: row.get(6)?,
+                    enabled: row.get::<_, i64>(7)? != 0,
+                    ai_config: row.get(8)?,
+                    created_at: row.get(9)?,
+                    updated_at: row.get(10)?,
+                })
+            },
+        );
+        match result {
+            Ok(row) => Ok(Some(row)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.to_string()),
+        }
     }
 
     pub fn update_notification_rule(
@@ -1148,6 +1340,7 @@ impl DbPool {
         threshold: Option<f64>,
         channel_ids: Option<&str>,
         cooldown_secs: Option<i64>,
+        ai_config: Option<Option<&str>>,
     ) -> Result<(), String> {
         let conn = self.conn.lock().unwrap();
         let now = chrono::Utc::now().timestamp();
@@ -1173,6 +1366,10 @@ impl DbPool {
         }
         if cooldown_secs.is_some() {
             sets.push(format!("cooldown_secs = ?{}", idx));
+            idx += 1;
+        }
+        if ai_config.is_some() {
+            sets.push(format!("ai_config = ?{}", idx));
             idx += 1;
         }
 
@@ -1215,12 +1412,27 @@ impl DbPool {
                 .map_err(|e| e.to_string())?;
             param_idx += 1;
         }
+        if let Some(v) = ai_config {
+            // v is Option<&str>: Some("json") sets the value, None sets it to NULL
+            match v {
+                Some(json_str) => {
+                    stmt.raw_bind_parameter(param_idx as usize, json_str)
+                        .map_err(|e| e.to_string())?;
+                }
+                None => {
+                    stmt.raw_bind_parameter(param_idx as usize, Null)
+                        .map_err(|e| e.to_string())?;
+                }
+            }
+            param_idx += 1;
+        }
 
         // Bind the WHERE id parameter
         stmt.raw_bind_parameter(param_idx as usize, id)
             .map_err(|e| e.to_string())?;
 
-        stmt.raw_execute().map_err(|e| format!("更新通知規則失敗: {}", e))?;
+        stmt.raw_execute()
+            .map_err(|e| format!("更新通知規則失敗: {}", e))?;
         Ok(())
     }
 
@@ -1330,5 +1542,24 @@ impl DbPool {
             });
         }
         Ok(result)
+    }
+
+    /// Test helper: insert price history records directly (bypasses record_enabled and dedup checks)
+    #[cfg(test)]
+    pub fn insert_price_history_for_test(
+        &self,
+        subscription_id: i64,
+        provider_id: &str,
+        records: &[(f64, Option<f64>, Option<f64>, i64)], // (price, change_pct, volume, recorded_at)
+    ) -> Result<(), String> {
+        let conn = self.conn.lock().unwrap();
+        for (price, change_pct, volume, recorded_at) in records {
+            conn.execute(
+                "INSERT INTO price_history (subscription_id, provider_id, price, change_pct, volume, recorded_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![subscription_id, provider_id, price, change_pct, volume, recorded_at],
+            )
+            .map_err(|e| format!("插入測試價格歷史失敗: {}", e))?;
+        }
+        Ok(())
     }
 }

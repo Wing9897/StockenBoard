@@ -208,7 +208,13 @@ impl DataProvider for PolygonProvider {
                 "https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers?tickers={}&apiKey={}",
                 tickers_param, api_key
             );
-            match self.client.get(&url).send().await.and_then(|r| r.error_for_status()) {
+            match self
+                .client
+                .get(&url)
+                .send()
+                .await
+                .and_then(|r| r.error_for_status())
+            {
                 Ok(resp) => {
                     if let Ok(data) = resp.json::<serde_json::Value>().await {
                         if let Some(arr) = data["tickers"].as_array() {

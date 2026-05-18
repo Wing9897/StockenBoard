@@ -3,14 +3,16 @@
 //! 透過 HTTP POST 發送 JSON 格式的通知資料至使用者指定的 URL。
 //! 支援自訂 Headers、10 秒逾時、重試邏輯（30 秒後重試一次）。
 
-use super::models::{NotificationData, WebhookConfig};
+use super::models::{ConditionType, NotificationData, WebhookConfig};
 use serde_json::{json, Value};
 use std::time::Duration;
 use tokio::time::sleep;
 
 /// 建構 Webhook JSON payload
 ///
-/// 將 NotificationData 轉換為設計文件中定義的 JSON 格式：
+/// 將 NotificationData 轉換為 JSON 格式。
+///
+/// 對於閾值型規則：
 /// ```json
 /// {
 ///   "event": "price_alert",
@@ -23,7 +25,28 @@ use tokio::time::sleep;
 ///   "rule_name": "BTC 突破 65K"
 /// }
 /// ```
+///
+/// 對於 AI 規則：
+/// ```json
+/// {
+///   "event": "ai_notification",
+///   "symbol": "BTC/USDT",
+///   "condition": "ai",
+///   "reason": "價格在最近 5 筆紀錄中上升了 6.2%",
+///   "triggered_at": "2024-01-15T14:30:00Z"
+/// }
+/// ```
 pub fn build_webhook_payload(data: &NotificationData) -> Value {
+    if data.condition_type == ConditionType::Ai {
+        return json!({
+            "event": "ai_notification",
+            "symbol": data.symbol,
+            "condition": data.condition_type.as_str(),
+            "reason": data.ai_reason(),
+            "triggered_at": data.triggered_at.to_rfc3339(),
+        });
+    }
+
     json!({
         "event": "price_alert",
         "symbol": data.symbol,
@@ -53,10 +76,7 @@ pub async fn send_webhook(
     match send_request(client, config, &payload).await {
         Ok(()) => return Ok(()),
         Err(e) => {
-            eprintln!(
-                "[Webhook] Request failed: {}. Retrying in 30 seconds...",
-                e
-            );
+            eprintln!("[Webhook] Request failed: {}. Retrying in 30 seconds...", e);
         }
     }
 
@@ -156,9 +176,7 @@ mod tests {
             condition_type: ConditionType::PriceBelow,
             threshold: 3000.0,
             rule_name: "ETH 跌破 3K".to_string(),
-            triggered_at: chrono::Utc
-                .with_ymd_and_hms(2024, 3, 20, 8, 15, 0)
-                .unwrap(),
+            triggered_at: chrono::Utc.with_ymd_and_hms(2024, 3, 20, 8, 15, 0).unwrap(),
         };
 
         let payload = build_webhook_payload(&data);
@@ -181,9 +199,7 @@ mod tests {
             condition_type: ConditionType::ChangePctAbove,
             threshold: 10.0,
             rule_name: "SOL 漲幅超過 10%".to_string(),
-            triggered_at: chrono::Utc
-                .with_ymd_and_hms(2024, 2, 1, 12, 0, 0)
-                .unwrap(),
+            triggered_at: chrono::Utc.with_ymd_and_hms(2024, 2, 1, 12, 0, 0).unwrap(),
         };
 
         let payload = build_webhook_payload(&data);
@@ -243,5 +259,77 @@ mod tests {
         assert!(obj.contains_key("threshold"));
         assert!(obj.contains_key("triggered_at"));
         assert!(obj.contains_key("rule_name"));
+    }
+
+    #[test]
+    fn test_build_webhook_payload_ai_notification() {
+        let data = NotificationData {
+            symbol: "BTC/USDT".to_string(),
+            provider: String::new(),
+            price: 0.0,
+            condition_type: ConditionType::Ai,
+            threshold: 0.0,
+            rule_name: "[AI] 價格在最近 5 筆紀錄中上升了 6.2%".to_string(),
+            triggered_at: chrono::Utc
+                .with_ymd_and_hms(2024, 1, 15, 14, 30, 0)
+                .unwrap(),
+        };
+
+        let payload = build_webhook_payload(&data);
+
+        assert_eq!(payload["event"], "ai_notification");
+        assert_eq!(payload["symbol"], "BTC/USDT");
+        assert_eq!(payload["condition"], "ai");
+        assert_eq!(payload["reason"], "價格在最近 5 筆紀錄中上升了 6.2%");
+        // triggered_at should be RFC 3339 format
+        let triggered_at = payload["triggered_at"].as_str().unwrap();
+        assert!(triggered_at.contains("2024-01-15"));
+        // Should NOT contain price_alert-specific fields
+        assert!(payload.get("price").is_none());
+        assert!(payload.get("threshold").is_none());
+        assert!(payload.get("provider").is_none());
+        assert!(payload.get("rule_name").is_none());
+    }
+
+    #[test]
+    fn test_build_webhook_payload_ai_notification_fields() {
+        let data = NotificationData {
+            symbol: "ETH/USDT".to_string(),
+            provider: String::new(),
+            price: 0.0,
+            condition_type: ConditionType::Ai,
+            threshold: 0.0,
+            rule_name: "[AI] 大幅波動偵測".to_string(),
+            triggered_at: chrono::Utc.with_ymd_and_hms(2024, 6, 1, 9, 0, 0).unwrap(),
+        };
+
+        let payload = build_webhook_payload(&data);
+        let obj = payload.as_object().unwrap();
+
+        // AI payload should have exactly 5 fields
+        assert_eq!(obj.len(), 5, "AI payload should have exactly 5 fields");
+        assert!(obj.contains_key("event"));
+        assert!(obj.contains_key("symbol"));
+        assert!(obj.contains_key("condition"));
+        assert!(obj.contains_key("reason"));
+        assert!(obj.contains_key("triggered_at"));
+    }
+
+    #[test]
+    fn test_build_webhook_payload_ai_without_prefix() {
+        let data = NotificationData {
+            symbol: "SOL/USDT".to_string(),
+            provider: String::new(),
+            price: 0.0,
+            condition_type: ConditionType::Ai,
+            threshold: 0.0,
+            rule_name: "直接的 reason".to_string(),
+            triggered_at: chrono::Utc.with_ymd_and_hms(2024, 3, 15, 12, 0, 0).unwrap(),
+        };
+
+        let payload = build_webhook_payload(&data);
+
+        // Without [AI] prefix, the full rule_name becomes the reason
+        assert_eq!(payload["reason"], "直接的 reason");
     }
 }

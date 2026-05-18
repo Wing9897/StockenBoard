@@ -80,7 +80,7 @@ impl DataProvider for AlphaVantageProvider {
             .ok_or("Alpha Vantage 需要 API Key")?
             .clone();
         let client = self.client.clone();
-        
+
         let mut tasks = tokio::task::JoinSet::new();
         let mut results = Vec::new();
         let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(2));
@@ -96,7 +96,7 @@ impl DataProvider for AlphaVantageProvider {
                     .send().await.map_err(|e| format!("AlphaVantage: {}", e))?
                     .error_for_status().map_err(|e| format!("AlphaVantage API 錯誤: {}", e))?
                     .json().await.map_err(|e| format!("AlphaVantage: {}", e));
-                
+
                 let data = match data_res {
                     Ok(d) => d,
                     Err(e) => return Err(e),
@@ -112,7 +112,7 @@ impl DataProvider for AlphaVantageProvider {
                 let parse = |key: &str| q[key].as_str().and_then(|s| s.parse::<f64>().ok());
                 let pct = q["10. change percent"].as_str()
                     .and_then(|s| s.trim_end_matches('%').parse::<f64>().ok());
-                
+
                 Ok(AssetDataBuilder::new(&sym, "alphavantage")
                     .price(parse("05. price").unwrap_or(0.0))
                     .change_24h(parse("09. change"))

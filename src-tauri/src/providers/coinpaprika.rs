@@ -174,9 +174,7 @@ impl DataProvider for CoinPaprikaProvider {
                 let key = sym.to_uppercase();
                 let rank = item["rank"].as_u64().unwrap_or(u64::MAX);
                 let replace = match sym_map.get(&key) {
-                    Some(existing) => {
-                        rank < existing["rank"].as_u64().unwrap_or(u64::MAX)
-                    }
+                    Some(existing) => rank < existing["rank"].as_u64().unwrap_or(u64::MAX),
                     None => true,
                 };
                 if replace {

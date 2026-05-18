@@ -40,7 +40,10 @@ pub async fn dispatch_notification(
         let channel_type = match ChannelType::from_str(&channel.channel_type) {
             Some(ct) => ct,
             None => {
-                eprintln!("[Dispatcher] 通道 {} 類型無效: {}", channel_id, channel.channel_type);
+                eprintln!(
+                    "[Dispatcher] 通道 {} 類型無效: {}",
+                    channel_id, channel.channel_type
+                );
                 continue;
             }
         };
@@ -52,7 +55,15 @@ pub async fn dispatch_notification(
                     Ok(c) => c,
                     Err(e) => {
                         let message = format_telegram_message(data);
-                        record_history(db, rule.id, *channel_id, data.price, "failed", &message, Some(&e));
+                        record_history(
+                            db,
+                            rule.id,
+                            *channel_id,
+                            data.price,
+                            "failed",
+                            &message,
+                            Some(&e),
+                        );
                         continue;
                     }
                 };
@@ -64,12 +75,21 @@ pub async fn dispatch_notification(
                 let config: WebhookConfig = match serde_json::from_str(&channel.config) {
                     Ok(c) => c,
                     Err(e) => {
-                        record_history(db, rule.id, *channel_id, data.price, "failed", "", Some(&format!("Config parse error: {}", e)));
+                        record_history(
+                            db,
+                            rule.id,
+                            *channel_id,
+                            data.price,
+                            "failed",
+                            "",
+                            Some(&format!("Config parse error: {}", e)),
+                        );
                         continue;
                     }
                 };
                 let send_result = send_webhook(http_client, &config, data).await;
-                let payload_str = serde_json::to_string(&build_webhook_payload(data)).unwrap_or_default();
+                let payload_str =
+                    serde_json::to_string(&build_webhook_payload(data)).unwrap_or_default();
                 (send_result, payload_str)
             }
         };
@@ -77,11 +97,27 @@ pub async fn dispatch_notification(
         let (send_result, message) = result;
         match send_result {
             Ok(()) => {
-                record_history(db, rule.id, *channel_id, data.price, "success", &message, None);
+                record_history(
+                    db,
+                    rule.id,
+                    *channel_id,
+                    data.price,
+                    "success",
+                    &message,
+                    None,
+                );
             }
             Err(e) => {
                 eprintln!("[Dispatcher] 通道 {} 發送失敗: {}", channel_id, e);
-                record_history(db, rule.id, *channel_id, data.price, "failed", &message, Some(&e));
+                record_history(
+                    db,
+                    rule.id,
+                    *channel_id,
+                    data.price,
+                    "failed",
+                    &message,
+                    Some(&e),
+                );
             }
         }
     }
@@ -89,8 +125,8 @@ pub async fn dispatch_notification(
 
 /// 解析 Telegram 設定並解密 bot_token
 fn parse_telegram_config(config_json: &str) -> Result<TelegramConfig, String> {
-    let stored: serde_json::Value = serde_json::from_str(config_json)
-        .map_err(|e| format!("Telegram 設定解析失敗: {}", e))?;
+    let stored: serde_json::Value =
+        serde_json::from_str(config_json).map_err(|e| format!("Telegram 設定解析失敗: {}", e))?;
 
     let encrypted_token = stored["bot_token"]
         .as_str()
@@ -117,7 +153,9 @@ fn record_history(
     message: &str,
     error: Option<&str>,
 ) {
-    if let Err(e) = db.insert_notification_history(rule_id, channel_id, status, price, message, error) {
+    if let Err(e) =
+        db.insert_notification_history(rule_id, channel_id, status, price, message, error)
+    {
         eprintln!("[Dispatcher] 寫入通知歷史失敗: {}", e);
     }
 }

@@ -73,7 +73,8 @@ impl CoinGeckoProvider {
         }
         // 也用 id 本身作為 key，讓使用者可以直接輸入 CoinGecko ID
         for item in &items {
-            map.entry(item.id.to_uppercase()).or_insert_with(|| item.id.clone());
+            map.entry(item.id.to_uppercase())
+                .or_insert_with(|| item.id.clone());
         }
 
         *id_cache().write().await = map;

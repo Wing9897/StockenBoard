@@ -67,7 +67,10 @@ impl NotificationEngine {
                                     triggered_at: chrono::Utc::now(),
                                 };
                                 dispatcher::dispatch_notification(
-                                    &db, &http_client, rule, &notif_data,
+                                    &db,
+                                    &http_client,
+                                    rule,
+                                    &notif_data,
                                 )
                                 .await;
                             }
@@ -92,7 +95,10 @@ impl NotificationEngine {
             Ok(new_rules) => {
                 let mut rules_guard = self.rules.write().await;
                 *rules_guard = new_rules;
-                eprintln!("[NotificationEngine] 規則已重新載入，共 {} 條", rules_guard.len());
+                eprintln!(
+                    "[NotificationEngine] 規則已重新載入，共 {} 條",
+                    rules_guard.len()
+                );
             }
             Err(e) => {
                 eprintln!("[NotificationEngine] 載入規則失敗: {}", e);

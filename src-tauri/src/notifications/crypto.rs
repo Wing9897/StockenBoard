@@ -47,8 +47,7 @@ fn simple_hash(input: &str) -> [u8; 32] {
         for i in 0..32 {
             let prev = hash[(i + 31) % 32];
             let next = hash[(i + 1) % 32];
-            hash[i] = hash[i]
-                .wrapping_add(prev.rotate_left(3))
+            hash[i] = hash[i].wrapping_add(prev.rotate_left(3))
                 ^ next.rotate_right(2)
                 ^ round.wrapping_add(i as u8);
         }

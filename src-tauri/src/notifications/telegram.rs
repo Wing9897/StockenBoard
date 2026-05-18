@@ -15,6 +15,7 @@ fn format_condition_description(condition_type: &ConditionType, threshold: f64) 
         ConditionType::PriceBelow => format!("價格低於 {}", format_price(threshold)),
         ConditionType::ChangePctAbove => format!("24h漲幅超過 {:.2}%", threshold),
         ConditionType::ChangePctBelow => format!("24h跌幅超過 {:.2}%", threshold),
+        ConditionType::Ai => "AI 分析觸發".to_string(),
     }
 }
 
@@ -36,15 +37,15 @@ fn format_price(price: f64) -> String {
         .chars()
         .rev()
         .enumerate()
-        .map(|(i, c)| {
+        .flat_map(|(i, c)| {
             if i > 0 && i % 3 == 0 {
-                format!(",{}", c)
+                vec![',', c]
             } else {
-                c.to_string()
+                vec![c]
             }
         })
-        .collect::<Vec<_>>()
-        .into_iter()
+        .collect::<String>()
+        .chars()
         .rev()
         .collect();
 
@@ -57,7 +58,9 @@ fn format_price(price: f64) -> String {
 
 /// 格式化 Telegram 通知訊息
 ///
-/// 將 NotificationData 格式化為預定義的訊息模板：
+/// 將 NotificationData 格式化為預定義的訊息模板。
+///
+/// 對於閾值型規則：
 /// ```text
 /// 📊 StockenBoard 價格警報
 ///
@@ -67,10 +70,34 @@ fn format_price(price: f64) -> String {
 /// 觸發條件: 價格高於 $65,000.00
 /// 觸發時間: 2024-01-15 14:30:00 UTC
 /// ```
+///
+/// 對於 AI 規則：
+/// ```text
+/// 🤖 AI 通知
+/// 📊 BTC/USDT
+/// 💡 價格在最近 5 筆紀錄中上升了 6.2%
+/// ⏰ 2024-01-15 14:30:00 UTC
+/// ```
 pub fn format_telegram_message(data: &NotificationData) -> String {
+    let time_display = data
+        .triggered_at
+        .format("%Y-%m-%d %H:%M:%S UTC")
+        .to_string();
+
+    if data.condition_type == ConditionType::Ai {
+        return format!(
+            "🤖 AI 通知\n\
+             📊 {}\n\
+             💡 {}\n\
+             ⏰ {}",
+            data.symbol,
+            data.ai_reason(),
+            time_display
+        );
+    }
+
     let condition_desc = format_condition_description(&data.condition_type, data.threshold);
     let price_display = format_price(data.price);
-    let time_display = data.triggered_at.format("%Y-%m-%d %H:%M:%S UTC").to_string();
 
     format!(
         "📊 StockenBoard 價格警報\n\n\
@@ -154,7 +181,9 @@ mod tests {
             condition_type: ConditionType::PriceAbove,
             threshold: 65000.0,
             rule_name: "BTC 突破 65K".to_string(),
-            triggered_at: chrono::Utc.with_ymd_and_hms(2024, 1, 15, 14, 30, 0).unwrap(),
+            triggered_at: chrono::Utc
+                .with_ymd_and_hms(2024, 1, 15, 14, 30, 0)
+                .unwrap(),
         };
 
         let message = format_telegram_message(&data);
@@ -213,7 +242,9 @@ mod tests {
             condition_type: ConditionType::ChangePctBelow,
             threshold: -5.0,
             rule_name: "DOGE 跌幅超過 5%".to_string(),
-            triggered_at: chrono::Utc.with_ymd_and_hms(2024, 4, 10, 6, 45, 30).unwrap(),
+            triggered_at: chrono::Utc
+                .with_ymd_and_hms(2024, 4, 10, 6, 45, 30)
+                .unwrap(),
         };
 
         let message = format_telegram_message(&data);
@@ -249,5 +280,79 @@ mod tests {
             format_condition_description(&ConditionType::ChangePctBelow, -5.0),
             "24h跌幅超過 -5.00%"
         );
+    }
+
+    #[test]
+    fn test_format_telegram_message_ai_notification() {
+        let data = NotificationData {
+            symbol: "BTC/USDT".to_string(),
+            provider: String::new(),
+            price: 0.0,
+            condition_type: ConditionType::Ai,
+            threshold: 0.0,
+            rule_name: "[AI] 價格在最近 5 筆紀錄中上升了 6.2%，超過設定的 5% 閾值".to_string(),
+            triggered_at: chrono::Utc
+                .with_ymd_and_hms(2024, 1, 15, 14, 30, 0)
+                .unwrap(),
+        };
+
+        let message = format_telegram_message(&data);
+
+        assert!(message.contains("🤖 AI 通知"));
+        assert!(message.contains("📊 BTC/USDT"));
+        assert!(message.contains("💡 價格在最近 5 筆紀錄中上升了 6.2%，超過設定的 5% 閾值"));
+        assert!(message.contains("⏰ 2024-01-15 14:30:00 UTC"));
+        // Should NOT contain the generic price alert format
+        assert!(!message.contains("StockenBoard 價格警報"));
+        assert!(!message.contains("當前價格"));
+    }
+
+    #[test]
+    fn test_format_telegram_message_ai_without_prefix() {
+        // Test that if rule_name doesn't have [AI] prefix, it still works
+        let data = NotificationData {
+            symbol: "ETH/USDT".to_string(),
+            provider: String::new(),
+            price: 0.0,
+            condition_type: ConditionType::Ai,
+            threshold: 0.0,
+            rule_name: "直接的 reason 文字".to_string(),
+            triggered_at: chrono::Utc.with_ymd_and_hms(2024, 6, 1, 9, 0, 0).unwrap(),
+        };
+
+        let message = format_telegram_message(&data);
+
+        assert!(message.contains("🤖 AI 通知"));
+        assert!(message.contains("📊 ETH/USDT"));
+        assert!(message.contains("💡 直接的 reason 文字"));
+        assert!(message.contains("⏰ 2024-06-01 09:00:00 UTC"));
+    }
+
+    #[test]
+    fn test_ai_reason_with_prefix() {
+        let data = NotificationData {
+            symbol: "BTC".to_string(),
+            provider: String::new(),
+            price: 0.0,
+            condition_type: ConditionType::Ai,
+            threshold: 0.0,
+            rule_name: "[AI] some reason".to_string(),
+            triggered_at: chrono::Utc::now(),
+        };
+        assert_eq!(data.ai_reason(), "some reason");
+    }
+
+    #[test]
+    fn test_ai_reason_without_prefix() {
+        let data = NotificationData {
+            symbol: "BTC".to_string(),
+            provider: String::new(),
+            price: 0.0,
+            condition_type: ConditionType::Ai,
+            threshold: 0.0,
+            rule_name: "no prefix reason".to_string(),
+            triggered_at: chrono::Utc::now(),
+        };
+        assert_eq!(data.ai_reason(), "no prefix reason");
     }
 }

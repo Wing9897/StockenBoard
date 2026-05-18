@@ -132,8 +132,8 @@ impl DataProvider for TwelveDataProvider {
             .await
             .map_err(|e| format!("TwelveData 批量讀取失敗: {}", e))?;
 
-        let data: serde_json::Value = serde_json::from_str(&body)
-            .map_err(|_| "TwelveData 批量解析失敗".to_string())?;
+        let data: serde_json::Value =
+            serde_json::from_str(&body).map_err(|_| "TwelveData 批量解析失敗".to_string())?;
 
         let mut results = Vec::new();
         // TwelveData: 單個返回 object，多個返回 { "AAPL": {...}, "BTC/USD": {...} }

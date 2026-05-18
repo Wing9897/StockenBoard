@@ -166,7 +166,12 @@ impl DataProvider for MboumProvider {
                     "https://api.mboum.com/v1/markets/stock/quotes?ticker={}",
                     sym
                 );
-                match c.get(&url).header("Authorization", format!("Bearer {}", k)).send().await {
+                match c
+                    .get(&url)
+                    .header("Authorization", format!("Bearer {}", k))
+                    .send()
+                    .await
+                {
                     Ok(resp) if resp.status().is_success() => {
                         if let Ok(data) = resp.json::<serde_json::Value>().await {
                             let q = &data["body"][0];

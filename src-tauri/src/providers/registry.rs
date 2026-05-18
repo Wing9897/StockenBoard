@@ -30,11 +30,7 @@ impl ProviderRegistry {
     }
 
     /// 取得或建立 provider instance（lazy，從 DbPool 讀取 API key）
-    pub async fn get_or_create(
-        &self,
-        id: &str,
-        db: &DbPool,
-    ) -> Option<Arc<dyn DataProvider>> {
+    pub async fn get_or_create(&self, id: &str, db: &DbPool) -> Option<Arc<dyn DataProvider>> {
         // 先嘗試從快取中取得
         {
             let p = self.providers.read().await;

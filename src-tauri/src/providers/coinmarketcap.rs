@@ -87,22 +87,22 @@ impl DataProvider for CoinMarketCapProvider {
             syms
         );
         let resp = self
-        .client
-        .get(&url)
-        .header("X-CMC_PRO_API_KEY", api_key)
-        .send()
-        .await
-        .map_err(|e| format!("CMC 批量連接失敗: {}", e))?
-        .error_for_status()
-        .map_err(|e| format!("CMC 批量 API 錯誤: {}", e))?;
+            .client
+            .get(&url)
+            .header("X-CMC_PRO_API_KEY", api_key)
+            .send()
+            .await
+            .map_err(|e| format!("CMC 批量連接失敗: {}", e))?
+            .error_for_status()
+            .map_err(|e| format!("CMC 批量 API 錯誤: {}", e))?;
 
-    let body = resp
-        .text()
-        .await
-        .map_err(|e| format!("CMC 批量讀取失敗: {}", e))?;
+        let body = resp
+            .text()
+            .await
+            .map_err(|e| format!("CMC 批量讀取失敗: {}", e))?;
 
-    let data: serde_json::Value = serde_json::from_str(&body)
-        .map_err(|_| format!("CMC 批量解析失敗 (可能含無效 symbol)"))?;
+        let data: serde_json::Value = serde_json::from_str(&body)
+            .map_err(|_| format!("CMC 批量解析失敗 (可能含無效 symbol)"))?;
 
         let mut results = Vec::new();
         for (symbol, base) in &mappings {

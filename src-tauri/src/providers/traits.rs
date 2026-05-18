@@ -219,7 +219,7 @@ pub fn get_provider_info(id: &str) -> Option<ProviderInfo> {
 }
 
 fn build_all_provider_info() -> Vec<ProviderInfo> {
-        vec![
+    vec![
         // Crypto                                                                                    free_iv  key_iv
         pi(
             "binance",
@@ -734,7 +734,7 @@ pub fn to_binance_symbol(symbol: &str) -> String {
             return s;
         }
     }
-    
+
     let (base, quote) = parse_crypto_symbol(&s);
     let q = if quote == "USD" { "USDT" } else { &quote };
     format!("{}{}", base, q)

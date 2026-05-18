@@ -82,9 +82,15 @@ impl DataProvider for BinanceProvider {
                 "https://api.binance.com/api/v3/ticker/24hr?symbols={}",
                 syms_param
             );
-            let resp = self.client.get(&url).send().await
+            let resp = self
+                .client
+                .get(&url)
+                .send()
+                .await
                 .map_err(|e| format!("Binance 批量連接失敗: {}", e))?;
-            let body = resp.text().await
+            let body = resp
+                .text()
+                .await
                 .map_err(|e| format!("Binance 批量讀取失敗: {}", e))?;
 
             if let Ok(arr) = serde_json::from_str::<Vec<serde_json::Value>>(&body) {
@@ -117,8 +123,15 @@ impl DataProvider for BinanceProvider {
         })?;
 
         if !status.is_success() {
-            eprintln!("Binance 全量查詢遭拒絕 ({}): {}", status, &body[..body.len().min(200)]);
-            return Err(format!("Binance API 拒絕請求 (IP 可能受到限制): {}", status));
+            eprintln!(
+                "Binance 全量查詢遭拒絕 ({}): {}",
+                status,
+                &body[..body.len().min(200)]
+            );
+            return Err(format!(
+                "Binance API 拒絕請求 (IP 可能受到限制): {}",
+                status
+            ));
         }
 
         let arr: Vec<serde_json::Value> = serde_json::from_str(&body).map_err(|e| {

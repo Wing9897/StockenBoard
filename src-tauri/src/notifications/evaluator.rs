@@ -8,16 +8,18 @@ use crate::providers::traits::AssetData;
 /// 評估單一條件是否滿足
 /// Returns Some(true) if the condition is triggered, Some(false) if not triggered,
 /// or None if the required data is unavailable (e.g., change_percent_24h is None).
-pub fn evaluate_condition(condition_type: &ConditionType, threshold: f64, asset: &AssetData) -> Option<bool> {
+pub fn evaluate_condition(
+    condition_type: &ConditionType,
+    threshold: f64,
+    asset: &AssetData,
+) -> Option<bool> {
     match condition_type {
         ConditionType::PriceAbove => Some(asset.price > threshold),
         ConditionType::PriceBelow => Some(asset.price < threshold),
-        ConditionType::ChangePctAbove => {
-            asset.change_percent_24h.map(|pct| pct > threshold)
-        }
-        ConditionType::ChangePctBelow => {
-            asset.change_percent_24h.map(|pct| pct < threshold)
-        }
+        ConditionType::ChangePctAbove => asset.change_percent_24h.map(|pct| pct > threshold),
+        ConditionType::ChangePctBelow => asset.change_percent_24h.map(|pct| pct < threshold),
+        // AI rules are evaluated by the AI scheduler, not the threshold evaluator
+        ConditionType::Ai => None,
     }
 }
 
@@ -44,8 +46,7 @@ pub fn evaluate_rules<'a>(
     matching
         .into_iter()
         .filter(|rule| {
-            evaluate_condition(&rule.condition_type, rule.threshold, asset)
-                .unwrap_or(false)
+            evaluate_condition(&rule.condition_type, rule.threshold, asset).unwrap_or(false)
         })
         .collect()
 }
@@ -54,7 +55,12 @@ pub fn evaluate_rules<'a>(
 mod tests {
     use super::*;
 
-    fn make_asset(symbol: &str, provider_id: &str, price: f64, change_pct: Option<f64>) -> AssetData {
+    fn make_asset(
+        symbol: &str,
+        provider_id: &str,
+        price: f64,
+        change_pct: Option<f64>,
+    ) -> AssetData {
         AssetData {
             symbol: symbol.to_string(),
             price,
@@ -71,7 +77,14 @@ mod tests {
         }
     }
 
-    fn make_rule(id: i64, provider_id: &str, symbol: &str, condition_type: ConditionType, threshold: f64, enabled: bool) -> NotificationRule {
+    fn make_rule(
+        id: i64,
+        provider_id: &str,
+        symbol: &str,
+        condition_type: ConditionType,
+        threshold: f64,
+        enabled: bool,
+    ) -> NotificationRule {
         NotificationRule {
             id,
             name: format!("rule_{}", id),
@@ -177,9 +190,23 @@ mod tests {
     #[test]
     fn test_filter_matching_rules_basic() {
         let rules = vec![
-            make_rule(1, "binance", "BTC", ConditionType::PriceAbove, 65000.0, true),
+            make_rule(
+                1,
+                "binance",
+                "BTC",
+                ConditionType::PriceAbove,
+                65000.0,
+                true,
+            ),
             make_rule(2, "binance", "ETH", ConditionType::PriceAbove, 3000.0, true),
-            make_rule(3, "coinbase", "BTC", ConditionType::PriceBelow, 60000.0, true),
+            make_rule(
+                3,
+                "coinbase",
+                "BTC",
+                ConditionType::PriceBelow,
+                60000.0,
+                true,
+            ),
         ];
         let matched = filter_matching_rules(&rules, "binance", "BTC");
         assert_eq!(matched.len(), 1);
@@ -189,8 +216,22 @@ mod tests {
     #[test]
     fn test_filter_matching_rules_excludes_disabled() {
         let rules = vec![
-            make_rule(1, "binance", "BTC", ConditionType::PriceAbove, 65000.0, false),
-            make_rule(2, "binance", "BTC", ConditionType::PriceBelow, 60000.0, true),
+            make_rule(
+                1,
+                "binance",
+                "BTC",
+                ConditionType::PriceAbove,
+                65000.0,
+                false,
+            ),
+            make_rule(
+                2,
+                "binance",
+                "BTC",
+                ConditionType::PriceBelow,
+                60000.0,
+                true,
+            ),
         ];
         let matched = filter_matching_rules(&rules, "binance", "BTC");
         assert_eq!(matched.len(), 1);
@@ -199,9 +240,14 @@ mod tests {
 
     #[test]
     fn test_filter_matching_rules_empty_when_no_match() {
-        let rules = vec![
-            make_rule(1, "binance", "BTC", ConditionType::PriceAbove, 65000.0, true),
-        ];
+        let rules = vec![make_rule(
+            1,
+            "binance",
+            "BTC",
+            ConditionType::PriceAbove,
+            65000.0,
+            true,
+        )];
         let matched = filter_matching_rules(&rules, "coinbase", "ETH");
         assert!(matched.is_empty());
     }
@@ -211,8 +257,22 @@ mod tests {
     #[test]
     fn test_evaluate_rules_triggers_matching() {
         let rules = vec![
-            make_rule(1, "binance", "BTC", ConditionType::PriceAbove, 65000.0, true),
-            make_rule(2, "binance", "BTC", ConditionType::PriceBelow, 60000.0, true),
+            make_rule(
+                1,
+                "binance",
+                "BTC",
+                ConditionType::PriceAbove,
+                65000.0,
+                true,
+            ),
+            make_rule(
+                2,
+                "binance",
+                "BTC",
+                ConditionType::PriceBelow,
+                60000.0,
+                true,
+            ),
             make_rule(3, "binance", "ETH", ConditionType::PriceAbove, 3000.0, true),
         ];
         let asset = make_asset("BTC", "binance", 70000.0, None);
@@ -223,9 +283,14 @@ mod tests {
 
     #[test]
     fn test_evaluate_rules_skips_disabled() {
-        let rules = vec![
-            make_rule(1, "binance", "BTC", ConditionType::PriceAbove, 65000.0, false),
-        ];
+        let rules = vec![make_rule(
+            1,
+            "binance",
+            "BTC",
+            ConditionType::PriceAbove,
+            65000.0,
+            false,
+        )];
         let asset = make_asset("BTC", "binance", 70000.0, None);
         let triggered = evaluate_rules(&rules, &asset);
         assert!(triggered.is_empty());
@@ -233,9 +298,14 @@ mod tests {
 
     #[test]
     fn test_evaluate_rules_change_pct_none_skipped() {
-        let rules = vec![
-            make_rule(1, "binance", "BTC", ConditionType::ChangePctAbove, 5.0, true),
-        ];
+        let rules = vec![make_rule(
+            1,
+            "binance",
+            "BTC",
+            ConditionType::ChangePctAbove,
+            5.0,
+            true,
+        )];
         let asset = make_asset("BTC", "binance", 70000.0, None);
         let triggered = evaluate_rules(&rules, &asset);
         assert!(triggered.is_empty());
@@ -244,8 +314,22 @@ mod tests {
     #[test]
     fn test_evaluate_rules_multiple_triggered() {
         let rules = vec![
-            make_rule(1, "binance", "BTC", ConditionType::PriceAbove, 65000.0, true),
-            make_rule(2, "binance", "BTC", ConditionType::ChangePctAbove, 3.0, true),
+            make_rule(
+                1,
+                "binance",
+                "BTC",
+                ConditionType::PriceAbove,
+                65000.0,
+                true,
+            ),
+            make_rule(
+                2,
+                "binance",
+                "BTC",
+                ConditionType::ChangePctAbove,
+                3.0,
+                true,
+            ),
         ];
         let asset = make_asset("BTC", "binance", 70000.0, Some(5.0));
         let triggered = evaluate_rules(&rules, &asset);

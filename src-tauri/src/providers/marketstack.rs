@@ -105,8 +105,8 @@ impl DataProvider for MarketstackProvider {
             .await
             .map_err(|e| format!("Marketstack 批量讀取失敗: {}", e))?;
 
-        let data: serde_json::Value = serde_json::from_str(&body)
-            .map_err(|_| "Marketstack 批量解析失敗".to_string())?;
+        let data: serde_json::Value =
+            serde_json::from_str(&body).map_err(|_| "Marketstack 批量解析失敗".to_string())?;
 
         if let Some(err) = data["error"].as_object() {
             let msg = err
