@@ -145,7 +145,6 @@ export const AssetCard = memo(function AssetCard({ subscription, providers, curr
         <div className="compact-top">
           {renderIcon('asset-icon compact-icon')}
           <span className="compact-symbol" title={subscription.symbol}>{subscription.symbol}</span>
-          <span className={`asset-type-tag ${assetType}`}>{assetType === 'crypto' ? t.subForm.cryptoShort : t.subForm.stockShort}</span>
           {sessionInfo && <span className={`market-session-badge ${sessionInfo.cls}`}>{sessionInfo.label}</span>}
           <button className="asset-card-edit-btn" onClick={openEdit} title={t.common.edit}>✎</button>
         </div>
