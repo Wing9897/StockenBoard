@@ -101,7 +101,7 @@
 .compact-change { font-size: 10px; font-weight: 500; }
 .compact-change.positive { color: var(--green); }
 .compact-change.negative { color: var(--red); }
-.asset-card-compact .countdown-circle { margin-left: auto; }
+.asset-card-compact .countdown-circle { }
 
 /* ===== Market Session Badge ===== */
 .market-session-badge { font-size: 9px; font-weight: 600; padding: 1px 5px; border-radius: 3px; letter-spacing: 0.3px; flex-shrink: 0; }
