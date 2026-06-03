@@ -39,7 +39,7 @@ impl CoinMarketCapProvider {
 #[async_trait::async_trait]
 impl DataProvider for CoinMarketCapProvider {
     fn info(&self) -> ProviderInfo {
-        get_provider_info("coinmarketcap").unwrap()
+        provider_info_or_panic("coinmarketcap")
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {
@@ -102,7 +102,7 @@ impl DataProvider for CoinMarketCapProvider {
             .map_err(|e| format!("CMC 批量讀取失敗: {}", e))?;
 
         let data: serde_json::Value = serde_json::from_str(&body)
-            .map_err(|_| format!("CMC 批量解析失敗 (可能含無效 symbol)"))?;
+            .map_err(|_| "CMC 批量解析失敗 (可能含無效 symbol)".to_string())?;
 
         let mut results = Vec::new();
         for (symbol, base) in &mappings {

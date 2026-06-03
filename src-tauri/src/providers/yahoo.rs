@@ -130,7 +130,7 @@ impl YahooProvider {
 #[async_trait::async_trait]
 impl DataProvider for YahooProvider {
     fn info(&self) -> ProviderInfo {
-        get_provider_info("yahoo").unwrap()
+        provider_info_or_panic("yahoo")
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {

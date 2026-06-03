@@ -1,13 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-
-interface ChannelRow {
-  id: number;
-  channel_type: string;
-  name: string;
-  config: string;
-  created_at: number;
-}
+import { t } from '../../lib/i18n';
+import { silentLog } from '../../lib/errorLog';
+import { useConfirm } from '../../hooks/useConfirm';
+import { ConfirmDialog } from '../ConfirmDialog/ConfirmDialog';
+import type { ChannelRow } from '../../types';
 
 export function ChannelSettings() {
   const [channels, setChannels] = useState<ChannelRow[]>([]);
@@ -22,13 +19,14 @@ export function ChannelSettings() {
   const [testing, setTesting] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [testResult, setTestResult] = useState<{ id: number; success: boolean; msg: string } | null>(null);
+  const { confirmState, requestConfirm, handleConfirm, handleCancel } = useConfirm();
 
   const fetchChannels = useCallback(async () => {
     try {
       const data = await invoke<ChannelRow[]>('list_notification_channels');
       setChannels(data);
     } catch (e) {
-      console.error('Failed to fetch channels:', e);
+      silentLog('ChannelSettings.fetchChannels', e);
     } finally {
       setLoading(false);
     }
@@ -39,14 +37,14 @@ export function ChannelSettings() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!name.trim()) { setError('請輸入通道名稱'); return; }
+    if (!name.trim()) { setError(t.notifications.channelNameRequired); return; }
 
     let config: string;
     if (channelType === 'telegram') {
-      if (!botToken.trim() || !chatId.trim()) { setError('Bot Token 和 Chat ID 不可為空'); return; }
+      if (!botToken.trim() || !chatId.trim()) { setError(t.notifications.telegramFieldsRequired); return; }
       config = JSON.stringify({ bot_token: botToken.trim(), chat_id: chatId.trim() });
     } else {
-      if (!webhookUrl.trim()) { setError('Webhook URL 不可為空'); return; }
+      if (!webhookUrl.trim()) { setError(t.notifications.webhookUrlRequired); return; }
       config = JSON.stringify({ url: webhookUrl.trim() });
     }
 
@@ -59,19 +57,20 @@ export function ChannelSettings() {
       setName(''); setBotToken(''); setChatId(''); setWebhookUrl('');
       await fetchChannels();
     } catch (e: unknown) {
-      setError(typeof e === 'string' ? e : '儲存失敗');
+      setError(typeof e === 'string' ? e : t.notifications.saveFailed);
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('確定要刪除此通道？')) return;
+    const ok = await requestConfirm(t.notifications.deleteChannelConfirm);
+    if (!ok) return;
     try {
       await invoke('delete_notification_channel', { id });
       setChannels(prev => prev.filter(c => c.id !== id));
     } catch (e) {
-      console.error('Failed to delete channel:', e);
+      silentLog('ChannelSettings.delete', e);
     }
   };
 
@@ -80,25 +79,25 @@ export function ChannelSettings() {
     setTestResult(null);
     try {
       await invoke('test_notification_channel', { id });
-      setTestResult({ id, success: true, msg: '測試成功！' });
+      setTestResult({ id, success: true, msg: t.notifications.testOk });
     } catch (e: unknown) {
-      setTestResult({ id, success: false, msg: typeof e === 'string' ? e : '測試失敗' });
+      setTestResult({ id, success: false, msg: typeof e === 'string' ? e : t.notifications.testFailed });
     } finally {
       setTesting(null);
     }
   };
 
-  if (loading) return <div className="notification-placeholder"><p>載入中...</p></div>;
+  if (loading) return <div className="notification-placeholder"><p>{t.common.loading}</p></div>;
 
   return (
     <div className="channel-settings">
       <div className="rule-list-header">
-        <h3>通知通道</h3>
-        <button className="btn-add-rule" onClick={() => setShowForm(true)}>+ 新增通道</button>
+        <h3>{t.notifications.channels_label}</h3>
+        <button className="btn-add-rule" onClick={() => setShowForm(true)}>+ {t.notifications.addChannel}</button>
       </div>
 
       {channels.length === 0 && !showForm ? (
-        <div className="notification-placeholder"><p>尚無通知通道</p></div>
+        <div className="notification-placeholder"><p>{t.notifications.noChannels}</p></div>
       ) : (
         <div className="rule-items">
           {channels.map(ch => (
@@ -109,14 +108,14 @@ export function ChannelSettings() {
               </div>
               <div className="rule-actions">
                 <button className="btn-test" onClick={() => handleTest(ch.id)} disabled={testing === ch.id}>
-                  {testing === ch.id ? '測試中...' : '測試'}
+                  {testing === ch.id ? t.notifications.testing : t.notifications.test}
                 </button>
                 {testResult?.id === ch.id && (
                   <span className={testResult.success ? 'test-success' : 'test-fail'}>
                     {testResult.msg}
                   </span>
                 )}
-                <button className="btn-delete-rule" onClick={() => handleDelete(ch.id)} title="刪除">🗑</button>
+                <button className="btn-delete-rule" onClick={() => handleDelete(ch.id)} title={t.common.delete}>🗑</button>
               </div>
             </div>
           ))}
@@ -127,11 +126,11 @@ export function ChannelSettings() {
         <form onSubmit={handleSave} className="channel-form">
           {error && <div className="rule-form-error">{error}</div>}
           <label className="form-field">
-            <span>通道名稱</span>
-            <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="例：我的 Telegram" />
+            <span>{t.notifications.channelName}</span>
+            <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder={t.notifications.channelNamePlaceholder} />
           </label>
           <label className="form-field">
-            <span>通道類型</span>
+            <span>{t.notifications.channelType}</span>
             <select value={channelType} onChange={e => setChannelType(e.target.value as 'telegram' | 'webhook')}>
               <option value="telegram">Telegram</option>
               <option value="webhook">Webhook</option>
@@ -145,7 +144,7 @@ export function ChannelSettings() {
               </label>
               <label className="form-field">
                 <span>Chat ID</span>
-                <input type="text" value={chatId} onChange={e => setChatId(e.target.value)} placeholder="例：-1001234567890" />
+                <input type="text" value={chatId} onChange={e => setChatId(e.target.value)} placeholder={t.notifications.chatIdPlaceholder} />
               </label>
             </>
           ) : (
@@ -155,10 +154,14 @@ export function ChannelSettings() {
             </label>
           )}
           <div className="rule-form-actions">
-            <button type="button" className="btn-cancel" onClick={() => setShowForm(false)}>取消</button>
-            <button type="submit" className="btn-save" disabled={saving}>{saving ? '儲存中...' : '儲存'}</button>
+            <button type="button" className="btn-cancel" onClick={() => setShowForm(false)}>{t.common.cancel}</button>
+            <button type="submit" className="btn-save" disabled={saving}>{saving ? t.common.saving : t.common.save}</button>
           </div>
         </form>
+      )}
+
+      {confirmState && (
+        <ConfirmDialog message={confirmState.message} onConfirm={handleConfirm} onCancel={handleCancel} />
       )}
     </div>
   );

@@ -31,6 +31,7 @@ export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
 
   const unlistenRefs = useRef<UnlistenFn[]>([]);
   const wsActiveRef = useRef<Set<string>>(new Set());
+  const wsProvidersRef = useRef<Set<string>>(new Set());
   const providerInfoRef = useRef<ProviderInfo[]>([]);
   const subscriptionsRef = useRef<Subscription[]>([]);
   subscriptionsRef.current = subscriptions;
@@ -100,6 +101,7 @@ export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
             if (!wsActiveRef.current.has(key)) {
               await invoke('start_ws_stream', { providerId: pid, symbols: syms });
               wsActiveRef.current.add(key);
+              wsProvidersRef.current.add(pid);
             }
           }
         } catch (e) { silentLog('wsConnect', e); }
@@ -107,7 +109,16 @@ export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
 
       setLoading(false);
     })();
-    return () => { for (const fn of unlistenRefs.current) fn(); };
+    return () => {
+      for (const fn of unlistenRefs.current) fn();
+      // 停止本 hook 啟動的所有 WebSocket 串流，避免 forwarder task 洩漏
+      const startedProviders = wsProvidersRef.current;
+      for (const pid of startedProviders) {
+        invoke('stop_ws_stream', { providerId: pid }).catch(e => silentLog('stopWsStream', e));
+      }
+      startedProviders.clear();
+      wsActiveRef.current.clear();
+    };
   }, [loadSubs, subType]);
 
   // ── CRUD ──

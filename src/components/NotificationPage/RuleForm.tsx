@@ -1,29 +1,9 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { t } from '../../lib/i18n';
-
-interface Subscription {
-  id: number;
-  symbol: string;
-  selected_provider_id: string;
-}
-
-interface ChannelRow {
-  id: number;
-  channel_type: string;
-  name: string;
-}
-
-interface EditRuleData {
-  id: number;
-  name: string;
-  subscription_id: number;
-  condition_type: string;
-  threshold: number;
-  channel_ids: string;
-  cooldown_secs: number;
-  ai_config: string | null;
-}
+import { silentLog } from '../../lib/errorLog';
+import { loadAllSubscriptions } from '../../lib/subscriptionApi';
+import type { Subscription, ChannelRow, EditRuleData } from '../../types';
 
 interface RuleFormProps {
   onClose: () => void;
@@ -33,21 +13,23 @@ interface RuleFormProps {
 
 type RuleMode = 'threshold' | 'ai';
 
+/** 條件類型選項 — label 於 render 時由 t.notifications[labelKey] 解析（i18n） */
 const CONDITION_TYPES = [
-  { value: 'price_above', label: '價格高於' },
-  { value: 'price_below', label: '價格低於' },
-  { value: 'change_pct_above', label: '24h漲幅超過' },
-  { value: 'change_pct_below', label: '24h跌幅超過' },
-];
+  { value: 'price_above', labelKey: 'priceAbove' },
+  { value: 'price_below', labelKey: 'priceBelow' },
+  { value: 'change_pct_above', labelKey: 'changePctAbove' },
+  { value: 'change_pct_below', labelKey: 'changePctBelow' },
+] as const;
 
+/** 分析間隔選項 — label 於 render 時由 t.notifications[labelKey] 解析（i18n） */
 const ANALYSIS_INTERVAL_OPTIONS = [
-  { value: 30, label: '30 秒' },
-  { value: 60, label: '1 分鐘' },
-  { value: 300, label: '5 分鐘' },
-  { value: 600, label: '10 分鐘' },
-  { value: 1800, label: '30 分鐘' },
-  { value: 3600, label: '1 小時' },
-];
+  { value: 30, labelKey: 'interval30s' },
+  { value: 60, labelKey: 'interval1m' },
+  { value: 300, labelKey: 'interval5m' },
+  { value: 600, labelKey: 'interval10m' },
+  { value: 1800, labelKey: 'interval30m' },
+  { value: 3600, labelKey: 'interval1h' },
+] as const;
 
 export function RuleForm({ onClose, onSaved, editRule }: RuleFormProps) {
   const isEditing = !!editRule;
@@ -88,8 +70,10 @@ export function RuleForm({ onClose, onSaved, editRule }: RuleFormProps) {
   };
 
   useEffect(() => {
-    invoke<Subscription[]>('list_subscriptions').then(setSubscriptions).catch(console.error);
-    invoke<ChannelRow[]>('list_notification_channels').then(setChannels).catch(console.error);
+    loadAllSubscriptions()
+      .then(setSubscriptions)
+      .catch((e: unknown) => setError(typeof e === 'string' ? e : t.common.error));
+    invoke<ChannelRow[]>('list_notification_channels').then(setChannels).catch(e => silentLog('RuleForm.loadChannels', e));
     invoke<{ base_url: string; model: string; has_api_key: boolean } | null>('get_ai_provider_config')
       .then(config => setAiProviderConfigured(config !== null))
       .catch(() => setAiProviderConfigured(false));
@@ -100,7 +84,6 @@ export function RuleForm({ onClose, onSaved, editRule }: RuleFormProps) {
     setError('');
     if (!name.trim()) { setError(t.notifications.nameRequired); return; }
     if (subscriptionId === '') { setError(t.notifications.subscriptionRequired); return; }
-    if (selectedChannels.length === 0) { setError(t.notifications.channelRequired); return; }
 
     if (ruleMode === 'threshold') {
       if (!threshold.trim() || isNaN(Number(threshold))) { setError(t.notifications.thresholdRequired); return; }
@@ -162,7 +145,7 @@ export function RuleForm({ onClose, onSaved, editRule }: RuleFormProps) {
       onSaved();
       onClose();
     } catch (e: unknown) {
-      setError(typeof e === 'string' ? e : (isEditing ? '更新規則失敗' : '建立規則失敗'));
+      setError(typeof e === 'string' ? e : (isEditing ? t.notifications.updateRuleFailed : t.notifications.createRuleFailed));
     } finally {
       setSaving(false);
     }
@@ -206,7 +189,7 @@ export function RuleForm({ onClose, onSaved, editRule }: RuleFormProps) {
 
           <label className="form-field">
             <span>{t.notifications.ruleName}</span>
-            <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="例：BTC 突破 65K" />
+            <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder={t.notifications.ruleNamePlaceholder} />
           </label>
 
           <label className="form-field">
@@ -225,7 +208,7 @@ export function RuleForm({ onClose, onSaved, editRule }: RuleFormProps) {
                 <span>{t.notifications.conditionType}</span>
                 <select value={conditionType} onChange={e => setConditionType(e.target.value)}>
                   {CONDITION_TYPES.map(ct => (
-                    <option key={ct.value} value={ct.value}>{ct.label}</option>
+                    <option key={ct.value} value={ct.value}>{t.notifications[ct.labelKey]}</option>
                   ))}
                 </select>
               </label>
@@ -233,7 +216,7 @@ export function RuleForm({ onClose, onSaved, editRule }: RuleFormProps) {
               <label className="form-field">
                 <span>{t.notifications.threshold}</span>
                 <input type="number" step="any" value={threshold} onChange={e => setThreshold(e.target.value)}
-                  placeholder={conditionType.includes('pct') ? '例：5.0 (%)' : '例：65000'} />
+                  placeholder={conditionType.includes('pct') ? t.notifications.thresholdPctPlaceholder : t.notifications.thresholdPricePlaceholder} />
               </label>
             </>
           ) : (
@@ -279,7 +262,7 @@ export function RuleForm({ onClose, onSaved, editRule }: RuleFormProps) {
                   onChange={e => setAnalysisInterval(Number(e.target.value))}
                 >
                   {ANALYSIS_INTERVAL_OPTIONS.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    <option key={opt.value} value={opt.value}>{t.notifications[opt.labelKey]}</option>
                   ))}
                 </select>
               </label>

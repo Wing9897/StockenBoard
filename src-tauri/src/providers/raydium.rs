@@ -1,7 +1,6 @@
-use crate::providers::traits::PROVIDER_INFO_MAP;
 use crate::providers::traits::{
-    shared_client, AssetData, AssetDataBuilder, DataProvider, DexPoolInfo, DexPoolLookup,
-    ProviderInfo,
+    provider_info_or_panic, shared_client, AssetData, AssetDataBuilder, DataProvider, DexPoolInfo,
+    DexPoolLookup, ProviderInfo,
 };
 use serde::Deserialize;
 
@@ -72,7 +71,7 @@ struct RaydiumDayStats {
 #[async_trait::async_trait]
 impl DataProvider for RaydiumProvider {
     fn info(&self) -> ProviderInfo {
-        PROVIDER_INFO_MAP.get("raydium").cloned().unwrap()
+        provider_info_or_panic("raydium")
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {
@@ -97,14 +96,14 @@ impl DataProvider for RaydiumProvider {
             .await
             .map_err(|e| format!("Raydium JSON parse failed: {}", e))?;
 
-        if body.success == Some(false) || body.data.is_none() {
+        if body.success == Some(false) {
             return Err(format!("Raydium: pool {} not found", pool_addr));
         }
 
         let pool = body
             .data
-            .unwrap()
             .into_iter()
+            .flatten()
             .flatten()
             .next()
             .ok_or_else(|| format!("Raydium: pool {} not found or returned null", pool_addr))?;

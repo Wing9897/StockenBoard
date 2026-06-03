@@ -45,7 +45,7 @@ fn parse_okx_ticker(symbol: &str, item: &serde_json::Value) -> AssetData {
 #[async_trait::async_trait]
 impl DataProvider for OkxProvider {
     fn info(&self) -> ProviderInfo {
-        get_provider_info("okx").unwrap()
+        provider_info_or_panic("okx")
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {

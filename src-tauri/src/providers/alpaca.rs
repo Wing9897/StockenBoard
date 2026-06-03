@@ -56,7 +56,7 @@ impl AlpacaProvider {
 #[async_trait::async_trait]
 impl DataProvider for AlpacaProvider {
     fn info(&self) -> ProviderInfo {
-        get_provider_info("alpaca").unwrap()
+        provider_info_or_panic("alpaca")
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {

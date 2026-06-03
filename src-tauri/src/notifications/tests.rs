@@ -3,6 +3,7 @@
 //! 使用 proptest 驗證推播通知系統的正確性屬性。
 
 use proptest::prelude::*;
+use std::str::FromStr;
 
 use crate::notifications::evaluator::{evaluate_condition, evaluate_rules, filter_matching_rules};
 use crate::notifications::models::{
@@ -783,7 +784,7 @@ mod parse_ai_response_tests {
     fn test_parse_valid_json_trigger_true() {
         let json = r#"{"trigger": true, "reason": "價格上升超過 5%"}"#;
         let result = parse_ai_response(json).unwrap();
-        assert_eq!(result.trigger, true);
+        assert!(result.trigger);
         assert_eq!(result.reason, "價格上升超過 5%");
     }
 
@@ -791,7 +792,7 @@ mod parse_ai_response_tests {
     fn test_parse_valid_json_trigger_false() {
         let json = r#"{"trigger": false, "reason": "no significant change"}"#;
         let result = parse_ai_response(json).unwrap();
-        assert_eq!(result.trigger, false);
+        assert!(!result.trigger);
         assert_eq!(result.reason, "no significant change");
     }
 
@@ -799,7 +800,7 @@ mod parse_ai_response_tests {
     fn test_parse_json_with_whitespace() {
         let json = r#"  {"trigger": true, "reason": "test"}  "#;
         let result = parse_ai_response(json).unwrap();
-        assert_eq!(result.trigger, true);
+        assert!(result.trigger);
         assert_eq!(result.reason, "test");
     }
 
@@ -809,7 +810,7 @@ mod parse_ai_response_tests {
     fn test_parse_json_with_extra_fields() {
         let json = r#"{"trigger": true, "reason": "test", "confidence": 0.95, "extra": "ignored"}"#;
         let result = parse_ai_response(json).unwrap();
-        assert_eq!(result.trigger, true);
+        assert!(result.trigger);
         assert_eq!(result.reason, "test");
     }
 
@@ -817,7 +818,7 @@ mod parse_ai_response_tests {
     fn test_parse_json_with_nested_extra_fields() {
         let json = r#"{"trigger": false, "reason": "stable", "metadata": {"model": "gpt-4", "tokens": 150}}"#;
         let result = parse_ai_response(json).unwrap();
-        assert_eq!(result.trigger, false);
+        assert!(!result.trigger);
         assert_eq!(result.reason, "stable");
     }
 
@@ -827,7 +828,7 @@ mod parse_ai_response_tests {
     fn test_parse_markdown_json_code_block() {
         let raw = "```json\n{\"trigger\": true, \"reason\": \"detected spike\"}\n```";
         let result = parse_ai_response(raw).unwrap();
-        assert_eq!(result.trigger, true);
+        assert!(result.trigger);
         assert_eq!(result.reason, "detected spike");
     }
 
@@ -835,7 +836,7 @@ mod parse_ai_response_tests {
     fn test_parse_markdown_plain_code_block() {
         let raw = "```\n{\"trigger\": false, \"reason\": \"no change\"}\n```";
         let result = parse_ai_response(raw).unwrap();
-        assert_eq!(result.trigger, false);
+        assert!(!result.trigger);
         assert_eq!(result.reason, "no change");
     }
 
@@ -843,7 +844,7 @@ mod parse_ai_response_tests {
     fn test_parse_markdown_with_surrounding_text() {
         let raw = "Here is my analysis:\n```json\n{\"trigger\": true, \"reason\": \"price surge\"}\n```\nEnd of response.";
         let result = parse_ai_response(raw).unwrap();
-        assert_eq!(result.trigger, true);
+        assert!(result.trigger);
         assert_eq!(result.reason, "price surge");
     }
 
@@ -2212,7 +2213,7 @@ mod ai_e2e_integration_tests {
             result.err()
         );
         let response = result.unwrap();
-        assert_eq!(response.trigger, true, "AI should trigger notification");
+        assert!(response.trigger, "AI should trigger notification");
         assert!(!response.reason.is_empty(), "AI reason should not be empty");
         assert!(
             response.reason.contains("6.2%"),
@@ -2371,7 +2372,7 @@ mod ai_e2e_integration_tests {
             result.err()
         );
         let response = result.unwrap();
-        assert_eq!(response.trigger, true);
+        assert!(response.trigger);
     }
 
     /// E2E Test: evaluate_ai_rule with no price history returns error

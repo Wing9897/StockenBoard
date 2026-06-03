@@ -262,7 +262,7 @@ fn parse_jupiter_price(symbol: &str, mint: &str, resp: &serde_json::Value) -> Op
 #[async_trait::async_trait]
 impl DataProvider for JupiterProvider {
     fn info(&self) -> ProviderInfo {
-        get_provider_info("jupiter").unwrap()
+        provider_info_or_panic("jupiter")
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {

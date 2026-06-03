@@ -17,7 +17,7 @@ impl AlphaVantageProvider {
 #[async_trait::async_trait]
 impl DataProvider for AlphaVantageProvider {
     fn info(&self) -> ProviderInfo {
-        get_provider_info("alphavantage").unwrap()
+        provider_info_or_panic("alphavantage")
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {
@@ -85,7 +85,8 @@ impl DataProvider for AlphaVantageProvider {
         let mut results = Vec::new();
         let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(2));
 
-        for sym in symbols.to_vec() {
+        for sym in symbols {
+            let sym = sym.clone();
             let c = client.clone();
             let key = api_key.clone();
             let sem = semaphore.clone();

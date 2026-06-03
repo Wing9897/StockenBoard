@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { t } from '../../lib/i18n';
+import { silentLog } from '../../lib/errorLog';
 
 interface AiProviderConfigResponse {
   base_url: string;
@@ -10,12 +11,22 @@ interface AiProviderConfigResponse {
 
 type ProviderType = 'ollama' | 'openai' | 'openrouter' | 'custom';
 
-const PROVIDER_PRESETS: Record<ProviderType, { baseUrl: string; needsKey: boolean; label: string }> = {
-  ollama: { baseUrl: 'http://localhost:11434/v1', needsKey: false, label: 'Ollama (本地)' },
-  openai: { baseUrl: 'https://api.openai.com/v1', needsKey: true, label: 'OpenAI' },
-  openrouter: { baseUrl: 'https://openrouter.ai/api/v1', needsKey: true, label: 'OpenRouter' },
-  custom: { baseUrl: '', needsKey: false, label: '自訂' },
+const PROVIDER_PRESETS: Record<ProviderType, { baseUrl: string; needsKey: boolean }> = {
+  ollama: { baseUrl: 'http://localhost:11434/v1', needsKey: false },
+  openai: { baseUrl: 'https://api.openai.com/v1', needsKey: true },
+  openrouter: { baseUrl: 'https://openrouter.ai/api/v1', needsKey: true },
+  custom: { baseUrl: '', needsKey: false },
 };
+
+/** 渲染時查表取得 provider 的 i18n 標籤（避免在模組常數中硬編碼中文） */
+function providerLabel(type: ProviderType): string {
+  switch (type) {
+    case 'ollama': return t.notifications.providerOllama;
+    case 'openai': return t.notifications.providerOpenai;
+    case 'openrouter': return t.notifications.providerOpenrouter;
+    case 'custom': return t.notifications.providerCustom;
+  }
+}
 
 export function AiSettings() {
   const [providerType, setProviderType] = useState<ProviderType>('ollama');
@@ -52,7 +63,7 @@ export function AiSettings() {
         }
       }
     } catch (e) {
-      console.error('Failed to load AI provider config:', e);
+      silentLog('AiSettings.loadConfig', e);
     } finally {
       setLoading(false);
     }
@@ -156,16 +167,16 @@ export function AiSettings() {
         )}
 
         <div className="form-field">
-          <span>服務類型</span>
+          <span>{t.notifications.providerType}</span>
           <div className="rule-mode-toggle">
-            {(Object.entries(PROVIDER_PRESETS) as [ProviderType, typeof PROVIDER_PRESETS['ollama']][]).map(([key, preset]) => (
+            {(Object.keys(PROVIDER_PRESETS) as ProviderType[]).map((key) => (
               <button
                 key={key}
                 type="button"
                 className={`mode-btn ${providerType === key ? 'active' : ''}`}
                 onClick={() => handleProviderChange(key)}
               >
-                {preset.label}
+                {providerLabel(key)}
               </button>
             ))}
           </div>
@@ -181,57 +192,57 @@ export function AiSettings() {
             disabled={providerType !== 'custom'}
           />
           {providerType === 'ollama' && (
-            <p className="form-hint">本地 Ollama 預設端點，確保 Ollama 正在運行</p>
+            <p className="form-hint">{t.notifications.ollamaBaseUrlHint}</p>
           )}
           {providerType === 'openai' && (
-            <p className="form-hint">OpenAI 官方 API 端點</p>
+            <p className="form-hint">{t.notifications.openaiBaseUrlHint}</p>
           )}
           {providerType === 'openrouter' && (
-            <p className="form-hint">OpenRouter 統一 API，支援數百種模型（需 API Key）</p>
+            <p className="form-hint">{t.notifications.openrouterBaseUrlHint}</p>
           )}
         </label>
 
         <div className="form-field">
-          <span>模型 {loadingModels && <small>（載入中...）</small>}</span>
+          <span>{t.notifications.modelLabel} {loadingModels && <small>（{t.common.loading}）</small>}</span>
           {modelList.length > 0 ? (
             <div className="ai-model-select-row">
               <select value={model} onChange={e => setModel(e.target.value)}>
-                <option value="">-- 選擇模型 --</option>
+                <option value="">{t.notifications.selectModel}</option>
                 {modelList.map(m => (
                   <option key={m} value={m}>{m}</option>
                 ))}
               </select>
-              <button type="button" className="btn-refresh" onClick={() => fetchModels()} title="重新整理">🔄</button>
+              <button type="button" className="btn-refresh" onClick={() => fetchModels()} title={t.notifications.refresh}>🔄</button>
             </div>
           ) : (
             <input
               type="text"
               value={model}
               onChange={e => setModel(e.target.value)}
-              placeholder={providerType === 'ollama' ? 'llama3.1:8b' : providerType === 'openai' ? 'gpt-4o' : providerType === 'openrouter' ? 'meta-llama/llama-3.1-8b-instruct:free' : '模型名稱'}
+              placeholder={providerType === 'ollama' ? 'llama3.1:8b' : providerType === 'openai' ? 'gpt-4o' : providerType === 'openrouter' ? 'meta-llama/llama-3.1-8b-instruct:free' : t.notifications.model}
             />
           )}
           {providerType === 'ollama' && modelList.length === 0 && !loadingModels && (
-            <p className="form-hint">無法取得模型列表，請確認 Ollama 正在運行，或手動輸入模型名稱</p>
+            <p className="form-hint">{t.notifications.ollamaNoModelsHint}</p>
           )}
           {providerType === 'ollama' && (
-            <p className="form-hint">推薦：llama3.1:8b、qwen2.5:7b、mistral:7b 等通用模型（避免使用 code 專用模型）</p>
+            <p className="form-hint">{t.notifications.ollamaModelHint}</p>
           )}
           {providerType === 'openrouter' && (
-            <p className="form-hint">推薦：meta-llama/llama-3.1-8b-instruct:free、google/gemma-2-9b-it:free（免費模型）</p>
+            <p className="form-hint">{t.notifications.openrouterModelHint}</p>
           )}
         </div>
 
         {(providerType === 'openai' || providerType === 'openrouter' || providerType === 'custom') && (
           <label className="form-field">
-            <span>API Key{providerType === 'custom' ? '（可選）' : ''}</span>
+            <span>API Key{providerType === 'custom' ? t.notifications.apiKeyOptionalSuffix : ''}</span>
             <input
               type="password"
               value={apiKey}
               onChange={e => setApiKey(e.target.value)}
               placeholder="sk-..."
             />
-            <p className="form-hint">留空表示不更新已儲存的 Key。</p>
+            <p className="form-hint">{t.notifications.apiKeyBlankHint}</p>
           </label>
         )}
 

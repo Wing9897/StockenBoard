@@ -3,6 +3,7 @@
 //! 根據 channel_type 分派通知至對應的 sender（Telegram 或 Webhook），
 //! 並記錄發送結果至 notification_history。
 
+use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::db::DbPool;
@@ -20,6 +21,13 @@ pub async fn dispatch_notification(
     rule: &NotificationRule,
     data: &NotificationData,
 ) {
+    // 若沒有綁定任何通道，僅記錄歷史（供 app 內 pop-up/面板顯示），不做外部派發
+    if rule.channel_ids.is_empty() {
+        let message = format!("[{}] {} @ ${}", data.symbol, data.rule_name, data.price);
+        record_history(db, rule.id, 0, data.price, "success", &message, None);
+        return;
+    }
+
     let channels = match db.list_notification_channels() {
         Ok(ch) => ch,
         Err(e) => {
@@ -38,8 +46,8 @@ pub async fn dispatch_notification(
         };
 
         let channel_type = match ChannelType::from_str(&channel.channel_type) {
-            Some(ct) => ct,
-            None => {
+            Ok(ct) => ct,
+            Err(_) => {
                 eprintln!(
                     "[Dispatcher] 通道 {} 類型無效: {}",
                     channel_id, channel.channel_type

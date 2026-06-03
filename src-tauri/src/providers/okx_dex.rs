@@ -180,7 +180,7 @@ fn chain_name(chain_id: &str) -> &'static str {
 #[async_trait::async_trait]
 impl DataProvider for OkxDexProvider {
     fn info(&self) -> ProviderInfo {
-        get_provider_info("okx_dex").unwrap()
+        provider_info_or_panic("okx_dex")
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {
@@ -247,7 +247,8 @@ impl DataProvider for OkxDexProvider {
         let mut results = Vec::new();
         let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(5));
 
-        for sym in symbols.to_vec() {
+        for sym in symbols {
+            let sym = sym.clone();
             let client = self.client.clone();
             let api_key = self.api_key.clone();
             let sem = semaphore.clone();

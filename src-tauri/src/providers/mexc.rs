@@ -41,7 +41,7 @@ fn parse_mexc_ticker(symbol: &str, item: &serde_json::Value) -> AssetData {
 #[async_trait::async_trait]
 impl DataProvider for MexcProvider {
     fn info(&self) -> ProviderInfo {
-        get_provider_info("mexc").unwrap()
+        provider_info_or_panic("mexc")
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {

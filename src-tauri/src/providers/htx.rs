@@ -45,7 +45,7 @@ fn parse_htx_ticker(symbol: &str, tick: &serde_json::Value) -> AssetData {
 #[async_trait::async_trait]
 impl DataProvider for HtxProvider {
     fn info(&self) -> ProviderInfo {
-        get_provider_info("htx").unwrap()
+        provider_info_or_panic("htx")
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {

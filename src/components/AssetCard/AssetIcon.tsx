@@ -77,7 +77,7 @@ interface AssetIconProps {
 }
 
 export function getIconName(symbol: string): string {
-  return symbol.toLowerCase().replace(/usdt$/, '').replace(/-usd$/, '');
+  return symbol.toLowerCase();
 }
 
 export const AssetIcon = memo(function AssetIcon({ symbol, className, onClick }: AssetIconProps) {

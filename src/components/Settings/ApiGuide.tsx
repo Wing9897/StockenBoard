@@ -4,8 +4,13 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useLocale } from '../../hooks/useLocale';
+import { silentLog } from '../../lib/errorLog';
 
-export function ApiGuide() {
+interface ApiGuideProps {
+  onToast?: (type: 'success' | 'error' | 'info', title: string, message?: string) => void;
+}
+
+export function ApiGuide({ onToast }: ApiGuideProps) {
   const { t } = useLocale();
   const [copied, setCopied] = useState('');
   const [apiPort, setApiPort] = useState(8080);
@@ -26,7 +31,7 @@ export function ApiGuide() {
       setTempPort(port.toString());
       setApiEnabled(enabled);
     } catch (err) {
-      console.error('載入 API 設定失敗:', err);
+      silentLog('ApiGuide.loadApiSettings', err);
     }
   };
 
@@ -35,16 +40,16 @@ export function ApiGuide() {
       const newEnabled = !apiEnabled;
       await invoke('set_api_enabled', { enabled: newEnabled });
       setApiEnabled(newEnabled);
-      alert(newEnabled ? t.api.enabledMsg : t.api.disabledMsg);
+      onToast?.('info', newEnabled ? t.api.enabledMsg : t.api.disabledMsg);
     } catch (err) {
-      alert(`${t.api.saveFailed}: ${err}`);
+      onToast?.('error', `${t.api.saveFailed}: ${err}`);
     }
   };
 
   const saveApiPort = async () => {
     const port = parseInt(tempPort);
     if (isNaN(port) || port < 1024 || port > 65535) {
-      alert(t.api.portRange);
+      onToast?.('error', t.api.portRange);
       return;
     }
 
@@ -52,9 +57,9 @@ export function ApiGuide() {
       await invoke('set_api_port', { port });
       setApiPort(port);
       setEditingPort(false);
-      alert(t.api.portSaved);
+      onToast?.('info', t.api.portSaved);
     } catch (err) {
-      alert(`${t.api.saveFailed}: ${err}`);
+      onToast?.('error', `${t.api.saveFailed}: ${err}`);
     }
   };
 
@@ -362,7 +367,7 @@ curl ${apiBase}/prices/binance/BTCUSDT`;
             onClick={() => setActiveModal('python')}
             style={{ padding: '6px 14px', background: 'var(--blue)', color: 'var(--base)', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '500' }}
           >
-            {t.api.viewExample || '查看指令與回傳範例'}
+            {t.api.viewExample}
           </button>
         </div>
 
@@ -376,7 +381,7 @@ curl ${apiBase}/prices/binance/BTCUSDT`;
             onClick={() => setActiveModal('history')}
             style={{ padding: '6px 14px', background: 'var(--blue)', color: 'var(--base)', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '500' }}
           >
-            {t.api.viewExample || '查看指令與回傳範例'}
+            {t.api.viewExample}
           </button>
         </div>
 
@@ -390,7 +395,7 @@ curl ${apiBase}/prices/binance/BTCUSDT`;
             onClick={() => setActiveModal('curl')}
             style={{ padding: '6px 14px', background: 'var(--blue)', color: 'var(--base)', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '500' }}
           >
-            {t.api.viewExample || '查看指令與回傳範例'}
+            {t.api.viewExample}
           </button>
         </div>
 

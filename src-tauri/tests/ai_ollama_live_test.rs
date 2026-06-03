@@ -123,17 +123,17 @@ fn test_parse_various_ollama_formats() {
     // Plain JSON
     let raw1 = r#"{"trigger": true, "reason": "Price rose significantly"}"#;
     let v1: serde_json::Value = serde_json::from_str(raw1).unwrap();
-    assert_eq!(v1["trigger"].as_bool().unwrap(), true);
+    assert!(v1["trigger"].as_bool().unwrap());
 
     // JSON with newlines (common Ollama format)
     let raw2 = "{\n  \"trigger\": false,\n  \"reason\": \"No significant change detected\"\n}";
     let v2: serde_json::Value = serde_json::from_str(raw2).unwrap();
-    assert_eq!(v2["trigger"].as_bool().unwrap(), false);
+    assert!(!v2["trigger"].as_bool().unwrap());
 
     // JSON in markdown code block
     let raw3 = "```json\n{\"trigger\": true, \"reason\": \"test\"}\n```";
     let start = raw3.find('{').unwrap();
     let end = raw3.rfind('}').unwrap() + 1;
     let v3: serde_json::Value = serde_json::from_str(&raw3[start..end]).unwrap();
-    assert_eq!(v3["trigger"].as_bool().unwrap(), true);
+    assert!(v3["trigger"].as_bool().unwrap());
 }

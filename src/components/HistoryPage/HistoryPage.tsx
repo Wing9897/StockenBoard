@@ -5,6 +5,9 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 
 import { t } from '../../lib/i18n';
+import { silentLog } from '../../lib/errorLog';
+import { useConfirm } from '../../hooks/useConfirm';
+import { ConfirmDialog } from '../ConfirmDialog/ConfirmDialog';
 import { HistorySidebar } from './HistorySidebar';
 import { HistoryChart } from './HistoryChart';
 import { HistoryTable } from './HistoryTable';
@@ -54,6 +57,7 @@ export function HistoryPage({ onToast }: Props) {
   const [collapsed, setCollapsed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const { confirmState, requestConfirm, handleConfirm, handleCancel } = useConfirm();
 
   // ── 載入訂閱 ──
   const loadSubs = useCallback(async () => {
@@ -61,7 +65,7 @@ export function HistoryPage({ onToast }: Props) {
       const assetSubs = await invoke<Subscription[]>('list_subscriptions', { subType: 'asset' });
       const dexSubs = await invoke<Subscription[]>('list_subscriptions', { subType: 'dex' });
       setSubs([...assetSubs, ...dexSubs]);
-    } catch (e) { console.error('loadSubs:', e); }
+    } catch (e) { silentLog('HistoryPage.loadSubs', e); }
   }, []);
   useEffect(() => { loadSubs(); }, [loadSubs]);
 
@@ -111,7 +115,7 @@ export function HistoryPage({ onToast }: Props) {
       }
       setRecords(await invoke<PriceHistoryRecord[]>('get_price_history', { subscriptionId: selectedId, fromTs, toTs, limit: 10000 }));
     } catch (e) {
-      console.error('loadHistory:', e);
+      silentLog('HistoryPage.loadHistory', e);
       setRecords([]);
     } finally { setLoading(false); }
   }, [selectedId, range, customFrom, customTo]);
@@ -125,22 +129,22 @@ export function HistoryPage({ onToast }: Props) {
   // ── 清理 ──
   const cleanupSelected = useCallback(async () => {
     if (!selectedId) return;
-    if (!confirm(t.history.purgeAllConfirm)) return;
+    if (!await requestConfirm(t.history.cleanupCurrentConfirm)) return;
     try {
       const n = await invoke<number>('delete_subscription_history', { subscriptionId: selectedId });
       onToast.success(t.history.purgeAllDone(n));
       setRecords([]);
     } catch (e) { onToast.error(String(e)); }
-  }, [selectedId, onToast]);
+  }, [selectedId, onToast, requestConfirm]);
 
   const purgeAll = useCallback(async () => {
-    if (!confirm(t.history.purgeAllConfirm)) return;
+    if (!await requestConfirm(t.history.purgeAllConfirm)) return;
     try {
       const n = await invoke<number>('purge_all_history');
       onToast.success(t.history.purgeAllDone(n));
       setRecords([]);
     } catch (e) { onToast.error(String(e)); }
-  }, [onToast]);
+  }, [onToast, requestConfirm]);
 
   const cleanup90 = useCallback(async () => {
     try {
@@ -288,6 +292,10 @@ export function HistoryPage({ onToast }: Props) {
           <HistoryTable records={records} session={session} tzLabel={TZ_LABEL} />
         )}
       </div>
+
+      {confirmState && (
+        <ConfirmDialog message={confirmState.message} onConfirm={handleConfirm} onCancel={handleCancel} />
+      )}
     </div>
   );
 }

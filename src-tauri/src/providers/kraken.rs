@@ -29,7 +29,7 @@ fn to_kraken_symbol(symbol: &str) -> String {
 #[async_trait::async_trait]
 impl DataProvider for KrakenProvider {
     fn info(&self) -> ProviderInfo {
-        get_provider_info("kraken").unwrap()
+        provider_info_or_panic("kraken")
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {

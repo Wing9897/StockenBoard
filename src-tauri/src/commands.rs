@@ -1,5 +1,6 @@
 use crate::db::{DbPool, ExportData, ProviderSettingsRow, Subscription, ViewRow, ViewSubCount};
 use crate::events::AppEvent;
+use crate::notifications::global_cooldown::GlobalCooldown;
 use crate::polling::{PollTick, PollingManager};
 use crate::providers::{
     create_dex_lookup, create_ws_provider, get_all_provider_info, registry::ProviderRegistry,
@@ -24,6 +25,8 @@ pub struct AppState {
     pub notification_engine: Arc<crate::notifications::engine::NotificationEngine>,
     /// AI 排程器（管理 AI 規則的定期評估 task）
     pub ai_scheduler: Arc<crate::notifications::ai_scheduler::AiScheduler>,
+    /// 全局通知冷卻期（跨規則共享的最小觸發間隔）
+    pub global_cooldown: Arc<GlobalCooldown>,
     ws_sender: broadcast::Sender<WsTickerUpdate>,
     #[allow(clippy::type_complexity)]
     ws_tasks: RwLock<HashMap<String, (tokio::task::JoinHandle<()>, tokio::task::JoinHandle<()>)>>,
@@ -37,6 +40,7 @@ impl AppState {
         event_bus: broadcast::Sender<AppEvent>,
         notification_engine: Arc<crate::notifications::engine::NotificationEngine>,
         ai_scheduler: Arc<crate::notifications::ai_scheduler::AiScheduler>,
+        global_cooldown: Arc<GlobalCooldown>,
     ) -> Self {
         let (ws_sender, _) = broadcast::channel(256);
         Self {
@@ -45,6 +49,7 @@ impl AppState {
             event_bus,
             notification_engine,
             ai_scheduler,
+            global_cooldown,
             ws_sender,
             ws_tasks: RwLock::new(HashMap::new()),
             polling: PollingManager::new(),
@@ -59,6 +64,7 @@ impl AppState {
             event_bus: self.event_bus.clone(),
             notification_engine: self.notification_engine.clone(),
             ai_scheduler: self.ai_scheduler.clone(),
+            global_cooldown: self.global_cooldown.clone(),
             ws_sender: broadcast::channel(1).0,
             ws_tasks: RwLock::new(HashMap::new()),
             polling: self.polling.clone(),
@@ -193,6 +199,15 @@ pub async fn list_subscriptions(
 }
 
 #[tauri::command]
+pub async fn list_all_subscriptions(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<Subscription>, String> {
+    state.db.list_all_subscriptions()
+}
+
+#[tauri::command]
+// 引數對應前端 IPC 契約與 subscriptions 資料表欄位，刻意保持平面簽章（見 Requirement 6.4）
+#[allow(clippy::too_many_arguments)]
 pub async fn add_subscription(
     state: tauri::State<'_, AppState>,
     sub_type: String,
@@ -335,6 +350,8 @@ pub async fn list_provider_settings(
 }
 
 #[tauri::command]
+// 引數對應前端 IPC 契約與 provider_settings 資料表欄位，刻意保持平面簽章
+#[allow(clippy::too_many_arguments)]
 pub async fn upsert_provider_settings(
     state: tauri::State<'_, AppState>,
     provider_id: String,
@@ -500,10 +517,7 @@ pub async fn set_icon(app: tauri::AppHandle, symbol: String) -> Result<String, S
         .pick_file()
         .await
         .ok_or_else(|| "已取消".to_string())?;
-    let icon_name = symbol
-        .to_lowercase()
-        .replace("usdt", "")
-        .replace("-usd", "");
+    let icon_name = symbol.to_lowercase();
     let icons_dir = app
         .path()
         .app_data_dir()
@@ -521,10 +535,7 @@ pub async fn set_icon(app: tauri::AppHandle, symbol: String) -> Result<String, S
 
 #[tauri::command]
 pub async fn remove_icon(app: tauri::AppHandle, symbol: String) -> Result<(), String> {
-    let icon_name = symbol
-        .to_lowercase()
-        .replace("usdt", "")
-        .replace("-usd", "");
+    let icon_name = symbol.to_lowercase();
     let dest = app
         .path()
         .app_data_dir()
@@ -547,6 +558,142 @@ pub async fn get_icons_dir(app: tauri::AppHandle) -> Result<String, String> {
         .map_err(|e| format!("無法取得 app 目錄: {}", e))?
         .join("icons");
     Ok(dir.to_string_lossy().to_string())
+}
+
+// ── Logo Batch Download ─────────────────────────────────────────
+
+/// 批量下載訂閱的 logo icon（只下載本地尚未存在的）。
+/// 回傳 { succeeded, skipped (已存在), failed (找不到/非 PNG) } 的數量。
+#[tauri::command]
+pub async fn download_logos(
+    state: tauri::State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<LogoDownloadResult, String> {
+    use tokio::sync::Semaphore;
+
+    let icons_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("無法取得 app 目錄: {}", e))?
+        .join("icons");
+    tokio::fs::create_dir_all(&icons_dir)
+        .await
+        .map_err(|e| format!("建立 icons 目錄失敗: {}", e))?;
+
+    // 載入所有訂閱
+    let subs = state.db.list_all_subscriptions()?;
+
+    let semaphore = std::sync::Arc::new(Semaphore::new(3));
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .user_agent("StockenBoard/1.0")
+        .build()
+        .unwrap_or_default();
+
+    let mut succeeded = 0u32;
+    let mut skipped = 0u32;
+    let mut failed_list: Vec<String> = Vec::new();
+
+    for sub in &subs {
+        let icon_name = to_icon_name(&sub.symbol);
+        let dest = icons_dir.join(format!("{}.png", icon_name));
+
+        // 已存在 → 跳過（不覆蓋手動設定的）
+        if dest.exists() {
+            skipped += 1;
+            continue;
+        }
+
+        let query_symbol = to_query_symbol(&sub.symbol, &sub.asset_type);
+        let _permit = semaphore.clone().acquire_owned().await.unwrap();
+
+        // Fallback 鏈
+        let bytes = try_download_png(&client, &query_symbol, sub.sub_type == "dex").await;
+
+        drop(_permit);
+
+        match bytes {
+            Some(data) => {
+                if let Err(e) = tokio::fs::write(&dest, &data).await {
+                    eprintln!("[LogoDownload] 寫入 {} 失敗: {}", icon_name, e);
+                    failed_list.push(sub.symbol.clone());
+                } else {
+                    succeeded += 1;
+                }
+            }
+            None => {
+                failed_list.push(sub.symbol.clone());
+            }
+        }
+
+        // 每次請求間隔 200ms，避免觸發 rate limit
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    }
+
+    Ok(LogoDownloadResult {
+        succeeded,
+        skipped,
+        failed: failed_list.len() as u32,
+        failed_symbols: failed_list,
+    })
+}
+
+#[derive(serde::Serialize)]
+pub struct LogoDownloadResult {
+    pub succeeded: u32,
+    pub skipped: u32,
+    pub failed: u32,
+    pub failed_symbols: Vec<String>,
+}
+
+/// 將 symbol 轉為 icon 檔名（直接使用小寫 symbol，不做任何後綴剝離）
+fn to_icon_name(symbol: &str) -> String {
+    symbol.to_lowercase()
+}
+
+/// 將 symbol 轉為用於 logo API 查詢的形式（提取 base symbol）
+///
+/// 使用 parse_crypto_symbol 通用規則拆分 base/quote，
+/// 因為 logo API（Parqet、spothq）只認 base symbol（如 BTC、ETH）。
+fn to_query_symbol(symbol: &str, asset_type: &str) -> String {
+    match asset_type {
+        "crypto" => {
+            let (base, _quote) = crate::providers::traits::parse_crypto_symbol(symbol);
+            base
+        }
+        // stock / forex / others: 直接用原始 symbol
+        _ => symbol.to_uppercase(),
+    }
+}
+
+/// 嘗試從多個來源下載 PNG。回傳 Some(bytes) 或 None。
+async fn try_download_png(client: &reqwest::Client, symbol: &str, _is_dex: bool) -> Option<Vec<u8>> {
+    let upper = symbol.to_uppercase();
+
+    // Parqet (stock + crypto, CDN, 無 rate limit)
+    let url = format!("https://assets.parqet.com/logos/symbol/{}", upper);
+    fetch_if_png(client, &url).await
+}
+
+/// 下載 URL，若 response 是 image/png 或 image/jpeg 則回傳 bytes，否則 None。
+async fn fetch_if_png(client: &reqwest::Client, url: &str) -> Option<Vec<u8>> {
+    let resp = client.get(url).send().await.ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    if !content_type.starts_with("image/png") && !content_type.starts_with("image/jpeg") {
+        return None; // SVG 或其他格式 → 跳過
+    }
+    let bytes = resp.bytes().await.ok()?;
+    if bytes.len() < 100 {
+        return None; // 太小，可能是空/錯誤頁
+    }
+    Some(bytes.to_vec())
 }
 
 /// 讀取本地檔案並回傳 base64 data URL
@@ -857,6 +1004,32 @@ pub async fn set_api_enabled(
         .set_setting("api_enabled", if enabled { "1" } else { "0" })
 }
 
+// ── Global Cooldown Commands ────────────────────────────────────
+
+#[tauri::command]
+pub async fn get_notification_global_cooldown(
+    state: tauri::State<'_, AppState>,
+) -> Result<u64, String> {
+    let val = state
+        .db
+        .get_setting("notification_global_cooldown")?
+        .unwrap_or_else(|| "30".into());
+    val.parse::<u64>()
+        .map_err(|e| format!("無效的 cooldown 值: {}", e))
+}
+
+#[tauri::command]
+pub async fn set_notification_global_cooldown(
+    state: tauri::State<'_, AppState>,
+    secs: u64,
+) -> Result<(), String> {
+    state
+        .db
+        .set_setting("notification_global_cooldown", &secs.to_string())?;
+    state.global_cooldown.set_cooldown(secs);
+    Ok(())
+}
+
 // ── Notification Rule Commands ──────────────────────────────────
 
 #[tauri::command]
@@ -885,7 +1058,7 @@ pub async fn create_notification_rule(
     let ai_config_json = rule
         .ai_config
         .as_ref()
-        .map(|cfg| serde_json::to_string(cfg))
+        .map(serde_json::to_string)
         .transpose()
         .map_err(|e| format!("序列化 ai_config 失敗: {}", e))?;
     let id = state.db.create_notification_rule(
@@ -936,7 +1109,7 @@ pub async fn update_notification_rule(
     let channel_ids_json = rule
         .channel_ids
         .as_ref()
-        .map(|ids| serde_json::to_string(ids))
+        .map(serde_json::to_string)
         .transpose()
         .map_err(|e| format!("序列化 channel_ids 失敗: {}", e))?;
 

@@ -126,7 +126,7 @@ impl PolygonProvider {
 #[async_trait::async_trait]
 impl DataProvider for PolygonProvider {
     fn info(&self) -> ProviderInfo {
-        get_provider_info("polygon").unwrap()
+        provider_info_or_panic("polygon")
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {

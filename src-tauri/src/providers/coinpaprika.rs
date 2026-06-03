@@ -115,7 +115,7 @@ fn parse_paprika_ticker(symbol: &str, data: &serde_json::Value) -> AssetData {
 #[async_trait::async_trait]
 impl DataProvider for CoinPaprikaProvider {
     fn info(&self) -> ProviderInfo {
-        get_provider_info("coinpaprika").unwrap()
+        provider_info_or_panic("coinpaprika")
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {

@@ -238,7 +238,7 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
           {importing ? t.settings.importing : t.settings.import}
         </button>
         <button className="dm-btn import" style={{ background: 'var(--red)', borderColor: 'var(--red)', color: 'var(--base)' }} onClick={handleReset}>
-          {t.settings.factoryReset || '恢復出廠設定'}
+          {t.settings.factoryReset}
         </button>
       </div>
       {importResult && (

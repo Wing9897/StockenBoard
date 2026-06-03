@@ -101,7 +101,7 @@ impl FMPProvider {
 #[async_trait::async_trait]
 impl DataProvider for FMPProvider {
     fn info(&self) -> ProviderInfo {
-        get_provider_info("fmp").unwrap()
+        provider_info_or_panic("fmp")
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {
@@ -165,7 +165,7 @@ impl DataProvider for FMPProvider {
             .map_err(|e| format!("FMP 批量讀取失敗: {}", e))?;
 
         let arr: Vec<serde_json::Value> = serde_json::from_str(&body)
-            .map_err(|_| format!("FMP 批量解析失敗 (可能含無效 symbol)"))?;
+            .map_err(|_| "FMP 批量解析失敗 (可能含無效 symbol)".to_string())?;
 
         // 建立 fmp_symbol -> response 查找表
         let response_map: HashMap<String, &serde_json::Value> = arr

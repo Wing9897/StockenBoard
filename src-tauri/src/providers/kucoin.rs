@@ -38,7 +38,7 @@ fn parse_kucoin_ticker(symbol: &str, data: &serde_json::Value) -> AssetData {
 #[async_trait::async_trait]
 impl DataProvider for KuCoinProvider {
     fn info(&self) -> ProviderInfo {
-        get_provider_info("kucoin").unwrap()
+        provider_info_or_panic("kucoin")
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {

@@ -218,6 +218,17 @@ pub fn get_provider_info(id: &str) -> Option<ProviderInfo> {
     PROVIDER_INFO_MAP.get(id).cloned()
 }
 
+/// 取得已註冊 provider 的靜態 info；供 `DataProvider::info()` 使用。
+///
+/// `id` 必須是 `build_all_provider_info()` 中註冊過的字面值。若未註冊則 panic，
+/// 並附帶可定位問題的訊息（取代各處裸 `.unwrap()`，避免 registry 與 `info()` 失步時
+/// 只得到無資訊的 panic）。
+#[allow(dead_code)]
+pub fn provider_info_or_panic(id: &str) -> ProviderInfo {
+    get_provider_info(id)
+        .unwrap_or_else(|| panic!("provider info '{id}' 未在 build_all_provider_info() 註冊"))
+}
+
 fn build_all_provider_info() -> Vec<ProviderInfo> {
     vec![
         // Crypto                                                                                    free_iv  key_iv

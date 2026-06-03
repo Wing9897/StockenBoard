@@ -17,7 +17,7 @@ impl FinnhubProvider {
 #[async_trait::async_trait]
 impl DataProvider for FinnhubProvider {
     fn info(&self) -> ProviderInfo {
-        get_provider_info("finnhub").unwrap()
+        provider_info_or_panic("finnhub")
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {

@@ -15,7 +15,7 @@ impl CoinbaseProvider {
 #[async_trait::async_trait]
 impl DataProvider for CoinbaseProvider {
     fn info(&self) -> ProviderInfo {
-        get_provider_info("coinbase").unwrap()
+        provider_info_or_panic("coinbase")
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {

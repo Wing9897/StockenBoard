@@ -3,14 +3,16 @@
 //! 訂閱 Event Bus 的 PriceUpdate 事件，評估觸發條件，派發通知。
 
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{broadcast, RwLock};
 
 use crate::db::DbPool;
-use crate::events::AppEvent;
+use crate::events::{AppEvent, NotificationTriggeredPayload};
 use crate::notifications::dispatcher;
 use crate::notifications::evaluator;
+use crate::notifications::global_cooldown::GlobalCooldown;
 use crate::notifications::models::{ConditionType, NotificationData, NotificationRule};
 
 pub struct NotificationEngine {
@@ -18,15 +20,21 @@ pub struct NotificationEngine {
     cooldowns: Arc<RwLock<HashMap<i64, Instant>>>,
     db: Arc<DbPool>,
     http_client: reqwest::Client,
+    /// Event Bus sender — 觸發後發布 NotificationTriggered 供前端側欄即時顯示
+    event_bus: broadcast::Sender<AppEvent>,
+    /// 全局通知冷卻期（跨規則共享的最小觸發間隔）
+    global_cooldown: Arc<GlobalCooldown>,
 }
 
 impl NotificationEngine {
-    pub fn new(db: Arc<DbPool>) -> Self {
+    pub fn new(db: Arc<DbPool>, event_bus: broadcast::Sender<AppEvent>, global_cooldown: Arc<GlobalCooldown>) -> Self {
         Self {
             rules: Arc::new(RwLock::new(Vec::new())),
             cooldowns: Arc::new(RwLock::new(HashMap::new())),
             db,
             http_client: reqwest::Client::new(),
+            event_bus,
+            global_cooldown,
         }
     }
 
@@ -36,6 +44,8 @@ impl NotificationEngine {
         let cooldowns = self.cooldowns.clone();
         let db = self.db.clone();
         let http_client = self.http_client.clone();
+        let event_bus = self.event_bus.clone();
+        let global_cooldown = self.global_cooldown.clone();
 
         tokio::spawn(async move {
             eprintln!("[NotificationEngine] 啟動，開始監聯事件");
@@ -46,13 +56,23 @@ impl NotificationEngine {
                         for asset in &data {
                             let triggered = evaluator::evaluate_rules(&rules_guard, asset);
                             for rule in triggered {
-                                // Check cooldown
+                                // Check per-rule cooldown first (lightweight, no side effects)
                                 let mut cd_guard = cooldowns.write().await;
                                 if let Some(last_fired) = cd_guard.get(&rule.id) {
                                     if last_fired.elapsed().as_secs() < rule.cooldown_secs {
                                         continue;
                                     }
                                 }
+
+                                // Check global cooldown (atomically marks as triggered if passes)
+                                if !global_cooldown.check_and_trigger() {
+                                    eprintln!(
+                                        "[NotificationEngine] rule_id={} 全局冷卻期未過，跳過觸發",
+                                        rule.id
+                                    );
+                                    continue;
+                                }
+
                                 cd_guard.insert(rule.id, Instant::now());
                                 drop(cd_guard);
 
@@ -73,6 +93,21 @@ impl NotificationEngine {
                                     &notif_data,
                                 )
                                 .await;
+
+                                // 發布觸發事件供前端側欄即時顯示（閾值規則，非 AI）
+                                let _ = event_bus.send(AppEvent::NotificationTriggered(
+                                    NotificationTriggeredPayload {
+                                        rule_name: notif_data.rule_name.clone(),
+                                        symbol: notif_data.symbol.clone(),
+                                        provider: notif_data.provider.clone(),
+                                        price: notif_data.price,
+                                        condition_type: notif_data.condition_type.as_str().to_string(),
+                                        threshold: notif_data.threshold,
+                                        triggered_at: notif_data.triggered_at.timestamp(),
+                                        is_ai: false,
+                                        ai_reason: None,
+                                    },
+                                ));
                             }
                         }
                     }
@@ -120,8 +155,8 @@ impl NotificationEngine {
         for row in &rule_rows {
             if let Some(&(provider_id, symbol)) = sub_map.get(&row.subscription_id) {
                 let condition_type = match ConditionType::from_str(&row.condition_type) {
-                    Some(ct) => ct,
-                    None => {
+                    Ok(ct) => ct,
+                    Err(_) => {
                         eprintln!(
                             "[NotificationEngine] 規則 {} 的條件類型無效: {}",
                             row.id, row.condition_type

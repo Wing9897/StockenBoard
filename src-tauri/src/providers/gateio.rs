@@ -42,7 +42,7 @@ fn parse_gateio_ticker(symbol: &str, item: &serde_json::Value) -> AssetData {
 #[async_trait::async_trait]
 impl DataProvider for GateioProvider {
     fn info(&self) -> ProviderInfo {
-        get_provider_info("gateio").unwrap()
+        provider_info_or_panic("gateio")
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {

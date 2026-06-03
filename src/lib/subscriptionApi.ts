@@ -11,6 +11,11 @@ export async function loadSubscriptions(subType: 'asset' | 'dex'): Promise<Subsc
   return invoke<Subscription[]>('list_subscriptions', { subType });
 }
 
+/** 載入所有訂閱（asset + dex），對應後端 list_all_subscriptions */
+export async function loadAllSubscriptions(): Promise<Subscription[]> {
+  return invoke<Subscription[]>('list_all_subscriptions');
+}
+
 /** 載入所有 provider 資訊 */
 export async function loadProviderInfo(): Promise<ProviderInfo[]> {
   return invoke<ProviderInfo[]>('get_all_providers');

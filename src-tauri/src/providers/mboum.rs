@@ -69,7 +69,7 @@ impl MboumProvider {
 #[async_trait::async_trait]
 impl DataProvider for MboumProvider {
     fn info(&self) -> ProviderInfo {
-        get_provider_info("mboum").unwrap()
+        provider_info_or_panic("mboum")
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {
@@ -156,7 +156,8 @@ impl DataProvider for MboumProvider {
         let mut results = Vec::new();
         let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(5));
 
-        for sym in symbols.to_vec() {
+        for sym in symbols {
+            let sym = sym.clone();
             let c = client.clone();
             let k = api_key_clone.clone();
             let sem = semaphore.clone();

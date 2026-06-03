@@ -23,7 +23,7 @@ fn to_coinapi_base(symbol: &str) -> String {
 #[async_trait::async_trait]
 impl DataProvider for CoinApiProvider {
     fn info(&self) -> ProviderInfo {
-        get_provider_info("coinapi").unwrap()
+        provider_info_or_panic("coinapi")
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {

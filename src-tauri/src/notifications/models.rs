@@ -4,6 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::str::FromStr;
 
 // === 條件類型 ===
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -16,18 +17,22 @@ pub enum ConditionType {
     Ai,
 }
 
-impl ConditionType {
-    pub fn from_str(s: &str) -> Option<Self> {
+impl FromStr for ConditionType {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "price_above" => Some(Self::PriceAbove),
-            "price_below" => Some(Self::PriceBelow),
-            "change_pct_above" => Some(Self::ChangePctAbove),
-            "change_pct_below" => Some(Self::ChangePctBelow),
-            "ai" => Some(Self::Ai),
-            _ => None,
+            "price_above" => Ok(Self::PriceAbove),
+            "price_below" => Ok(Self::PriceBelow),
+            "change_pct_above" => Ok(Self::ChangePctAbove),
+            "change_pct_below" => Ok(Self::ChangePctBelow),
+            "ai" => Ok(Self::Ai),
+            _ => Err(()),
         }
     }
+}
 
+impl ConditionType {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::PriceAbove => "price_above",
@@ -124,12 +129,14 @@ pub enum ChannelType {
     Webhook,
 }
 
-impl ChannelType {
-    pub fn from_str(s: &str) -> Option<Self> {
+impl FromStr for ChannelType {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "telegram" => Some(Self::Telegram),
-            "webhook" => Some(Self::Webhook),
-            _ => None,
+            "telegram" => Ok(Self::Telegram),
+            "webhook" => Ok(Self::Webhook),
+            _ => Err(()),
         }
     }
 }

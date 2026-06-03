@@ -24,6 +24,24 @@ pub enum AppEvent {
         fetched_at: i64,
         interval_ms: u64,
     },
+    /// 通知規則觸發（閾值或 AI）— 供前端側欄即時顯示
+    NotificationTriggered(NotificationTriggeredPayload),
+}
+
+/// 前端事件用的通知觸發 payload（規則觸發即時推送到 UI）
+#[derive(Debug, Clone, Serialize)]
+pub struct NotificationTriggeredPayload {
+    pub rule_name: String,
+    pub symbol: String,
+    pub provider: String,
+    pub price: f64,
+    pub condition_type: String,
+    pub threshold: f64,
+    /// Unix 秒
+    pub triggered_at: i64,
+    pub is_ai: bool,
+    /// AI 規則的判斷理由；非 AI 規則為 None
+    pub ai_reason: Option<String>,
 }
 
 /// 前端事件用的 PollTick 結構

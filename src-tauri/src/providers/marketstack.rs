@@ -40,7 +40,7 @@ impl MarketstackProvider {
 #[async_trait::async_trait]
 impl DataProvider for MarketstackProvider {
     fn info(&self) -> ProviderInfo {
-        get_provider_info("marketstack").unwrap()
+        provider_info_or_panic("marketstack")
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {

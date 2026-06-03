@@ -2,30 +2,33 @@ mod api_server;
 mod commands;
 mod db;
 mod events;
-mod notifications;
+pub mod notifications;
 mod polling;
 mod providers;
 
 use commands::{
     add_sub_to_view, add_subscription, add_subscriptions_batch, cleanup_history,
     create_notification_rule, create_view, delete_notification_channel, delete_notification_rule,
-    delete_subscription_history, delete_view, enable_provider, export_data, export_file,
-    fetch_asset_price, fetch_multiple_prices, get_ai_provider_config, get_all_providers,
+    delete_subscription_history, delete_view, download_logos, enable_provider, export_data,
+    export_file, fetch_asset_price, fetch_multiple_prices, get_ai_provider_config, get_all_providers,
     get_api_enabled, get_api_port, get_cached_prices, get_data_dir, get_history_stats,
-    get_icons_dir, get_notification_history, get_poll_ticks, get_price_history, get_theme_bg_path,
-    get_unattended_polling, get_view_sub_counts, get_view_subscription_ids, has_api_key,
-    import_data, import_file, list_notification_channels, list_notification_rules,
+    get_icons_dir, get_notification_global_cooldown, get_notification_history, get_poll_ticks,
+    get_price_history, get_theme_bg_path, get_unattended_polling, get_view_sub_counts,
+    get_view_subscription_ids, has_api_key, import_data, import_file, list_all_subscriptions,
+    list_notification_channels, list_notification_rules,
     list_provider_settings, list_subscriptions, list_views, lookup_dex_pool, purge_all_history,
     read_local_file_base64, reload_polling, remove_icon, remove_sub_from_view, remove_subscription,
     remove_subscriptions, remove_theme_bg, rename_view, reset_all_data, save_ai_provider_config,
     save_notification_channel, save_theme_bg, set_api_enabled, set_api_port, set_icon,
-    set_provider_record_hours, set_record_hours, set_unattended_polling, set_visible_subscriptions,
-    start_ws_stream, stop_ws_stream, test_ai_connection, list_ai_models, test_notification_channel,
-    toggle_notification_rule, toggle_record, update_notification_rule, update_subscription,
-    upsert_provider_settings, AppState,
+    set_notification_global_cooldown, set_provider_record_hours, set_record_hours,
+    set_unattended_polling, set_visible_subscriptions, start_ws_stream, stop_ws_stream,
+    test_ai_connection, list_ai_models, test_notification_channel, toggle_notification_rule,
+    toggle_record, update_notification_rule, update_subscription, upsert_provider_settings,
+    AppState,
 };
-use db::DbPool;
+use db::{DbPool, PriceRecord};
 use events::AppEvent;
+use notifications::global_cooldown::GlobalCooldown;
 use providers::registry::ProviderRegistry;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -58,6 +61,11 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
+            // 注意：部分指令目前前端尚未呼叫（如 enable_provider、get_unattended_polling、
+            // remove_icon、set_provider_record_hours、get_history_stats），屬刻意保留的 IPC 介面：
+            // 其底層能力已存在且部分經由其他路徑使用（例：api_server 直接用 polling.is_unattended()，
+            // record hours 經由 upsert_provider_settings 寫入）。保留以供未來 UI／HTTP API 擴充，
+            // 移除前請先確認無外部依賴。
             // Provider / Fetch
             fetch_asset_price,
             fetch_multiple_prices,
@@ -72,6 +80,7 @@ pub fn run() {
             get_poll_ticks,
             // Subscriptions (NEW)
             list_subscriptions,
+            list_all_subscriptions,
             add_subscription,
             add_subscriptions_batch,
             update_subscription,
@@ -97,6 +106,7 @@ pub fn run() {
             set_icon,
             remove_icon,
             get_icons_dir,
+            download_logos,
             read_local_file_base64,
             // Theme
             save_theme_bg,
@@ -136,6 +146,8 @@ pub fn run() {
             delete_notification_channel,
             test_notification_channel,
             get_notification_history,
+            get_notification_global_cooldown,
+            set_notification_global_cooldown,
             // AI Provider Config
             save_ai_provider_config,
             get_ai_provider_config,
@@ -157,13 +169,26 @@ pub fn run() {
                 // 建立 Event Bus（解耦 Polling ↔ DB ↔ 前端）
                 let (event_bus, _) = broadcast::channel::<AppEvent>(512);
 
+                // 建立 Global Cooldown（從 DB 讀取設定值，預設 30 秒）
+                let cooldown_secs: u64 = db
+                    .get_setting("notification_global_cooldown")
+                    .ok()
+                    .flatten()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(30);
+                let global_cooldown = Arc::new(GlobalCooldown::new(cooldown_secs));
+
                 // 建立 Notification Engine
-                let notification_engine =
-                    Arc::new(notifications::engine::NotificationEngine::new(db.clone()));
+                let notification_engine = Arc::new(
+                    notifications::engine::NotificationEngine::new(db.clone(), event_bus.clone(), global_cooldown.clone()),
+                );
 
                 // 建立 AI Scheduler
-                let ai_scheduler =
-                    Arc::new(notifications::ai_scheduler::AiScheduler::new(db.clone()));
+                let ai_scheduler = Arc::new(
+                    notifications::ai_scheduler::AiScheduler::new(db.clone())
+                        .with_event_bus(event_bus.clone())
+                        .with_global_cooldown(global_cooldown.clone()),
+                );
 
                 let state = AppState::new(
                     db.clone(),
@@ -171,6 +196,7 @@ pub fn run() {
                     event_bus.clone(),
                     notification_engine.clone(),
                     ai_scheduler.clone(),
+                    global_cooldown.clone(),
                 );
                 state.polling.start(
                     app.handle().clone(),
@@ -198,14 +224,7 @@ pub fn run() {
                                     if !record_symbols.is_empty() {
                                         let record_set: HashSet<String> =
                                             record_symbols.into_iter().collect();
-                                        let records: Vec<(
-                                            String,
-                                            f64,
-                                            Option<f64>,
-                                            Option<f64>,
-                                            Option<f64>,
-                                            Option<f64>,
-                                        )> = data
+                                        let records: Vec<PriceRecord> = data
                                             .iter()
                                             .filter(|d| record_set.contains(&d.symbol))
                                             .map(|d| {
@@ -260,6 +279,10 @@ pub fn run() {
                                             interval_ms,
                                         },
                                     );
+                                }
+                                AppEvent::NotificationTriggered(payload) => {
+                                    let _ = app_for_forwarder
+                                        .emit("notification-triggered", &payload);
                                 }
                             },
                             Err(broadcast::error::RecvError::Lagged(n)) => {

@@ -57,7 +57,7 @@ impl TiingoProvider {
 #[async_trait::async_trait]
 impl DataProvider for TiingoProvider {
     fn info(&self) -> ProviderInfo {
-        get_provider_info("tiingo").unwrap()
+        provider_info_or_panic("tiingo")
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {

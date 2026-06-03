@@ -1,7 +1,6 @@
-use crate::providers::traits::PROVIDER_INFO_MAP;
 use crate::providers::traits::{
-    shared_client, AssetData, AssetDataBuilder, DataProvider, DexPoolInfo, DexPoolLookup,
-    ProviderInfo,
+    provider_info_or_panic, shared_client, AssetData, AssetDataBuilder, DataProvider, DexPoolInfo,
+    DexPoolLookup, ProviderInfo,
 };
 use serde::Deserialize;
 
@@ -101,7 +100,7 @@ struct TokenData {
 #[async_trait::async_trait]
 impl DataProvider for SubgraphProvider {
     fn info(&self) -> ProviderInfo {
-        PROVIDER_INFO_MAP.get("subgraph").cloned().unwrap()
+        provider_info_or_panic("subgraph")
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {
@@ -214,7 +213,8 @@ impl DataProvider for SubgraphProvider {
         let mut results = Vec::new();
         let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(5));
 
-        for symbol in symbols.to_vec() {
+        for symbol in symbols {
+            let symbol = symbol.clone();
             let sem = semaphore.clone();
 
             // pre-compute information before spawning the task to avoid lifetime/borrow issues

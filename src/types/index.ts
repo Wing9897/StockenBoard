@@ -89,3 +89,47 @@ export interface ToastActions {
   info: (title: string, msg?: string) => void;
   warning?: (title: string, msg?: string) => void;
 }
+
+/** 通知通道（對應後端 list_notification_channels 回傳） */
+export interface ChannelRow {
+  id: number;
+  channel_type: string;   // 'telegram' | 'webhook'
+  name: string;
+  config: string;         // JSON 字串
+  created_at: number;
+}
+
+/** 通知規則完整列（對應後端 list_notification_rules 回傳） */
+export interface NotificationRuleRow {
+  id: number;
+  name: string;
+  subscription_id: number;
+  condition_type: string;
+  threshold: number;
+  channel_ids: string;    // JSON 陣列字串
+  cooldown_secs: number;
+  enabled: boolean;
+  ai_config: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+/** 編輯規則表單所需的資料（NotificationRuleRow 的子集） */
+export type EditRuleData = Pick<
+  NotificationRuleRow,
+  'id' | 'name' | 'subscription_id' | 'condition_type'
+  | 'threshold' | 'channel_ids' | 'cooldown_secs' | 'ai_config'
+>;
+
+/** 通知規則觸發事件（後端 'notification-triggered' Tauri 事件 payload） */
+export interface NotificationTriggeredEvent {
+  rule_name: string;
+  symbol: string;
+  provider: string;
+  price: number;
+  condition_type: string;   // 'price_above' | 'price_below' | 'change_pct_above' | 'change_pct_below' | 'ai'
+  threshold: number;
+  triggered_at: number;     // Unix 秒
+  is_ai: boolean;
+  ai_reason: string | null;
+}

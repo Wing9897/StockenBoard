@@ -6,12 +6,15 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
+use tokio::sync::broadcast;
 use tokio::sync::RwLock;
 use tokio::task::AbortHandle;
 
 use crate::db::DbPool;
+use crate::events::{AppEvent, NotificationTriggeredPayload};
 use crate::notifications::ai_evaluator;
 use crate::notifications::dispatcher;
+use crate::notifications::global_cooldown::GlobalCooldown;
 use crate::notifications::models::{
     AiConfig, AiProviderConfig, ConditionType, NotificationData, NotificationRule,
 };
@@ -35,6 +38,11 @@ pub struct AiScheduler {
     db: Arc<DbPool>,
     /// HTTP client，用於呼叫 AI API
     http_client: reqwest::Client,
+    /// Event Bus sender — 觸發後發布 NotificationTriggered 供前端側欄即時顯示。
+    /// 以 Option 包裝，讓測試可用無事件匯流排的精簡建構子。
+    event_bus: Option<broadcast::Sender<AppEvent>>,
+    /// 全局通知冷卻期（跨規則共享的最小觸發間隔）
+    global_cooldown: Option<Arc<GlobalCooldown>>,
 }
 
 /// 單條 AI 規則對應的 task 控制柄
@@ -53,7 +61,21 @@ impl AiScheduler {
             tasks: Arc::new(RwLock::new(HashMap::new())),
             db,
             http_client: reqwest::Client::new(),
+            event_bus: None,
+            global_cooldown: None,
         }
+    }
+
+    /// 設定 Event Bus sender（建構後注入），供觸發時推送前端事件。
+    pub fn with_event_bus(mut self, event_bus: broadcast::Sender<AppEvent>) -> Self {
+        self.event_bus = Some(event_bus);
+        self
+    }
+
+    /// 設定全局冷卻期（建構後注入），供觸發前檢查。
+    pub fn with_global_cooldown(mut self, global_cooldown: Arc<GlobalCooldown>) -> Self {
+        self.global_cooldown = Some(global_cooldown);
+        self
     }
 
     /// 啟動排程器，載入所有已啟用的 AI 規則並為每條規則啟動 task
@@ -120,6 +142,8 @@ impl AiScheduler {
                 self.http_client.clone(),
                 rule.cooldown_secs,
                 channel_ids,
+                self.event_bus.clone(),
+                self.global_cooldown.clone(),
             );
 
             tasks.insert(rule.id, TaskHandle { abort_handle });
@@ -218,6 +242,8 @@ impl AiScheduler {
             self.http_client.clone(),
             rule.cooldown_secs,
             channel_ids,
+            self.event_bus.clone(),
+            self.global_cooldown.clone(),
         );
 
         let mut tasks = self.tasks.write().await;
@@ -275,6 +301,8 @@ impl AiScheduler {
         http_client: reqwest::Client,
         cooldown_secs: i64,
         channel_ids: Vec<i64>,
+        event_bus: Option<broadcast::Sender<AppEvent>>,
+        global_cooldown: Option<Arc<GlobalCooldown>>,
     ) -> AbortHandle {
         let handle = tokio::spawn(async move {
             let interval = std::time::Duration::from_secs(ai_config.analysis_interval_secs);
@@ -303,7 +331,7 @@ impl AiScheduler {
                 match eval_result {
                     Ok(response) => {
                         if response.trigger {
-                            // Step 3a: Check cooldown
+                            // Step 3a: Check per-rule cooldown first (lightweight, no side effects)
                             let in_cooldown =
                                 should_suppress_trigger(last_trigger_time, cooldown_secs as u64);
 
@@ -315,7 +343,18 @@ impl AiScheduler {
                                 continue;
                             }
 
-                            // Step 3b: Not in cooldown — dispatch notification
+                            // Step 3b: Check global cooldown (atomically marks as triggered if passes)
+                            if let Some(ref gc) = global_cooldown {
+                                if !gc.check_and_trigger() {
+                                    eprintln!(
+                                        "[AiScheduler] rule_id={} 全局冷卻期未過，跳過觸發",
+                                        rule_id
+                                    );
+                                    continue;
+                                }
+                            }
+
+                            // Step 3c: Not in cooldown — dispatch notification
                             // Get symbol from subscription
                             let symbol = match get_symbol_for_subscription(&db, subscription_id) {
                                 Some(s) => s,
@@ -361,6 +400,23 @@ impl AiScheduler {
                                 &notif_data,
                             )
                             .await;
+
+                            // 發布觸發事件供前端側欄即時顯示（AI 規則）
+                            if let Some(bus) = &event_bus {
+                                let _ = bus.send(AppEvent::NotificationTriggered(
+                                    NotificationTriggeredPayload {
+                                        rule_name: notif_data.rule_name.clone(),
+                                        symbol: notif_data.symbol.clone(),
+                                        provider: notif_data.provider.clone(),
+                                        price: notif_data.price,
+                                        condition_type: ConditionType::Ai.as_str().to_string(),
+                                        threshold: 0.0,
+                                        triggered_at: triggered_at.timestamp(),
+                                        is_ai: true,
+                                        ai_reason: Some(response.reason.clone()),
+                                    },
+                                ));
+                            }
 
                             // Step 3c: Record trigger time for cooldown tracking
                             last_trigger_time = Some(Instant::now());

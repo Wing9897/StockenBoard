@@ -31,7 +31,7 @@ impl EODHDProvider {
 #[async_trait::async_trait]
 impl DataProvider for EODHDProvider {
     fn info(&self) -> ProviderInfo {
-        get_provider_info("eodhd").unwrap()
+        provider_info_or_panic("eodhd")
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {
@@ -88,7 +88,7 @@ impl DataProvider for EODHDProvider {
             .map_err(|e| format!("EODHD 批量讀取失敗: {}", e))?;
 
         let arr: Vec<serde_json::Value> = serde_json::from_str(&body)
-            .map_err(|_| format!("EODHD 批量解析失敗 (可能含無效 symbol)"))?;
+            .map_err(|_| "EODHD 批量解析失敗 (可能含無效 symbol)".to_string())?;
 
         let response_map: HashMap<String, &serde_json::Value> = arr
             .iter()

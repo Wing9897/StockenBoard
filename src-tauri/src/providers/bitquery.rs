@@ -17,7 +17,7 @@ impl BitqueryProvider {
 #[async_trait::async_trait]
 impl DataProvider for BitqueryProvider {
     fn info(&self) -> ProviderInfo {
-        get_provider_info("bitquery").unwrap()
+        provider_info_or_panic("bitquery")
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {

@@ -1,20 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { t } from '../../lib/i18n';
-
-interface NotificationRuleRow {
-  id: number;
-  name: string;
-  subscription_id: number;
-  condition_type: string;
-  threshold: number;
-  channel_ids: string;
-  cooldown_secs: number;
-  enabled: boolean;
-  ai_config: string | null;
-  created_at: number;
-  updated_at: number;
-}
+import { silentLog } from '../../lib/errorLog';
+import { useConfirm } from '../../hooks/useConfirm';
+import { ConfirmDialog } from '../ConfirmDialog/ConfirmDialog';
+import type { NotificationRuleRow } from '../../types';
 
 interface RuleListProps {
   onAddRule?: () => void;
@@ -23,25 +13,25 @@ interface RuleListProps {
 
 function formatCondition(conditionType: string, threshold: number): string {
   switch (conditionType) {
-    case 'price_above': return `價格 > $${threshold.toLocaleString()}`;
-    case 'price_below': return `價格 < $${threshold.toLocaleString()}`;
-    case 'change_pct_above': return `漲幅 > ${threshold}%`;
-    case 'change_pct_below': return `跌幅 < ${threshold}%`;
+    case 'price_above': return t.notifications.condPriceAbove(threshold.toLocaleString());
+    case 'price_below': return t.notifications.condPriceBelow(threshold.toLocaleString());
+    case 'change_pct_above': return t.notifications.condChangeUp(String(threshold));
+    case 'change_pct_below': return t.notifications.condChangeDown(String(threshold));
     default: return conditionType;
   }
 }
 
 function getAiPromptSummary(aiConfig: string | null): string {
-  if (!aiConfig) return 'AI 規則';
+  if (!aiConfig) return t.notifications.aiRule;
   try {
     const config = JSON.parse(aiConfig) as { prompt?: string };
     const prompt = config.prompt || '';
     if (prompt.length > 50) {
       return prompt.slice(0, 50) + '…';
     }
-    return prompt || 'AI 規則';
+    return prompt || t.notifications.aiRule;
   } catch {
-    return 'AI 規則';
+    return t.notifications.aiRule;
   }
 }
 
@@ -49,13 +39,14 @@ function getAiPromptSummary(aiConfig: string | null): string {
 export function RuleList({ onAddRule, onEditRule }: RuleListProps) {
   const [rules, setRules] = useState<NotificationRuleRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const { confirmState, requestConfirm, handleConfirm, handleCancel } = useConfirm();
 
   const fetchRules = useCallback(async () => {
     try {
       const data = await invoke<NotificationRuleRow[]>('list_notification_rules');
       setRules(data);
     } catch (e) {
-      console.error('Failed to fetch rules:', e);
+      silentLog('RuleList.fetchRules', e);
     } finally {
       setLoading(false);
     }
@@ -68,17 +59,18 @@ export function RuleList({ onAddRule, onEditRule }: RuleListProps) {
       await invoke('toggle_notification_rule', { id, enabled: !currentEnabled });
       setRules(prev => prev.map(r => r.id === id ? { ...r, enabled: !currentEnabled } : r));
     } catch (e) {
-      console.error('Failed to toggle rule:', e);
+      silentLog('RuleList.toggle', e);
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm(t.notifications.deleteConfirm)) return;
+    const ok = await requestConfirm(t.notifications.deleteConfirm);
+    if (!ok) return;
     try {
       await invoke('delete_notification_rule', { id });
       setRules(prev => prev.filter(r => r.id !== id));
     } catch (e) {
-      console.error('Failed to delete rule:', e);
+      silentLog('RuleList.delete', e);
     }
   };
 
@@ -109,17 +101,20 @@ export function RuleList({ onAddRule, onEditRule }: RuleListProps) {
               </div>
               <div className="rule-actions">
                 {onEditRule && (
-                  <button className="btn-edit-rule" onClick={() => onEditRule(rule)} title="編輯">✏️</button>
+                  <button className="btn-edit-rule" onClick={() => onEditRule(rule)} title={t.common.edit}>✏️</button>
                 )}
                 <label className="toggle-switch">
                   <input type="checkbox" checked={rule.enabled} onChange={() => handleToggle(rule.id, rule.enabled)} />
                   <span className="toggle-slider"></span>
                 </label>
-                <button className="btn-delete-rule" onClick={() => handleDelete(rule.id)} title="刪除">🗑</button>
+                <button className="btn-delete-rule" onClick={() => handleDelete(rule.id)} title={t.common.delete}>🗑</button>
               </div>
             </div>
           ))}
         </div>
+      )}
+      {confirmState && (
+        <ConfirmDialog message={confirmState.message} onConfirm={handleConfirm} onCancel={handleCancel} />
       )}
     </div>
   );

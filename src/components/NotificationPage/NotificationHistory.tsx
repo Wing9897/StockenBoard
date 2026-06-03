@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { t } from '../../lib/i18n';
+import { silentLog } from '../../lib/errorLog';
 
 interface HistoryRow {
   id: number;
@@ -29,7 +31,7 @@ export function NotificationHistory() {
       });
       setHistory(data);
     } catch (e) {
-      console.error('Failed to fetch history:', e);
+      silentLog('NotificationHistory.fetchHistory', e);
     } finally {
       setLoading(false);
     }
@@ -47,31 +49,31 @@ export function NotificationHistory() {
     return new Date(ts * 1000).toLocaleString();
   };
 
-  if (loading) return <div className="notification-placeholder"><p>載入中...</p></div>;
+  if (loading) return <div className="notification-placeholder"><p>{t.common.loading}</p></div>;
 
   return (
     <div className="notification-history">
       <div className="history-filter">
         <label className="filter-field">
-          <span>從</span>
+          <span>{t.notifications.filterFrom}</span>
           <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} />
         </label>
         <label className="filter-field">
-          <span>至</span>
+          <span>{t.notifications.filterTo}</span>
           <input type="date" value={toDate} onChange={e => setToDate(e.target.value)} />
         </label>
-        <button className="btn-filter" onClick={handleFilter}>篩選</button>
+        <button className="btn-filter" onClick={handleFilter}>{t.notifications.filterApply}</button>
       </div>
 
       {history.length === 0 ? (
-        <div className="notification-placeholder"><p>尚無通知紀錄</p></div>
+        <div className="notification-placeholder"><p>{t.notifications.noHistory}</p></div>
       ) : (
         <div className="history-items">
           {history.map(item => (
             <div key={item.id} className="history-item">
               <div className="history-meta">
                 <span className={`history-status ${item.status}`}>
-                  {item.status === 'success' ? '✓ 成功' : '✗ 失敗'}
+                  {item.status === 'success' ? t.notifications.statusSuccess : t.notifications.statusFailed}
                 </span>
                 <span className="history-time">{formatTime(item.sent_at)}</span>
                 <span className="history-price">${item.price.toLocaleString()}</span>

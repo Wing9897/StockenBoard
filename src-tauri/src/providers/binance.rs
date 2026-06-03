@@ -33,7 +33,7 @@ impl BinanceProvider {
 #[async_trait::async_trait]
 impl DataProvider for BinanceProvider {
     fn info(&self) -> ProviderInfo {
-        get_provider_info("binance").unwrap()
+        provider_info_or_panic("binance")
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {

@@ -9,6 +9,22 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+// ── Shared complex-type aliases ─────────────────────────────────
+
+/// 一筆待寫入的價格紀錄：(symbol, price, change_pct, volume, pre_price, post_price)
+pub type PriceRecord = (
+    String,
+    f64,
+    Option<f64>,
+    Option<f64>,
+    Option<f64>,
+    Option<f64>,
+);
+
+/// Polling 用的 provider 設定值：(api_key, api_secret, api_url, refresh_interval)
+pub type PollingProviderSetting = (Option<String>, Option<String>, Option<String>, Option<i64>);
+
+
 // ── Schema ──────────────────────────────────────────────────────
 
 pub const SCHEMA: &str = r#"
@@ -517,6 +533,8 @@ impl DbPool {
     }
 
     /// 新增訂閱，回傳新 ID。使用 INSERT OR IGNORE 避免重複。
+    // 引數對應 subscriptions 資料表欄位，刻意保持平面簽章
+    #[allow(clippy::too_many_arguments)]
     pub fn add_subscription(
         &self,
         sub_type: &str,
@@ -666,6 +684,8 @@ impl DbPool {
         }
     }
 
+    // 引數對應 provider_settings 資料表欄位，刻意保持平面簽章
+    #[allow(clippy::too_many_arguments)]
     pub fn upsert_provider_settings(
         &self,
         provider_id: &str,
@@ -821,14 +841,7 @@ impl DbPool {
     pub fn write_price_history(
         &self,
         provider_id: &str,
-        data: &[(
-            String,
-            f64,
-            Option<f64>,
-            Option<f64>,
-            Option<f64>,
-            Option<f64>,
-        )],
+        data: &[PriceRecord],
     ) {
         let conn = self.conn.lock().unwrap();
         let now = chrono::Utc::now().timestamp();
@@ -1179,13 +1192,7 @@ impl DbPool {
     /// 為 Polling 讀取所有 provider 設定
     pub fn read_polling_provider_settings(
         &self,
-    ) -> Result<
-        std::collections::HashMap<
-            String,
-            (Option<String>, Option<String>, Option<String>, Option<i64>),
-        >,
-        String,
-    > {
+    ) -> Result<std::collections::HashMap<String, PollingProviderSetting>, String> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn
             .prepare("SELECT provider_id, api_key, api_secret, api_url, refresh_interval FROM provider_settings")
@@ -1253,6 +1260,8 @@ impl DbPool {
 
     // ── Notification Rules ──────────────────────────────────────
 
+    // 引數對應 notification_rules 資料表欄位，刻意保持平面簽章
+    #[allow(clippy::too_many_arguments)]
     pub fn create_notification_rule(
         &self,
         name: &str,
@@ -1332,6 +1341,8 @@ impl DbPool {
         }
     }
 
+    // 引數對應 notification_rules 可更新欄位，刻意保持平面簽章
+    #[allow(clippy::too_many_arguments)]
     pub fn update_notification_rule(
         &self,
         id: i64,
@@ -1521,7 +1532,7 @@ impl DbPool {
 
         // Bind all parameters
         for (i, val) in param_values.iter().enumerate() {
-            stmt.raw_bind_parameter((i + 1) as usize, val.as_ref())
+            stmt.raw_bind_parameter(i + 1, val.as_ref())
                 .map_err(|e| e.to_string())?;
         }
         stmt.raw_bind_parameter(idx as usize, actual_limit)
@@ -1561,5 +1572,97 @@ impl DbPool {
             .map_err(|e| format!("插入測試價格歷史失敗: {}", e))?;
         }
         Ok(())
+    }
+}
+
+// ── Tests ───────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Helper: open an in-memory DB (schema initialized by `DbPool::open`).
+    fn open_test_db() -> DbPool {
+        DbPool::open(&PathBuf::from(":memory:")).unwrap()
+    }
+
+    /// Helper: insert an `asset` subscription, returning its id.
+    fn add_asset(db: &DbPool, symbol: &str, provider: &str) -> i64 {
+        db.add_subscription("asset", symbol, None, provider, "crypto", None, None, None)
+            .unwrap()
+    }
+
+    /// Helper: insert a `dex` subscription, returning its id.
+    fn add_dex(db: &DbPool, symbol: &str, provider: &str) -> i64 {
+        db.add_subscription(
+            "dex",
+            symbol,
+            None,
+            provider,
+            "dex",
+            Some("0xpool"),
+            Some("0xfrom"),
+            Some("0xto"),
+        )
+        .unwrap()
+    }
+
+    /// `list_all_subscriptions` returns both `asset` and `dex` rows, and the
+    /// total count equals (asset count + dex count). Mirrors how
+    /// `engine.rs::load_rules_from_db` consumes the same method.
+    ///
+    /// Validates: Requirements 1.2, 2.1, 2.2
+    #[test]
+    fn list_all_subscriptions_returns_mixed_types_with_full_count() {
+        let db = open_test_db();
+
+        // Fixture: 2 asset + 2 dex (mixed providers to keep UNIQUE constraint happy).
+        add_asset(&db, "BTC/USDT", "binance");
+        add_asset(&db, "ETH/USDT", "binance");
+        add_dex(&db, "WETH/USDC", "uniswap");
+        add_dex(&db, "PEPE/WETH", "uniswap");
+
+        let asset_count = db.list_subscriptions("asset").unwrap().len();
+        let dex_count = db.list_subscriptions("dex").unwrap().len();
+        let all = db.list_all_subscriptions().unwrap();
+
+        // Count contract: total == asset count + dex count.
+        assert_eq!(asset_count, 2);
+        assert_eq!(dex_count, 2);
+        assert_eq!(all.len(), asset_count + dex_count);
+
+        // Both sub_types are present in the combined result.
+        let has_asset = all.iter().any(|s| s.sub_type == "asset");
+        let has_dex = all.iter().any(|s| s.sub_type == "dex");
+        assert!(has_asset, "expected at least one asset subscription");
+        assert!(has_dex, "expected at least one dex subscription");
+    }
+
+    /// Asset-only data set: result contains only `asset` and count matches.
+    ///
+    /// Validates: Requirements 2.1, 2.2
+    #[test]
+    fn list_all_subscriptions_asset_only() {
+        let db = open_test_db();
+        add_asset(&db, "BTC/USDT", "binance");
+        add_asset(&db, "SOL/USDT", "binance");
+
+        let all = db.list_all_subscriptions().unwrap();
+        let asset_count = db.list_subscriptions("asset").unwrap().len();
+        let dex_count = db.list_subscriptions("dex").unwrap().len();
+
+        assert_eq!(dex_count, 0);
+        assert_eq!(all.len(), asset_count + dex_count);
+        assert!(all.iter().all(|s| s.sub_type == "asset"));
+    }
+
+    /// Empty DB: `list_all_subscriptions` returns an empty vec (count == 0).
+    ///
+    /// Validates: Requirements 2.1, 2.2
+    #[test]
+    fn list_all_subscriptions_empty() {
+        let db = open_test_db();
+        let all = db.list_all_subscriptions().unwrap();
+        assert_eq!(all.len(), 0);
     }
 }

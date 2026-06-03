@@ -21,8 +21,10 @@ import { ThemePicker } from './components/Settings/ThemePicker';
 import { LanguagePicker } from './components/Settings/LanguagePicker';
 import { UICustomizer } from './components/Settings/UICustomizer';
 import { ApiGuide } from './components/Settings/ApiGuide';
+import { LogoDownloader } from './components/Settings/LogoDownloader';
 import { ConfirmDialog } from './components/ConfirmDialog/ConfirmDialog';
 import { DashboardToolbar } from './components/DashboardToolbar/DashboardToolbar';
+import { AlertSidebar } from './components/AlertSidebar/AlertSidebar';
 import { ToastContainer } from './components/Toast/Toast';
 import { t } from './lib/i18n';
 import { useLocale } from './hooks/useLocale';
@@ -56,6 +58,7 @@ function App() {
   const [hidePrePost, setHidePrePost] = useState(() => localStorage.getItem(STORAGE_KEYS.HIDE_PREPOST) === '1');
   const toast = useToast();
   const { confirmState, requestConfirm, handleConfirm, handleCancel } = useConfirm();
+  const [alertPanelOpen, setAlertPanelOpen] = useState(false);
 
   const handleSetViewMode = (mode: ViewMode) => { setViewMode(mode); localStorage.setItem(STORAGE_KEYS.VIEW_MODE, mode); };
 
@@ -139,10 +142,11 @@ function App() {
           <button className={`nav-btn ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>{t.nav.dashboard}</button>
           <button className={`nav-btn ${activeTab === 'dex' ? 'active' : ''}`} onClick={() => setActiveTab('dex')}>{t.nav.dex}</button>
           <button className={`nav-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>{t.nav.history}</button>
-          <button className={`nav-btn ${activeTab === 'notifications' ? 'active' : ''}`} onClick={() => setActiveTab('notifications')}>通知</button>
+          <button className={`nav-btn ${activeTab === 'notifications' ? 'active' : ''}`} onClick={() => setActiveTab('notifications')}>{t.nav.notifications}</button>
           <button className={`nav-btn ${activeTab === 'providers' ? 'active' : ''}`} onClick={() => setActiveTab('providers')}>{t.nav.providers}</button>
           <button className={`nav-btn ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>{t.nav.settings}</button>
         </nav>
+        <button className={`nav-btn${alertPanelOpen ? ' active' : ''}`} onClick={() => setAlertPanelOpen(v => !v)} title={t.nav.notifications}>🔔</button>
       </header>
 
       <main className="app-main">
@@ -201,7 +205,8 @@ function App() {
             <ThemePicker />
             <LanguagePicker />
             <UICustomizer />
-            <ApiGuide />
+            <LogoDownloader onToast={(type, title, msg) => toast[type](title, msg)} />
+            <ApiGuide onToast={(type, title, msg) => toast[type](title, msg)} />
             <DataManager views={views} onRefresh={() => { refreshAssets(); refreshViews(); }}
               onToast={(type, title, msg) => toast[type](title, msg)} />
             <p className="settings-disclaimer">{t.settings.disclaimer}</p>
@@ -259,6 +264,8 @@ function App() {
       )}
 
       {confirmState && <ConfirmDialog message={confirmState.message} onConfirm={handleConfirm} onCancel={handleCancel} />}
+
+      <AlertSidebar panelOpen={alertPanelOpen} onClose={() => setAlertPanelOpen(false)} />
     </div>
   );
 }
