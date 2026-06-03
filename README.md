@@ -80,7 +80,7 @@
 - 🔄 **批量操作** - 批量新增、刪除、匯出、匯入訂閱
 - 🎭 **自訂外觀** - 14 種主題、自訂圖示、背景圖片
 - 🌍 **多語言** - 繁中、簡中、英文、日文、韓文
-- 🔔 **推播通知** - 條件觸發式通知，支援 Telegram Bot 及 Webhook
+- 🔔 **推播通知** - 條件觸發 + AI 智能評估，支援 Telegram Bot 及 Webhook，全局冷卻期防止過度通知
 
 ### 🏗️ 技術架構
 
@@ -173,6 +173,7 @@ StockenBoard/
 ├── src-tauri/              # 後端代碼
 │   └── src/
 │       ├── providers/      # 33 個數據源實現
+│       ├── notifications/  # 推播通知系統（引擎、AI 排程、派發）
 │       ├── api_server.rs   # HTTP API Server
 │       ├── polling.rs      # 統一 Polling 管理
 │       ├── commands.rs     # Tauri Commands
