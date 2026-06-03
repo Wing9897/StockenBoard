@@ -89,19 +89,18 @@
 .edit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ===== Compact View ===== */
-.asset-card-compact { background: var(--base); border-radius: var(--radius-sm); padding: 8px 10px; border: 1px solid var(--surface0); transition: all var(--transition-normal); position: relative; display: flex; flex-direction: column; gap: 4px; }
+.asset-card-compact { background: var(--base); border-radius: var(--radius-sm); padding: 6px 8px; border: 1px solid var(--surface0); transition: all var(--transition-normal); position: relative; display: flex; flex-direction: column; gap: 3px; }
 .asset-card-compact:hover { border-color: var(--surface1); }
 .asset-card-compact:hover .asset-card-edit-btn { opacity: 1; }
-.compact-top { display: flex; align-items: center; gap: 6px; }
+.compact-top { display: flex; align-items: center; gap: 4px; }
 .compact-icon { width: 22px; height: 22px; font-size: 8px; }
 .compact-symbol { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .compact-top .asset-card-edit-btn { font-size: 11px; padding: 2px 4px; }
-.compact-bottom { display: flex; align-items: baseline; gap: 6px; }
-.compact-price { font-size: 13px; font-weight: 700; color: var(--text); }
-.compact-change { font-size: 10px; font-weight: 500; }
+.compact-bottom { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
+.compact-price { font-size: 13px; font-weight: 700; color: var(--text); white-space: nowrap; }
+.compact-change { font-size: 10px; font-weight: 500; white-space: nowrap; }
 .compact-change.positive { color: var(--green); }
 .compact-change.negative { color: var(--red); }
-.asset-card-compact .countdown-circle { }
 
 /* ===== Market Session Badge ===== */
 .market-session-badge { font-size: 9px; font-weight: 600; padding: 1px 5px; border-radius: 3px; letter-spacing: 0.3px; flex-shrink: 0; }

@@ -43,7 +43,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxyge
 .app-main { flex: 1; padding: 20px; max-width: 1400px; margin: 0 auto; width: 100%; font-size: var(--ui-font-size, 14px); }
 .dashboard { display: flex; flex-direction: column; }
 .asset-grid { display: grid; grid-template-columns: var(--ui-card-cols, repeat(auto-fill, minmax(200px, 260px))); gap: var(--ui-card-gap, 12px); }
-.asset-grid.compact { grid-template-columns: repeat(auto-fill, minmax(130px, 160px)); gap: var(--ui-card-gap, 8px); }
+.asset-grid.compact { grid-template-columns: repeat(auto-fill, minmax(100px, 130px)); gap: var(--ui-card-gap, 6px); }
 .loading { text-align: center; padding: 40px; color: var(--overlay0); }
 .empty-state { text-align: center; padding: 60px 20px; color: var(--overlay0); }
 .empty-state p { margin-bottom: 16px; }

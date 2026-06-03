@@ -146,6 +146,7 @@ export const AssetCard = memo(function AssetCard({ subscription, providers, curr
           {renderIcon('asset-icon compact-icon')}
           <span className="compact-symbol" title={subscription.symbol}>{subscription.symbol}</span>
           {sessionInfo && <span className={`market-session-badge ${sessionInfo.cls}`}>{sessionInfo.label}</span>}
+          {refreshInterval > 0 && <CountdownCircle providerId={currentProviderId} fallbackInterval={refreshInterval} size={14} />}
           <button className="asset-card-edit-btn" onClick={openEdit} title={t.common.edit}>✎</button>
         </div>
         <div className="compact-bottom">
@@ -157,7 +158,6 @@ export const AssetCard = memo(function AssetCard({ subscription, providers, curr
               {isPositive ? '▲' : '▼'} {Math.abs(changePercent).toFixed(2)}%
             </span>
           )}
-          {refreshInterval > 0 && <CountdownCircle providerId={currentProviderId} fallbackInterval={refreshInterval} size={16} />}
         </div>
         {!hidePrePost && asset && !error && asset.extra && <PrePostRow extra={asset.extra as Record<string, unknown>} currency={asset.currency} className="compact-prepost" />}
         {editPanel}

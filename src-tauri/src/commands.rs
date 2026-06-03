@@ -593,6 +593,8 @@ pub async fn download_logos(
     let mut succeeded = 0u32;
     let mut skipped = 0u32;
     let mut failed_list: Vec<String> = Vec::new();
+    let total = subs.len() as u32;
+    let mut processed = 0u32;
 
     for sub in &subs {
         let icon_name = to_icon_name(&sub.symbol);
@@ -601,6 +603,10 @@ pub async fn download_logos(
         // 已存在 → 跳過（不覆蓋手動設定的）
         if dest.exists() {
             skipped += 1;
+            processed += 1;
+            let _ = app.emit("logo-download-progress", serde_json::json!({
+                "current": processed, "total": total, "symbol": sub.symbol
+            }));
             continue;
         }
 
@@ -625,6 +631,11 @@ pub async fn download_logos(
                 failed_list.push(sub.symbol.clone());
             }
         }
+
+        processed += 1;
+        let _ = app.emit("logo-download-progress", serde_json::json!({
+            "current": processed, "total": total, "symbol": sub.symbol
+        }));
 
         // 每次請求間隔 200ms，避免觸發 rate limit
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
