@@ -94,8 +94,8 @@
 .asset-card-compact:hover .asset-card-edit-btn { opacity: 1; }
 .compact-top { display: flex; align-items: center; gap: 6px; }
 .compact-icon { width: 22px; height: 22px; font-size: 8px; }
-.compact-symbol { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
-.compact-top .asset-card-edit-btn { margin-left: auto; font-size: 11px; padding: 2px 4px; }
+.compact-symbol { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.compact-top .asset-card-edit-btn { font-size: 11px; padding: 2px 4px; }
 .compact-bottom { display: flex; align-items: baseline; gap: 6px; }
 .compact-price { font-size: 13px; font-weight: 700; color: var(--text); }
 .compact-change { font-size: 10px; font-weight: 500; }
