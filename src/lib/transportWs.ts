@@ -62,15 +62,16 @@ export class HttpTransport implements Transport {
   }
 
   listen(event: string, handler: (payload: unknown) => void): () => void {
-    this.ensureWebSocket();
-
-    // Register handler for this event type
+    // Register handler first (before attempting WS connection)
     let handlers = this.eventHandlers.get(event);
     if (!handlers) {
       handlers = new Set();
       this.eventHandlers.set(event, handlers);
     }
     handlers.add(handler);
+
+    // Then try to establish WebSocket
+    this.ensureWebSocket();
 
     // Return an unsubscribe function that removes this specific handler
     return () => {
@@ -95,7 +96,16 @@ export class HttpTransport implements Transport {
 
     this.intentionallyClosed = false;
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    this.ws = new WebSocket(`${protocol}//${location.host}/api/ws`);
+
+    try {
+      this.ws = new WebSocket(`${protocol}//${location.host}/api/ws`);
+    } catch (e) {
+      console.warn('[Transport] WebSocket creation failed:', e);
+      this.ws = null;
+      return;
+    }
+
+    if (!this.ws) return; // Guard against null
 
     this.ws.onopen = () => {
       // Reset reconnect counter on successful connection

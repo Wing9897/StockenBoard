@@ -1,15 +1,12 @@
 # Stage 1: Build the Rust server binary
-FROM rust:1.86-alpine AS builder
-RUN apk add --no-cache musl-dev pkgconfig openssl-dev openssl-libs-static perl make
+FROM rust:1.86-slim-bookworm AS builder
+RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY src-tauri/ .
-ENV OPENSSL_STATIC=1
-ENV OPENSSL_LIB_DIR=/usr/lib
-ENV OPENSSL_INCLUDE_DIR=/usr/include
 RUN cargo build --release --bin server --no-default-features --features server
 
 # Stage 2: Build the frontend SPA
-FROM node:20-alpine AS frontend
+FROM node:20-slim AS frontend
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
@@ -19,8 +16,8 @@ COPY public/ public/
 RUN npm run build
 
 # Stage 3: Minimal runtime image
-FROM alpine:3.20
-RUN apk add --no-cache ca-certificates
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y ca-certificates wget && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/target/release/server /usr/local/bin/stockenboard-server
 COPY --from=frontend /app/dist /app/static
 

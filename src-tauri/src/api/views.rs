@@ -2,8 +2,10 @@
 //!
 //! - `GET  /views?type=`             — list views by type
 //! - `POST /views`                   — create a new view
+//! - `GET  /views/sub-counts`        — subscription count per view
 //! - `PUT  /views/:id`               — rename a view
 //! - `DELETE /views/:id`             — delete a view
+//! - `GET  /views/:id/subscription-ids` — subscription IDs for a view
 //! - `POST /views/:id/subscriptions` — add subscription to view
 //! - `DELETE /views/:id/subscriptions/:sub_id` — remove subscription from view
 
@@ -17,6 +19,7 @@ use axum::{
 use serde::Deserialize;
 
 use crate::core_state::CoreState;
+use crate::db::ViewSubCount;
 
 use super::{ApiError, ApiResponse};
 
@@ -50,8 +53,10 @@ pub struct AddSubBody {
 pub fn router() -> Router<Arc<CoreState>> {
     Router::new()
         .route("/views", get(list_views).post(create_view))
+        .route("/views/sub-counts", get(get_view_sub_counts))
         .route("/views/{id}", axum::routing::put(rename_view).delete(delete_view))
         .route("/views/{id}/subscriptions", axum::routing::post(add_sub_to_view))
+        .route("/views/{id}/subscription-ids", get(get_view_subscription_ids))
         .route(
             "/views/{id}/subscriptions/{sub_id}",
             delete(remove_sub_from_view),
@@ -149,5 +154,32 @@ async fn remove_sub_from_view(
         .db
         .remove_sub_from_view(id, sub_id)
         .map(|_| ApiResponse::ok(serde_json::json!({ "success": true })))
+        .map_err(ApiError::internal)
+}
+
+async fn get_view_sub_counts(
+    State(state): State<Arc<CoreState>>,
+) -> Result<
+    (axum::http::StatusCode, Json<ApiResponse<Vec<ViewSubCount>>>),
+    (axum::http::StatusCode, Json<ApiError>),
+> {
+    state
+        .db
+        .get_view_sub_counts()
+        .map(ApiResponse::ok)
+        .map_err(ApiError::internal)
+}
+
+async fn get_view_subscription_ids(
+    State(state): State<Arc<CoreState>>,
+    Path(id): Path<i64>,
+) -> Result<
+    (axum::http::StatusCode, Json<ApiResponse<Vec<i64>>>),
+    (axum::http::StatusCode, Json<ApiError>),
+> {
+    state
+        .db
+        .get_view_subscription_ids(id)
+        .map(ApiResponse::ok)
         .map_err(ApiError::internal)
 }

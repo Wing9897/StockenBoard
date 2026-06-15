@@ -80,6 +80,11 @@ export function mapCommandToHttp(
       method: 'DELETE',
       path: `/views/${encodeURIComponent(String(a.view_id))}/subscriptions/${encodeURIComponent(String(a.sub_id))}`,
     }),
+    get_view_sub_counts: () => ({ method: 'GET', path: '/views/sub-counts' }),
+    get_view_subscription_ids: (a) => ({
+      method: 'GET',
+      path: `/views/${encodeURIComponent(String(a.viewId))}/subscription-ids`,
+    }),
 
     // --- Providers ---
     get_all_providers: () => ({ method: 'GET', path: '/providers' }),
