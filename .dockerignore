@@ -1,0 +1,22 @@
+# Version control
+.git/
+
+# Dependencies
+node_modules/
+
+# Build outputs (rebuilt inside Docker)
+target/
+dist/
+
+# IDE and editor
+.vscode/
+
+# CI/CD
+.github/
+
+# Documentation
+doc/
+*.md
+
+# Kiro specs
+.kiro/

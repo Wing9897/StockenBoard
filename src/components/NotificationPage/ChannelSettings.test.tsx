@@ -2,12 +2,20 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, act, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-// Mock the Tauri IPC layer. The component imports `invoke` from
-// '@tauri-apps/api/core'; route each command to a controllable mock so the
-// tests never touch a real Tauri backend.
+// Mock the transport layer. The component imports `transport` from
+// '../../lib/transport'; route each command to a controllable mock so the
+// tests never touch a real backend.
 const invokeMock = vi.fn();
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: (...args: unknown[]) => invokeMock(...args),
+vi.mock('../../lib/transport', () => ({
+  transport: {
+    invoke: (...args: unknown[]) => invokeMock(...args),
+    listen: () => () => {},
+  },
+  createTransport: () => ({
+    invoke: (...args: unknown[]) => invokeMock(...args),
+    listen: () => () => {},
+  }),
+  isTauri: () => false,
 }));
 
 import { ChannelSettings } from './ChannelSettings';

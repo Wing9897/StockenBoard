@@ -1,17 +1,22 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 
-// Mock the Tauri IPC + event layers before importing the hook.
-vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
-vi.mock('@tauri-apps/api/event', () => ({
-  // listen resolves to an unlisten fn; we record calls for assertions.
-  listen: vi.fn(async () => () => {}),
+// Mock the transport layer before importing the hook.
+const mockInvoke = vi.fn();
+const mockListen = vi.fn(() => () => {});
+vi.mock('../lib/transport', () => ({
+  transport: {
+    invoke: (...args: unknown[]) => mockInvoke(...args),
+    listen: (...args: unknown[]) => mockListen(...args),
+  },
+  createTransport: () => ({
+    invoke: (...args: unknown[]) => mockInvoke(...args),
+    listen: (...args: unknown[]) => mockListen(...args),
+  }),
+  isTauri: () => false,
 }));
 
-import { invoke } from '@tauri-apps/api/core';
 import { useAssetData } from './useAssetData';
-
-const mockInvoke = invoke as unknown as Mock;
 
 const WS_SUB = {
   id: 1,

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { transport } from '../../lib/transport';
 import { RuleList } from './RuleList';
 import { RuleForm } from './RuleForm';
 import { ChannelSettings } from './ChannelSettings';
@@ -19,7 +19,7 @@ function GlobalCooldownSettings() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    invoke<number>('get_notification_global_cooldown')
+    transport.invoke<number>('get_notification_global_cooldown')
       .then(val => setCooldown(val))
       .catch(e => silentLog('GlobalCooldown.load', e))
       .finally(() => setLoading(false));
@@ -30,7 +30,7 @@ function GlobalCooldownSettings() {
     // Debounce backend writes to avoid spamming while dragging the slider
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      invoke('set_notification_global_cooldown', { secs: value })
+      transport.invoke('set_notification_global_cooldown', { secs: value })
         .catch(e => silentLog('GlobalCooldown.save', e));
     }, 300);
   }, []);

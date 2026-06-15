@@ -34,9 +34,10 @@
 
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif; color: var(--text); min-height: 100vh; }
 .app { min-height: 100vh; display: flex; flex-direction: column; }
-.app-header { background: var(--base); padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--surface0); }
+.app-header { background: var(--base); padding: 16px 24px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--surface0); }
 .app-header h1 { font-size: 20px; font-weight: 600; color: var(--text); }
-.app-nav { display: flex; gap: 8px; }
+.app-nav { display: flex; gap: 8px; margin-left: auto; }
+.alert-toggle-btn { font-size: 18px; padding: 6px 10px; line-height: 1; }
 .nav-btn { background: transparent; border: none; color: var(--overlay0); padding: 8px 16px; border-radius: var(--radius-sm); cursor: pointer; font-size: 14px; transition: all var(--transition-normal); }
 .nav-btn:hover { background: var(--surface0); color: var(--text); }
 .nav-btn.active { background: var(--surface0); color: var(--text); }

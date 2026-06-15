@@ -21,7 +21,6 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           if git rev-parse "v$VERSION" >/dev/null 2>&1; then
             echo "Tag v$VERSION already exists, appending run number."
-            # 生產一個唯一的 tag，例如 v0.1.0-update.25
             NEW_VERSION="v${VERSION}-update.${{ github.run_number }}"
             echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
           else
@@ -44,6 +43,9 @@ jobs:
           git tag ${{ needs.check-version.outputs.version }}
           git push origin ${{ needs.check-version.outputs.version }}
 
+  # ═══════════════════════════════════════════════════════════════════════════════
+  # Desktop (Tauri) — 5 targets
+  # ═══════════════════════════════════════════════════════════════════════════════
   build-tauri:
     needs: [check-version, create-tag]
     permissions:
@@ -52,23 +54,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macOS Apple Silicon (M1/M2/M3)
           - platform: "macos-latest"
             args: "--target aarch64-apple-darwin"
             rust_target: "aarch64-apple-darwin"
-          # macOS Intel
           - platform: "macos-latest"
             args: "--target x86_64-apple-darwin"
             rust_target: "x86_64-apple-darwin"
-          # Linux x86_64
           - platform: "ubuntu-22.04"
             args: ""
             rust_target: ""
-          # Windows x86_64
           - platform: "windows-latest"
             args: ""
             rust_target: ""
-          # Windows ARM64
           - platform: "windows-latest"
             args: "--target aarch64-pc-windows-msvc"
             rust_target: "aarch64-pc-windows-msvc"
@@ -111,32 +108,134 @@ jobs:
           releaseBody: |
             ## StockenBoard ${{ needs.check-version.outputs.version }}
             
-            ### 功能特色
-            - 支援 33 個數據源（股票、加密貨幣、外匯）
-            - 即時價格追蹤（REST + WebSocket）
-            - 歷史數據記錄與圖表
-            - 多頁面管理系統
-            - HTTP API（可選，默認停用）
-            - 14 種內建主題
-            - 多語言支援（繁中、簡中、英文、日文、韓文）
+            ### Desktop App
+            | OS | Arch | Format |
+            |----|------|--------|
+            | Windows | x64 | `.exe` / `.msi` |
+            | Windows | ARM64 | `.exe` / `.msi` |
+            | macOS | Intel | `.dmg` |
+            | macOS | Apple Silicon | `.dmg` |
+            | Linux | x64 | `.deb` / `.AppImage` |
             
-            ### 下載說明
-            請根據您的作業系統和架構選擇對應的安裝包：
+            ### Web Server (Headless)
+            | OS | Arch | File |
+            |----|------|------|
+            | Linux | x64 | `stockenboard-server-linux-amd64` |
+            | Linux | ARM64 | `stockenboard-server-linux-arm64` |
+            | macOS | Apple Silicon | `stockenboard-server-darwin-arm64` |
+            | Windows | x64 | `stockenboard-server-windows-amd64.exe` |
+            | Docker | multi-arch | `ghcr.io/wing/stockenboard:latest` |
             
-            | 作業系統 | 架構 | 檔案格式 |
-            |---------|------|---------|
-            | Windows | x64 | `.exe` 或 `.msi` |
-            | Windows | ARM64 | `.exe` 或 `.msi` |
-            | macOS | Intel (x64) | `.dmg` |
-            | macOS | Apple Silicon (ARM64) | `.dmg` |
-            | Linux | x64 | `.deb` 或 `.AppImage` |
+            ### Web Server 使用方式
+            ```bash
+            # 直接運行
+            SB_PORT=8080 SB_DATA_DIR=./data ./stockenboard-server-linux-amd64
             
-            ### 安裝方式
-            - **Windows**: 下載 `.exe` 或 `.msi` 安裝包，雙擊執行安裝程式
-            - **macOS**: 下載 `.dmg` 檔案，開啟後將應用程式拖曳到 Applications 資料夾
-            - **Linux**: 
-              - Debian/Ubuntu: `sudo dpkg -i StockenBoard_*.deb`
-              - AppImage: `chmod +x StockenBoard_*.AppImage && ./StockenBoard_*.AppImage`
+            # Docker
+            docker run -d -p 8080:8080 -v sb-data:/data ghcr.io/wing/stockenboard:latest
+            ```
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
+
+  # ═══════════════════════════════════════════════════════════════════════════════
+  # Server Binary — 4 targets (cross-compiled)
+  # ═══════════════════════════════════════════════════════════════════════════════
+  build-server:
+    needs: [check-version, create-tag]
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            artifact: stockenboard-server-linux-amd64
+            script: server:build:linux-x64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: stockenboard-server-darwin-arm64
+            script: server:build:mac-arm64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: stockenboard-server-windows-amd64.exe
+            script: server:build:win-x64
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+          key: server-${{ matrix.target }}
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build server (npm script)
+        run: npm run ${{ matrix.script }}
+
+      - name: Prepare artifact (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cp src-tauri/target/${{ matrix.target }}/release/server ${{ matrix.artifact }}
+          chmod +x ${{ matrix.artifact }}
+
+      - name: Prepare artifact (Windows)
+        if: runner.os == 'Windows'
+        run: copy src-tauri\target\${{ matrix.target }}\release\server.exe ${{ matrix.artifact }}
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.check-version.outputs.version }}
+          files: ${{ matrix.artifact }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ═══════════════════════════════════════════════════════════════════════════════
+  # Docker Image (multi-arch)
+  # ═══════════════════════════════════════════════════════════════════════════════
+  build-docker:
+    needs: [check-version, create-tag]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/stockenboard:latest
+            ghcr.io/${{ github.repository_owner }}/stockenboard:${{ needs.check-version.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -2,7 +2,7 @@
  * DexCard 的編輯面板 — 使用 EditPanelShell 共用外殼
  */
 import { useState, useMemo } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { transport } from '../../lib/transport';
 import type { Subscription, ProviderInfo } from '../../types';
 import { truncateAddr } from '../../lib/format';
 import { EditPanelShell } from '../EditPanel/EditPanelShell';
@@ -47,7 +47,7 @@ export function DexEditPanel({ subscription, providers, isCustomView, onSave, on
     if (!pool) { setEditError(isEditJupiter ? t.errors.pairInputRequired : t.errors.poolInputRequired); return; }
     setLookingUp(true); setEditError(null);
     try {
-      const info = await invoke<{ token0_address: string; token0_symbol: string; token1_address: string; token1_symbol: string }>(
+      const info = await transport.invoke<{ token0_address: string; token0_symbol: string; token1_address: string; token1_symbol: string }>(
         'lookup_dex_pool', { providerId: editProvider, poolAddress: pool }
       );
       setEditTokenFrom(info.token0_address); setEditTokenTo(info.token1_address);
@@ -71,7 +71,7 @@ export function DexEditPanel({ subscription, providers, isCustomView, onSave, on
     setSaving(true); setEditError(null);
     const testSymbol = `${finalPool}:${editTokenFrom.trim()}:${editTokenTo.trim()}`;
     try {
-      await invoke('fetch_asset_price', { providerId: editProvider, symbol: testSymbol });
+      await transport.invoke('fetch_asset_price', { providerId: editProvider, symbol: testSymbol });
     } catch (err) {
       setEditError(t.dex.validateFailed(err instanceof Error ? err.message : String(err)));
       setSaving(false); return;

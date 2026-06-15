@@ -2,16 +2,22 @@ import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react';
 import type { NotificationRuleRow } from '../../types';
 
-// Mock the Tauri IPC layer so the component can run in jsdom without a backend.
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn(),
+// Mock the transport layer so the component can run in jsdom without a backend.
+const mockInvoke = vi.fn();
+vi.mock('../../lib/transport', () => ({
+  transport: {
+    invoke: (...args: unknown[]) => mockInvoke(...args),
+    listen: () => () => {},
+  },
+  createTransport: () => ({
+    invoke: (...args: unknown[]) => mockInvoke(...args),
+    listen: () => () => {},
+  }),
+  isTauri: () => false,
 }));
 
-import { invoke } from '@tauri-apps/api/core';
 import { t, setLocale } from '../../lib/i18n';
 import { RuleList } from './RuleList';
-
-const mockInvoke = invoke as unknown as Mock;
 
 function makeRule(overrides: Partial<NotificationRuleRow> = {}): NotificationRuleRow {
   return {

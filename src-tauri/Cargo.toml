@@ -4,8 +4,14 @@ version = "0.1.0"
 description = "StockenBoard - Stock & Token Dashboard"
 authors = ["you"]
 edition = "2021"
+default-run = "stockenboard"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+default = ["desktop"]
+desktop = ["tauri", "tauri-plugin-opener", "tauri-plugin-shell", "rfd", "tauri-build"]
+server = []
 
 [lib]
 # The `_lib` suffix may seem redundant but it is necessary
@@ -14,31 +20,37 @@ edition = "2021"
 name = "stockenboard_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[[bin]]
+name = "server"
+path = "src/bin/server.rs"
+
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "2", features = [], optional = true }
 
 [dependencies]
-tauri = { version = "2", features = [] }
-tauri-plugin-opener = "2"
+tauri = { version = "2", features = [], optional = true }
+tauri-plugin-opener = { version = "2", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1.49.0", features = ["rt-multi-thread", "macros", "sync", "fs", "time", "net"] }
+tokio = { version = "1.49.0", features = ["rt-multi-thread", "macros", "sync", "fs", "time", "net", "signal"] }
 reqwest = { version = "0.13.2", features = ["json", "cookies"] }
 async-trait = "0.1.89"
 chrono = { version = "0.4.43", default-features = false, features = ["clock", "std"] }
 tokio-tungstenite = { version = "0.26", features = ["rustls-tls-native-roots"] }
 futures = "0.3"
 rusqlite = { version = "0.32", features = ["bundled"] }
-rfd = "0.16"
+rfd = { version = "0.16", optional = true }
 base64 = "0.22"
-tauri-plugin-shell = "2"
-axum = "0.7"
-tower = "0.5"
-tower-http = { version = "0.6", features = ["cors"] }
-
+tauri-plugin-shell = { version = "2", optional = true }
+axum = { version = "0.7", features = ["ws"] }
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = ["cors", "fs"] }
 
 [dev-dependencies]
 proptest = "1"
+tempfile = "3"
+http = "1"
+http-body-util = "0.1"
 
 [profile.release]
 opt-level = "z"     # 優化大小

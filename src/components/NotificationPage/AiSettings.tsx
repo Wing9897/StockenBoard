@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { transport } from '../../lib/transport';
 import { t } from '../../lib/i18n';
 import { silentLog } from '../../lib/errorLog';
 
@@ -47,7 +47,7 @@ export function AiSettings() {
 
   const loadConfig = async () => {
     try {
-      const config = await invoke<AiProviderConfigResponse | null>('get_ai_provider_config');
+      const config = await transport.invoke<AiProviderConfigResponse | null>('get_ai_provider_config');
       if (config) {
         setBaseUrl(config.base_url);
         setModel(config.model);
@@ -74,7 +74,7 @@ export function AiSettings() {
     if (!targetUrl.trim()) return;
     setLoadingModels(true);
     try {
-      const models = await invoke<string[]>('list_ai_models', {
+      const models = await transport.invoke<string[]>('list_ai_models', {
         baseUrl: targetUrl.trim(),
         apiKey: apiKey.trim() || null,
       });
@@ -124,7 +124,7 @@ export function AiSettings() {
 
     setSaving(true);
     try {
-      await invoke('save_ai_provider_config', {
+      await transport.invoke('save_ai_provider_config', {
         base_url: baseUrl.trim(),
         model: model.trim(),
         api_key: apiKey.trim() || null,
@@ -142,7 +142,7 @@ export function AiSettings() {
     setTestResult(null);
     setTesting(true);
     try {
-      const result = await invoke<string>('test_ai_connection');
+      const result = await transport.invoke<string>('test_ai_connection');
       setTestResult({ type: 'success', msg: `${t.notifications.testSuccess}: ${result}` });
     } catch (e: unknown) {
       setTestResult({ type: 'error', msg: typeof e === 'string' ? e : t.notifications.testFailed });

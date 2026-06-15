@@ -137,6 +137,7 @@ function App() {
       <ToastContainer toasts={toast.toasts} onRemove={toast.removeToast} />
 
       <header className="app-header">
+        <button className={`nav-btn alert-toggle-btn${alertPanelOpen ? ' active' : ''}`} onClick={() => setAlertPanelOpen(v => !v)} title={t.nav.notifications}>☰</button>
         <h1>StockenBoard</h1>
         <nav className="app-nav">
           <button className={`nav-btn ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>{t.nav.dashboard}</button>
@@ -146,7 +147,6 @@ function App() {
           <button className={`nav-btn ${activeTab === 'providers' ? 'active' : ''}`} onClick={() => setActiveTab('providers')}>{t.nav.providers}</button>
           <button className={`nav-btn ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>{t.nav.settings}</button>
         </nav>
-        <button className={`nav-btn${alertPanelOpen ? ' active' : ''}`} onClick={() => setAlertPanelOpen(v => !v)} title={t.nav.notifications}>🔔</button>
       </header>
 
       <main className="app-main">

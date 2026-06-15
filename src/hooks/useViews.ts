@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { transport } from '../lib/transport';
 import { View } from '../types';
 import { silentLog } from '../lib/errorLog';
 import { STORAGE_KEYS } from '../lib/storageKeys';
@@ -24,7 +24,7 @@ export function useViews(viewType: 'asset' | 'dex' = 'asset') {
 
   const loadViewSubCounts = useCallback(async (vl: View[]) => {
     try {
-      const rows = await invoke<{ view_id: number; count: number }[]>('get_view_sub_counts');
+      const rows = await transport.invoke<{ view_id: number; count: number }[]>('get_view_sub_counts');
       const counts: Record<number, number> = {};
       for (const v of vl) if (!v.is_default) counts[v.id] = 0;
       for (const r of rows) counts[r.view_id] = r.count;
@@ -34,7 +34,7 @@ export function useViews(viewType: 'asset' | 'dex' = 'asset') {
 
   const loadViews = useCallback(async () => {
     try {
-      const rows = await invoke<RawView[]>('list_views', { viewType });
+      const rows = await transport.invoke<RawView[]>('list_views', { viewType });
       const loaded = rows.map(toView);
       setViews(loaded);
       await loadViewSubCounts(loaded);
@@ -46,7 +46,7 @@ export function useViews(viewType: 'asset' | 'dex' = 'asset') {
     const view = vl.find(v => v.id === viewId);
     if (!view || view.is_default) { setActiveViewSubscriptionIds(null); return; }
     try {
-      const ids = await invoke<number[]>('get_view_subscription_ids', { viewId });
+      const ids = await transport.invoke<number[]>('get_view_subscription_ids', { viewId });
       setActiveViewSubscriptionIds(ids);
     } catch (e) { silentLog('loadActiveViewSubs', e); setActiveViewSubscriptionIds(null); }
   }, []);
@@ -61,7 +61,7 @@ export function useViews(viewType: 'asset' | 'dex' = 'asset') {
     const trimmed = name.trim();
     if (!trimmed) throw new Error('View name cannot be empty');
     if (viewsRef.current.some(v => v.name.trim().toLowerCase() === trimmed.toLowerCase())) throw new Error('View name already exists');
-    await invoke<number>('create_view', { name: trimmed, viewType });
+    await transport.invoke<number>('create_view', { name: trimmed, viewType });
     await loadViews();
   }, [viewType, loadViews]);
 
@@ -72,7 +72,7 @@ export function useViews(viewType: 'asset' | 'dex' = 'asset') {
     const trimmed = newName.trim();
     if (!trimmed) throw new Error('View name cannot be empty');
     if (viewsRef.current.some(v => v.id !== viewId && v.name.trim().toLowerCase() === trimmed.toLowerCase())) throw new Error('View name already exists');
-    await invoke('rename_view', { id: viewId, name: trimmed });
+    await transport.invoke('rename_view', { id: viewId, name: trimmed });
     await loadViews();
   }, [loadViews]);
 
@@ -80,7 +80,7 @@ export function useViews(viewType: 'asset' | 'dex' = 'asset') {
     const view = viewsRef.current.find(v => v.id === viewId);
     if (!view) throw new Error('View not found');
     if (view.is_default) throw new Error('Cannot delete the default view');
-    await invoke('delete_view', { id: viewId });
+    await transport.invoke('delete_view', { id: viewId });
     const updated = await loadViews();
     if (activeViewIdRef.current === viewId) {
       const def = updated.find(v => v.is_default);
@@ -89,13 +89,13 @@ export function useViews(viewType: 'asset' | 'dex' = 'asset') {
   }, [storageKey, loadViews]);
 
   const addSubscriptionToView = useCallback(async (viewId: number, subscriptionId: number) => {
-    await invoke('add_sub_to_view', { viewId, subscriptionId });
+    await transport.invoke('add_sub_to_view', { viewId, subscriptionId });
     if (viewId === activeViewIdRef.current) await loadActiveViewSubs(viewId, viewsRef.current);
     await loadViewSubCounts(viewsRef.current);
   }, [loadActiveViewSubs, loadViewSubCounts]);
 
   const removeSubscriptionFromView = useCallback(async (viewId: number, subscriptionId: number) => {
-    await invoke('remove_sub_from_view', { viewId, subscriptionId });
+    await transport.invoke('remove_sub_from_view', { viewId, subscriptionId });
     if (viewId === activeViewIdRef.current) await loadActiveViewSubs(viewId, viewsRef.current);
     await loadViewSubCounts(viewsRef.current);
   }, [loadActiveViewSubs, loadViewSubCounts]);

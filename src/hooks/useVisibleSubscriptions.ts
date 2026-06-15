@@ -1,5 +1,5 @@
 import { useMemo, useRef, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { transport } from '../lib/transport';
 import { Subscription } from '../types';
 
 /**
@@ -23,7 +23,7 @@ export function useVisibleSubscriptions(
     const key = ids.join(',');
     if (key === prevVisibleRef.current) return;
     prevVisibleRef.current = key;
-    invoke('set_visible_subscriptions', { ids, scope }).catch(() => {});
+    transport.invoke('set_visible_subscriptions', { ids, scope }).catch(() => {});
   }, [viewFilteredSubs, scope]);
 
   return viewFilteredSubs;

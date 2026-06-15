@@ -1,5 +1,5 @@
 import { useState, useEffect, memo, useCallback, type ReactElement } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { transport } from '../../lib/transport';
 import { Subscription, ProviderInfo } from '../../types';
 import { useAssetPrice } from '../../hooks/useAssetData';
 import { CountdownCircle } from './CountdownCircle';
@@ -107,7 +107,7 @@ export const AssetCard = memo(function AssetCard({ subscription, providers, curr
 
   const handleIconClick = useCallback(async () => {
     try {
-      await invoke('set_icon', { symbol: subscription.symbol });
+      await transport.invoke('set_icon', { symbol: subscription.symbol });
       invalidateIcon(iconName);
       setIconKey(v => v + 1);
     } catch { /* cancelled */ }

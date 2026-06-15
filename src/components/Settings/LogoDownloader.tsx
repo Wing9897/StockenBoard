@@ -2,8 +2,7 @@
  * LogoDownloader — 一鍵下載所有缺少 icon 的訂閱 logo（含進度條）
  */
 import { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { transport } from '../../lib/transport';
 import { t } from '../../lib/i18n';
 import { clearAllIcons } from '../AssetCard/AssetIcon';
 
@@ -29,17 +28,17 @@ export function LogoDownloader({ onToast }: Props) {
   const [progress, setProgress] = useState<ProgressPayload | null>(null);
 
   useEffect(() => {
-    const unlisten = listen<ProgressPayload>('logo-download-progress', (event) => {
-      setProgress(event.payload);
+    const unlisten = transport.listen('logo-download-progress', (payload) => {
+      setProgress(payload as ProgressPayload);
     });
-    return () => { unlisten.then(fn => fn()); };
+    return () => { unlisten(); };
   }, []);
 
   const handleDownload = async () => {
     setDownloading(true);
     setProgress(null);
     try {
-      const result = await invoke<LogoDownloadResult>('download_logos');
+      const result = await transport.invoke<LogoDownloadResult>('download_logos');
       clearAllIcons();
       onToast?.('success', t.settings.downloadLogos,
         t.settings.downloadLogosDone(result.succeeded, result.skipped, result.failed));

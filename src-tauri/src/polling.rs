@@ -105,7 +105,6 @@ impl PollingManager {
     /// 不再直接寫 DB 或 emit 到前端（由 Forwarder 處理）
     pub fn start(
         &self,
-        app_handle: tauri::AppHandle,
         db: Arc<DbPool>,
         registry: Arc<ProviderRegistry>,
         event_bus: broadcast::Sender<AppEvent>,
@@ -117,9 +116,7 @@ impl PollingManager {
         let mut reload_rx = self.reload_tx.subscribe();
         let mut stop_rx = self.stop_tx.subscribe();
 
-        tauri::async_runtime::spawn(async move {
-            // 保留 app_handle 以便在完全解耦後仍可用於前端事件
-            let _app = app_handle;
+        tokio::spawn(async move {
             loop {
                 let is_unattended = *unattended.read().await;
 

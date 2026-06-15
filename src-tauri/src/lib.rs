@@ -1,11 +1,17 @@
+pub mod api;
+#[cfg(feature = "desktop")]
 mod api_server;
+#[cfg(feature = "desktop")]
 mod commands;
-mod db;
-mod events;
+pub mod config;
+pub mod core_state;
+pub mod db;
+pub mod events;
 pub mod notifications;
-mod polling;
-mod providers;
+pub mod polling;
+pub mod providers;
 
+#[cfg(feature = "desktop")]
 use commands::{
     add_sub_to_view, add_subscription, add_subscriptions_batch, cleanup_history,
     create_notification_rule, create_view, delete_notification_channel, delete_notification_rule,
@@ -26,35 +32,32 @@ use commands::{
     toggle_record, update_notification_rule, update_subscription, upsert_provider_settings,
     AppState,
 };
+
+#[cfg(feature = "desktop")]
 use db::{DbPool, PriceRecord};
+#[cfg(feature = "desktop")]
 use events::AppEvent;
+#[cfg(feature = "desktop")]
 use notifications::global_cooldown::GlobalCooldown;
+#[cfg(feature = "desktop")]
 use providers::registry::ProviderRegistry;
+#[cfg(feature = "desktop")]
 use std::collections::HashSet;
+#[cfg(feature = "desktop")]
 use std::sync::Arc;
+#[cfg(feature = "desktop")]
 use tauri::{Emitter, Manager};
+#[cfg(feature = "desktop")]
 use tokio::sync::broadcast;
 
 /// 確保 DB schema 一致 — 版本不同就刪除重建
+/// (保留以維持 desktop 路徑相容性，底層委派給 core_state::ensure_clean_db)
+#[cfg(feature = "desktop")]
 fn ensure_clean_db(app_dir: &std::path::Path) {
-    let db_path = app_dir.join("stockenboard.db");
-    let marker = app_dir.join(".schema_v");
-    const SCHEMA_VER: &str = "8"; // Bumped for push notifications tables
-    let current = std::fs::read_to_string(&marker).unwrap_or_default();
-    if current.trim() != SCHEMA_VER {
-        eprintln!(
-            "[DB] Schema 版本不符 (current={:?}, expected={}), 刪除並重建資料庫",
-            current.trim(),
-            SCHEMA_VER
-        );
-        let _ = std::fs::remove_file(&db_path);
-        let _ = std::fs::remove_file(db_path.with_extension("db-shm"));
-        let _ = std::fs::remove_file(db_path.with_extension("db-wal"));
-        let _ = std::fs::create_dir_all(app_dir);
-        let _ = std::fs::write(&marker, SCHEMA_VER);
-    }
+    core_state::ensure_clean_db(app_dir);
 }
 
+#[cfg(feature = "desktop")]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -198,12 +201,19 @@ pub fn run() {
                     ai_scheduler.clone(),
                     global_cooldown.clone(),
                 );
-                state.polling.start(
-                    app.handle().clone(),
-                    db.clone(),
-                    registry.clone(),
-                    event_bus.clone(),
-                );
+
+                // Start polling inside async context so tokio::spawn works
+                let polling_ref = state.polling.clone();
+                let db_for_polling = db.clone();
+                let registry_for_polling = registry.clone();
+                let event_bus_for_polling = event_bus.clone();
+                tauri::async_runtime::spawn(async move {
+                    polling_ref.start(
+                        db_for_polling,
+                        registry_for_polling,
+                        event_bus_for_polling,
+                    );
+                });
 
                 // 啟動 Event Forwarder（將 AppEvent 轉發到前端 + DB）
                 let db_for_forwarder = db.clone();

@@ -1,29 +1,29 @@
 /**
  * 訂閱 CRUD 操作 — 純 data layer，不依賴 React。
- * 全部走 Rust IPC，不再直接操作 SQL。
+ * 全部走 Transport abstraction (Tauri IPC or HTTP)，不再直接操作 SQL。
  */
-import { invoke } from '@tauri-apps/api/core';
+import { transport } from './transport';
 import type { Subscription, ProviderInfo } from '../types';
 import { silentLog } from './errorLog';
 
 /** 載入指定類型的訂閱列表 */
 export async function loadSubscriptions(subType: 'asset' | 'dex'): Promise<Subscription[]> {
-  return invoke<Subscription[]>('list_subscriptions', { subType });
+  return transport.invoke<Subscription[]>('list_subscriptions', { subType });
 }
 
 /** 載入所有訂閱（asset + dex），對應後端 list_all_subscriptions */
 export async function loadAllSubscriptions(): Promise<Subscription[]> {
-  return invoke<Subscription[]>('list_all_subscriptions');
+  return transport.invoke<Subscription[]>('list_all_subscriptions');
 }
 
 /** 載入所有 provider 資訊 */
 export async function loadProviderInfo(): Promise<ProviderInfo[]> {
-  return invoke<ProviderInfo[]>('get_all_providers');
+  return transport.invoke<ProviderInfo[]>('get_all_providers');
 }
 
 /** 通知 Rust 後端重新載入 polling */
 export async function reloadPolling(): Promise<void> {
-  await invoke('reload_polling');
+  await transport.invoke('reload_polling');
 }
 
 /** 判斷 provider 是否為 DEX 類型 */
@@ -40,9 +40,9 @@ export async function addAssetSubscription(
   const isDex = isDexProvider(providers, pid);
   const storedSymbol = isDex ? symbol.trim() : symbol.toUpperCase();
   // 先驗證 symbol 有效性
-  await invoke('fetch_asset_price', { providerId: pid, symbol: storedSymbol });
+  await transport.invoke('fetch_asset_price', { providerId: pid, symbol: storedSymbol });
   // 再新增訂閱（走 Rust IPC）
-  await invoke<number>('add_subscription', {
+  await transport.invoke<number>('add_subscription', {
     subType: 'asset',
     symbol: storedSymbol,
     displayName: displayName || null,
@@ -83,7 +83,7 @@ export async function addAssetSubscriptionBatch(
   for (const [pid, group] of groups) {
     const symbols = group.map(g => g.storedSymbol);
     try {
-      const results = await invoke<{ symbol: string }[]>('fetch_multiple_prices', { providerId: pid, symbols });
+      const results = await transport.invoke<{ symbol: string }[]>('fetch_multiple_prices', { providerId: pid, symbols });
       const validSymbols = new Set(results.map(r => r.symbol.toUpperCase()));
 
       for (const g of group) {
@@ -111,7 +111,7 @@ export async function addAssetSubscriptionBatch(
         provider_id: v.pid,
         asset_type: v.assetType || 'crypto',
       }));
-      const result = await invoke<{ succeeded: string[]; failed: string[]; duplicates: string[] }>(
+      const result = await transport.invoke<{ succeeded: string[]; failed: string[]; duplicates: string[] }>(
         'add_subscriptions_batch',
         { items: batchItems }
       );
@@ -123,7 +123,7 @@ export async function addAssetSubscriptionBatch(
       // 如果批量失敗，逐個嘗試
       for (const v of allValid) {
         try {
-          await invoke<number>('add_subscription', {
+          await transport.invoke<number>('add_subscription', {
             subType: 'asset',
             symbol: v.storedSymbol,
             displayName: v.displayName || null,
@@ -157,7 +157,7 @@ export async function addDexSubscription(
   const tf = tokenFrom.trim();
   const tt = tokenTo.trim();
   const symbol = `${pool}:${tf}:${tt}`;
-  await invoke<number>('add_subscription', {
+  await transport.invoke<number>('add_subscription', {
     subType: 'dex',
     symbol,
     displayName: displayName || null,
@@ -177,7 +177,7 @@ export async function updateAssetSubscription(
   const targetPid = updates.providerId ?? sub.selected_provider_id;
   const isDex = isDexProvider(providers, targetPid);
   const storedSymbol = updates.symbol ? (isDex ? updates.symbol.trim() : updates.symbol.toUpperCase()) : sub.symbol;
-  await invoke('update_subscription', {
+  await transport.invoke('update_subscription', {
     id: sub.id,
     symbol: storedSymbol,
     displayName: updates.displayName !== undefined ? (updates.displayName || null) : (sub.display_name || null),
@@ -197,7 +197,7 @@ export async function updateDexSub(
   const tt = updates.tokenTo?.trim() ?? sub.token_to_address ?? '';
   const symbol = `${pool}:${tf}:${tt}`;
   // For DEX updates, we update the full subscription including pool fields
-  await invoke('update_subscription', {
+  await transport.invoke('update_subscription', {
     id: sub.id,
     symbol,
     displayName: updates.displayName !== undefined ? (updates.displayName || null) : (sub.display_name || null),
@@ -209,13 +209,13 @@ export async function updateDexSub(
 /** 檢查 provider 是否已設定 API key */
 export async function hasApiKey(providerId: string): Promise<boolean> {
   try {
-    return await invoke<boolean>('has_api_key', { providerId });
+    return await transport.invoke<boolean>('has_api_key', { providerId });
   } catch (e) { silentLog('hasApiKey', e); return false; }
 }
 
 /** 儲存 provider 設定（含 API key + 同步 Rust 端） */
 export async function saveApiKey(providerId: string, apiKey: string, apiSecret?: string): Promise<void> {
-  await invoke('upsert_provider_settings', {
+  await transport.invoke('upsert_provider_settings', {
     providerId,
     apiKey: apiKey || null,
     apiSecret: apiSecret || null,
@@ -229,11 +229,11 @@ export async function saveApiKey(providerId: string, apiKey: string, apiSecret?:
 
 /** 刪除單一訂閱 */
 export async function removeSubscription(id: number): Promise<void> {
-  await invoke('remove_subscription', { id });
+  await transport.invoke('remove_subscription', { id });
 }
 
 /** 批量刪除訂閱 */
 export async function removeSubscriptions(ids: number[]): Promise<void> {
   if (ids.length === 0) return;
-  await invoke('remove_subscriptions', { ids });
+  await transport.invoke('remove_subscriptions', { ids });
 }

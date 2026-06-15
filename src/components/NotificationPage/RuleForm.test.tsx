@@ -1,17 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
-import { invoke } from '@tauri-apps/api/core';
 import { RuleForm } from './RuleForm';
 import { t } from '../../lib/i18n';
 import type { Subscription, EditRuleData } from '../../types';
 
 // RuleForm loads subscriptions through loadAllSubscriptions(), which wraps
-// invoke('list_all_subscriptions'). It also calls invoke('list_notification_channels')
-// and invoke('get_ai_provider_config') on mount. We mock the Tauri core module so
+// transport.invoke('list_all_subscriptions'). It also calls transport.invoke('list_notification_channels')
+// and transport.invoke('get_ai_provider_config') on mount. We mock the transport module so
 // invoke resolves/rejects per command name without touching a real backend.
-vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
-
-const mockInvoke = invoke as unknown as ReturnType<typeof vi.fn>;
+const mockInvoke = vi.fn();
+vi.mock('../../lib/transport', () => ({
+  transport: {
+    invoke: (...args: unknown[]) => mockInvoke(...args),
+    listen: () => () => {},
+  },
+  createTransport: () => ({
+    invoke: (...args: unknown[]) => mockInvoke(...args),
+    listen: () => () => {},
+  }),
+  isTauri: () => false,
+}));
 
 /** Build a complete Subscription with sane defaults so tests stay focused. */
 function makeSubscription(overrides: Partial<Subscription> & Pick<Subscription, 'id' | 'symbol' | 'selected_provider_id'>): Subscription {

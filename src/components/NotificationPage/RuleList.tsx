@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { transport } from '../../lib/transport';
 import { t } from '../../lib/i18n';
 import { silentLog } from '../../lib/errorLog';
 import { useConfirm } from '../../hooks/useConfirm';
@@ -43,7 +43,7 @@ export function RuleList({ onAddRule, onEditRule }: RuleListProps) {
 
   const fetchRules = useCallback(async () => {
     try {
-      const data = await invoke<NotificationRuleRow[]>('list_notification_rules');
+      const data = await transport.invoke<NotificationRuleRow[]>('list_notification_rules');
       setRules(data);
     } catch (e) {
       silentLog('RuleList.fetchRules', e);
@@ -56,7 +56,7 @@ export function RuleList({ onAddRule, onEditRule }: RuleListProps) {
 
   const handleToggle = async (id: number, currentEnabled: boolean) => {
     try {
-      await invoke('toggle_notification_rule', { id, enabled: !currentEnabled });
+      await transport.invoke('toggle_notification_rule', { id, enabled: !currentEnabled });
       setRules(prev => prev.map(r => r.id === id ? { ...r, enabled: !currentEnabled } : r));
     } catch (e) {
       silentLog('RuleList.toggle', e);
@@ -67,7 +67,7 @@ export function RuleList({ onAddRule, onEditRule }: RuleListProps) {
     const ok = await requestConfirm(t.notifications.deleteConfirm);
     if (!ok) return;
     try {
-      await invoke('delete_notification_rule', { id });
+      await transport.invoke('delete_notification_rule', { id });
       setRules(prev => prev.filter(r => r.id !== id));
     } catch (e) {
       silentLog('RuleList.delete', e);

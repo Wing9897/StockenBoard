@@ -1,5 +1,5 @@
 import { useState, useEffect, memo, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { transport } from '../../lib/transport';
 import { Subscription, ProviderInfo } from '../../types';
 import { useAssetPrice } from '../../hooks/useAssetData';
 import { CountdownCircle } from '../AssetCard/CountdownCircle';
@@ -49,7 +49,7 @@ export const DexCard = memo(function DexCard({
   const handleFromIconClick = useCallback(async () => {
     if (!fromIconSymbol) return;
     try {
-      await invoke('set_icon', { symbol: fromIconSymbol });
+      await transport.invoke('set_icon', { symbol: fromIconSymbol });
       invalidateIcon(fromIconName);
       setIconKey(v => v + 1);
     } catch { /* cancelled */ }
@@ -58,7 +58,7 @@ export const DexCard = memo(function DexCard({
   const handleToIconClick = useCallback(async () => {
     if (!toIconSymbol) return;
     try {
-      await invoke('set_icon', { symbol: toIconSymbol });
+      await transport.invoke('set_icon', { symbol: toIconSymbol });
       invalidateIcon(toIconName);
       setIconKey(v => v + 1);
     } catch { /* cancelled */ }

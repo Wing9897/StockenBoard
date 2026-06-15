@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { transport } from '../../lib/transport';
 import { View } from '../../types';
 import { useConfirm } from '../../hooks/useConfirm';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
@@ -66,8 +66,8 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
 
   const openExportPicker = async () => {
     try {
-      const assetViews = await invoke<{ id: number; name: string; view_type: string; is_default: boolean }[]>('list_views', { viewType: 'asset' });
-      const dexViews = await invoke<{ id: number; name: string; view_type: string; is_default: boolean }[]>('list_views', { viewType: 'dex' });
+      const assetViews = await transport.invoke<{ id: number; name: string; view_type: string; is_default: boolean }[]>('list_views', { viewType: 'asset' });
+      const dexViews = await transport.invoke<{ id: number; name: string; view_type: string; is_default: boolean }[]>('list_views', { viewType: 'dex' });
       const loaded = [...assetViews, ...dexViews].map(r => ({
         id: r.id, name: r.name, view_type: r.view_type as 'asset' | 'dex', is_default: r.is_default
       }));
@@ -95,7 +95,7 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
   const handleExport = async () => {
     // 使用 Rust 端匯出，然後在前端格式化
     try {
-      const rustData = await invoke<RustExportData>('export_data');
+      const rustData = await transport.invoke<RustExportData>('export_data');
       const data: ExportData = {
         version: 1,
         exported_at: new Date().toISOString(),
@@ -124,7 +124,7 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
           .map(v => ({ name: v.name, view_type: v.view_type, subscriptions: v.symbols })),
       };
 
-      await invoke('export_file', {
+      await transport.invoke('export_file', {
         filename: `stockenboard_${new Date().toISOString().slice(0, 10)}.json`,
         content: JSON.stringify(data, null, 2),
       });
@@ -136,7 +136,7 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
   const handleImport = async () => {
     let raw: string;
     try {
-      raw = await invoke<string>('import_file');
+      raw = await transport.invoke<string>('import_file');
     } catch { return; }
 
     let data: ExportData;
@@ -202,7 +202,7 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
     };
 
     try {
-      const [imported, skipped] = await invoke<[number, number]>('import_data', { data: rustImportData });
+      const [imported, skipped] = await transport.invoke<[number, number]>('import_data', { data: rustImportData });
       setImportResult({ subs: imported, views: data.views?.length || 0, skipped });
     } catch (e) {
       onToast?.('error', t.settings.importFailed, String(e));
@@ -217,7 +217,7 @@ export function DataManager({ views, onRefresh, onToast }: DataManagerProps) {
     if (!confirmed) return;
 
     try {
-      await invoke('reset_all_data');
+      await transport.invoke('reset_all_data');
       onToast?.('success', t.settings.factoryResetSuccess);
       onRefresh();
       // Reload the page to ensure all state is wiped clean globally

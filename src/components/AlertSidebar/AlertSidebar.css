@@ -65,14 +65,14 @@
   margin-top: 2px;
 }
 
-/* ── Floating panel (overlay from right) ── */
+/* ── Floating panel (overlay from left) ── */
 .alert-panel-backdrop {
   position: fixed;
   inset: 0;
   z-index: 2500;
   background: rgba(0, 0, 0, 0.3);
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 .alert-panel {
@@ -80,15 +80,15 @@
   max-width: 90vw;
   height: 100%;
   background: var(--base);
-  border-left: 1px solid var(--surface0);
+  border-right: 1px solid var(--surface0);
   display: flex;
   flex-direction: column;
   animation: panel-slide-in 0.2s ease-out;
-  box-shadow: -4px 0 20px var(--shadow);
+  box-shadow: 4px 0 20px var(--shadow);
 }
 
 @keyframes panel-slide-in {
-  from { transform: translateX(100%); }
+  from { transform: translateX(-100%); }
   to   { transform: translateX(0); }
 }
 

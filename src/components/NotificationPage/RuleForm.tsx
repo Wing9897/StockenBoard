@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { transport } from '../../lib/transport';
 import { t } from '../../lib/i18n';
 import { silentLog } from '../../lib/errorLog';
 import { loadAllSubscriptions } from '../../lib/subscriptionApi';
@@ -73,8 +73,8 @@ export function RuleForm({ onClose, onSaved, editRule }: RuleFormProps) {
     loadAllSubscriptions()
       .then(setSubscriptions)
       .catch((e: unknown) => setError(typeof e === 'string' ? e : t.common.error));
-    invoke<ChannelRow[]>('list_notification_channels').then(setChannels).catch(e => silentLog('RuleForm.loadChannels', e));
-    invoke<{ base_url: string; model: string; has_api_key: boolean } | null>('get_ai_provider_config')
+    transport.invoke<ChannelRow[]>('list_notification_channels').then(setChannels).catch(e => silentLog('RuleForm.loadChannels', e));
+    transport.invoke<{ base_url: string; model: string; has_api_key: boolean } | null>('get_ai_provider_config')
       .then(config => setAiProviderConfigured(config !== null))
       .catch(() => setAiProviderConfigured(false));
   }, []);
@@ -99,7 +99,7 @@ export function RuleForm({ onClose, onSaved, editRule }: RuleFormProps) {
     setSaving(true);
     try {
       if (isEditing) {
-        await invoke('update_notification_rule', {
+        await transport.invoke('update_notification_rule', {
           id: editRule!.id,
           rule: {
             name: name.trim(),
@@ -115,7 +115,7 @@ export function RuleForm({ onClose, onSaved, editRule }: RuleFormProps) {
           }
         });
       } else if (ruleMode === 'ai') {
-        await invoke('create_notification_rule', {
+        await transport.invoke('create_notification_rule', {
           rule: {
             name: name.trim(),
             subscription_id: subscriptionId,
@@ -131,7 +131,7 @@ export function RuleForm({ onClose, onSaved, editRule }: RuleFormProps) {
           }
         });
       } else {
-        await invoke('create_notification_rule', {
+        await transport.invoke('create_notification_rule', {
           rule: {
             name: name.trim(),
             subscription_id: subscriptionId,

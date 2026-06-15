@@ -2,7 +2,7 @@
  * API 使用說明組件
  */
 import { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { transport } from '../../lib/transport';
 import { useLocale } from '../../hooks/useLocale';
 import { silentLog } from '../../lib/errorLog';
 
@@ -25,8 +25,8 @@ export function ApiGuide({ onToast }: ApiGuideProps) {
 
   const loadApiSettings = async () => {
     try {
-      const port = await invoke<number>('get_api_port');
-      const enabled = await invoke<boolean>('get_api_enabled');
+      const port = await transport.invoke<number>('get_api_port');
+      const enabled = await transport.invoke<boolean>('get_api_enabled');
       setApiPort(port);
       setTempPort(port.toString());
       setApiEnabled(enabled);
@@ -38,7 +38,7 @@ export function ApiGuide({ onToast }: ApiGuideProps) {
   const toggleApiEnabled = async () => {
     try {
       const newEnabled = !apiEnabled;
-      await invoke('set_api_enabled', { enabled: newEnabled });
+      await transport.invoke('set_api_enabled', { enabled: newEnabled });
       setApiEnabled(newEnabled);
       onToast?.('info', newEnabled ? t.api.enabledMsg : t.api.disabledMsg);
     } catch (err) {
@@ -54,7 +54,7 @@ export function ApiGuide({ onToast }: ApiGuideProps) {
     }
 
     try {
-      await invoke('set_api_port', { port });
+      await transport.invoke('set_api_port', { port });
       setApiPort(port);
       setEditingPort(false);
       onToast?.('info', t.api.portSaved);

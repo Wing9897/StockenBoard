@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { invoke } from '@tauri-apps/api/core';
+import { createTransport } from './lib/transport';
+import { TransportProvider } from './lib/TransportProvider';
 import { ANIME_IDS, loadBgForTheme } from './lib/themeData';
 import { STORAGE_KEYS } from './lib/storageKeys';
 import App from "./App";
@@ -17,11 +18,14 @@ if (ANIME_IDS.has(savedTheme)) {
 
 // Restore unattended polling state from localStorage to Rust backend
 if (localStorage.getItem(STORAGE_KEYS.UNATTENDED) === '1') {
-  invoke('set_unattended_polling', { enabled: true }).catch(() => { });
+  const transport = createTransport();
+  transport.invoke('set_unattended_polling', { enabled: true }).catch(() => { });
 }
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <App />
+    <TransportProvider>
+      <App />
+    </TransportProvider>
   </React.StrictMode>,
 );

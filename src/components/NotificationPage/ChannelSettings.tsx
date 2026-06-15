@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { transport } from '../../lib/transport';
 import { t } from '../../lib/i18n';
 import { silentLog } from '../../lib/errorLog';
 import { useConfirm } from '../../hooks/useConfirm';
@@ -23,7 +23,7 @@ export function ChannelSettings() {
 
   const fetchChannels = useCallback(async () => {
     try {
-      const data = await invoke<ChannelRow[]>('list_notification_channels');
+      const data = await transport.invoke<ChannelRow[]>('list_notification_channels');
       setChannels(data);
     } catch (e) {
       silentLog('ChannelSettings.fetchChannels', e);
@@ -50,7 +50,7 @@ export function ChannelSettings() {
 
     setSaving(true);
     try {
-      await invoke('save_notification_channel', {
+      await transport.invoke('save_notification_channel', {
         channel: { channel_type: channelType, name: name.trim(), config }
       });
       setShowForm(false);
@@ -67,7 +67,7 @@ export function ChannelSettings() {
     const ok = await requestConfirm(t.notifications.deleteChannelConfirm);
     if (!ok) return;
     try {
-      await invoke('delete_notification_channel', { id });
+      await transport.invoke('delete_notification_channel', { id });
       setChannels(prev => prev.filter(c => c.id !== id));
     } catch (e) {
       silentLog('ChannelSettings.delete', e);
@@ -78,7 +78,7 @@ export function ChannelSettings() {
     setTesting(id);
     setTestResult(null);
     try {
-      await invoke('test_notification_channel', { id });
+      await transport.invoke('test_notification_channel', { id });
       setTestResult({ id, success: true, msg: t.notifications.testOk });
     } catch (e: unknown) {
       setTestResult({ id, success: false, msg: typeof e === 'string' ? e : t.notifications.testFailed });
