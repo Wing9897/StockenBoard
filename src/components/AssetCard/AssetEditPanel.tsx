@@ -2,7 +2,7 @@
  * AssetCard 的編輯面板 — 使用 EditPanelShell 共用外殼
  */
 import { useState, useMemo } from 'react';
-import { transport } from '../../lib/transport';
+import { getTransport } from '../../lib/transport';
 import type { Subscription, ProviderInfo } from '../../types';
 import { EditPanelShell } from '../EditPanel/EditPanelShell';
 import { t } from '../../lib/i18n';
@@ -42,7 +42,7 @@ export function AssetEditPanel({ subscription, providers, currentProviderId, ass
     setEditError(null);
     if (sym.toUpperCase() !== subscription.symbol.toUpperCase()) {
       try {
-        await transport.invoke('fetch_asset_price', { providerId: editProvider, symbol: sym });
+        await getTransport().invoke('fetch_asset_price', { providerId: editProvider, symbol: sym });
       } catch (err) {
         setEditError(t.subForm.validateFailed(sym, err instanceof Error ? err.message : String(err)));
         setSaving(false);

@@ -5,10 +5,10 @@ import type { NotificationRuleRow } from '../../types';
 // Mock the transport layer so the component can run in jsdom without a backend.
 const mockInvoke = vi.fn();
 vi.mock('../../lib/transport', () => ({
-  transport: {
+  getTransport: () => ({
     invoke: (...args: unknown[]) => mockInvoke(...args),
     listen: () => () => {},
-  },
+  }),
   createTransport: () => ({
     invoke: (...args: unknown[]) => mockInvoke(...args),
     listen: () => () => {},

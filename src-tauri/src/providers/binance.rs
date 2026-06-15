@@ -44,12 +44,12 @@ impl DataProvider for BinanceProvider {
             .get(&url)
             .send()
             .await
-            .map_err(|e| format!("Binance 連接失敗: {}", e))?
+            .map_err(|e| format!("Binance connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("Binance API 錯誤: {}。格式: BTCUSDT", e))?
+            .map_err(|e| format!("Binance API error: {}. Format: BTCUSDT", e))?
             .json()
             .await
-            .map_err(|e| format!("Binance 解析失敗: {}", e))?;
+            .map_err(|e| format!("Binance parse failed: {}", e))?;
 
         Ok(Self::parse_ticker(symbol, &data))
     }
@@ -87,11 +87,11 @@ impl DataProvider for BinanceProvider {
                 .get(&url)
                 .send()
                 .await
-                .map_err(|e| format!("Binance 批量連接失敗: {}", e))?;
+                .map_err(|e| format!("Binance batch connection failed: {}", e))?;
             let body = resp
                 .text()
                 .await
-                .map_err(|e| format!("Binance 批量讀取失敗: {}", e))?;
+                .map_err(|e| format!("Binance batch read failed: {}", e))?;
 
             if let Ok(arr) = serde_json::from_str::<Vec<serde_json::Value>>(&body) {
                 let response_map: HashMap<String, &serde_json::Value> = arr
@@ -112,31 +112,31 @@ impl DataProvider for BinanceProvider {
         // 大量 symbol 或精確查詢失敗 → 取回所有 ticker，在本地過濾（免疫無效 symbol）
         let url = "https://api.binance.com/api/v3/ticker/24hr";
         let resp = self.client.get(url).send().await.map_err(|e| {
-            eprintln!("Binance 請求失敗: {:?}", e);
-            format!("Binance 全量查詢連接失敗: {}", e)
+            eprintln!("Binance request failed: {:?}", e);
+            format!("Binance full query connection failed: {}", e)
         })?;
 
         let status = resp.status();
         let body = resp.text().await.map_err(|e| {
-            eprintln!("Binance 讀取 body 失敗: {:?}", e);
-            format!("Binance 全量查詢讀取失敗: {}", e)
+            eprintln!("Binance read body failed: {:?}", e);
+            format!("Binance full query read failed: {}", e)
         })?;
 
         if !status.is_success() {
             eprintln!(
-                "Binance 全量查詢遭拒絕 ({}): {}",
+                "Binance batch request rejected ({}): {}",
                 status,
                 &body[..body.len().min(200)]
             );
             return Err(format!(
-                "Binance API 拒絕請求 (IP 可能受到限制): {}",
+                "Binance API rejected request (IP may be rate limited): {}",
                 status
             ));
         }
 
         let arr: Vec<serde_json::Value> = serde_json::from_str(&body).map_err(|e| {
-            eprintln!("Binance 序列化失敗: {:?}", e);
-            format!("Binance 全量查詢解析失敗: {}", e)
+            eprintln!("Binance parse failed: {:?}", e);
+            format!("Binance full query parse failed: {}", e)
         })?;
 
         let response_map: HashMap<String, &serde_json::Value> = arr

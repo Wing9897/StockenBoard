@@ -4,6 +4,12 @@ pub struct OkxProvider {
     client: reqwest::Client,
 }
 
+impl Default for OkxProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OkxProvider {
     pub fn new() -> Self {
         Self {
@@ -56,15 +62,15 @@ impl DataProvider for OkxProvider {
             .get(&url)
             .send()
             .await
-            .map_err(|e| format!("OKX 連接失敗: {}", e))?
+            .map_err(|e| format!("OKX connection failed: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("OKX 解析失敗: {}", e))?;
+            .map_err(|e| format!("OKX parse failed: {}", e))?;
 
         let item = data["data"]
             .as_array()
             .and_then(|a| a.first())
-            .ok_or("OKX: 找不到交易對數據")?;
+            .ok_or("OKX: trading pair not found")?;
 
         Ok(parse_okx_ticker(symbol, item))
     }
@@ -84,12 +90,12 @@ impl DataProvider for OkxProvider {
             .get(url)
             .send()
             .await
-            .map_err(|e| format!("OKX 批量連接失敗: {}", e))?
+            .map_err(|e| format!("OKX batch connection failed: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("OKX 批量解析失敗: {}", e))?;
+            .map_err(|e| format!("OKX batch parse failed: {}", e))?;
 
-        let list = data["data"].as_array().ok_or("OKX: 無結果")?;
+        let list = data["data"].as_array().ok_or("OKX: no results")?;
         let mut map = std::collections::HashMap::new();
         for item in list {
             if let Some(s) = item["instId"].as_str() {

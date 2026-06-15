@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { transport } from '../../lib/transport';
+import { getTransport } from '../../lib/transport';
 import { t } from '../../lib/i18n';
 import { silentLog } from '../../lib/errorLog';
 
@@ -23,7 +23,7 @@ export function NotificationHistory() {
   const fetchHistory = useCallback(async (from?: number, to?: number) => {
     setLoading(true);
     try {
-      const data = await transport.invoke<HistoryRow[]>('get_notification_history', {
+      const data = await getTransport().invoke<HistoryRow[]>('get_notification_history', {
         ruleId: null,
         from: from ?? null,
         to: to ?? null,

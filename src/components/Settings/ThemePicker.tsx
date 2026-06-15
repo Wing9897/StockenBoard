@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { transport } from '../../lib/transport';
+import { getTransport } from '../../lib/transport';
 import { t } from '../../lib/i18n';
 import { THEMES, ANIME_IDS, applyBgImage, loadBgForTheme } from '../../lib/themeData';
 import { STORAGE_KEYS } from '../../lib/storageKeys';
@@ -39,15 +39,15 @@ export function ThemePicker() {
 
   const handleChooseBg = async () => {
     try {
-      const filePath = await transport.invoke<string>('save_theme_bg', { themeId: current });
-      const dataUrl = await transport.invoke<string>('read_local_file_base64', { path: filePath });
+      const filePath = await getTransport().invoke<string>('save_theme_bg', { themeId: current });
+      const dataUrl = await getTransport().invoke<string>('read_local_file_base64', { path: filePath });
       setBgUrl(dataUrl);
       applyBgImage(dataUrl, bgOpacity);
     } catch { /* cancelled */ }
   };
 
   const handleRemoveBg = async () => {
-    try { await transport.invoke('remove_theme_bg', { themeId: current }); } catch { /* ignore */ }
+    try { await getTransport().invoke('remove_theme_bg', { themeId: current }); } catch { /* ignore */ }
     setBgUrl(null);
     applyBgImage(null, 0);
   };

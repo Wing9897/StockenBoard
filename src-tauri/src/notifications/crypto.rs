@@ -69,7 +69,7 @@ fn simple_hash(input: &str) -> [u8; 32] {
 /// ```
 pub fn encrypt_token(plaintext: &str) -> Result<String, String> {
     if plaintext.is_empty() {
-        return Err("Token 不可為空".to_string());
+        return Err("Token must not be empty".to_string());
     }
 
     let key = derive_key();
@@ -96,12 +96,12 @@ pub fn encrypt_token(plaintext: &str) -> Result<String, String> {
 /// ```
 pub fn decrypt_token(ciphertext: &str) -> Result<String, String> {
     if ciphertext.is_empty() {
-        return Err("密文不可為空".to_string());
+        return Err("Ciphertext must not be empty".to_string());
     }
 
     let encrypted_bytes = BASE64
         .decode(ciphertext)
-        .map_err(|e| format!("Base64 解碼失敗: {}", e))?;
+        .map_err(|e| format!("Base64 decode failed: {}", e))?;
 
     let key = derive_key();
     let decrypted: Vec<u8> = encrypted_bytes
@@ -110,7 +110,7 @@ pub fn decrypt_token(ciphertext: &str) -> Result<String, String> {
         .map(|(i, &b)| b ^ key[i % 32])
         .collect();
 
-    String::from_utf8(decrypted).map_err(|e| format!("UTF-8 解碼失敗: {}", e))
+    String::from_utf8(decrypted).map_err(|e| format!("UTF-8 decode failed: {}", e))
 }
 
 #[cfg(test)]

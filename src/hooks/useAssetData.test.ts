@@ -5,10 +5,10 @@ import { renderHook, waitFor } from '@testing-library/react';
 const mockInvoke = vi.fn();
 const mockListen = vi.fn(() => () => {});
 vi.mock('../lib/transport', () => ({
-  transport: {
+  getTransport: () => ({
     invoke: (...args: unknown[]) => mockInvoke(...args),
     listen: (...args: unknown[]) => mockListen(...args),
-  },
+  }),
   createTransport: () => ({
     invoke: (...args: unknown[]) => mockInvoke(...args),
     listen: (...args: unknown[]) => mockListen(...args),

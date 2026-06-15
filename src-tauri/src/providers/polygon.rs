@@ -130,7 +130,7 @@ impl DataProvider for PolygonProvider {
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {
-        let api_key = self.api_key.as_ref().ok_or("Polygon.io 需要 API Key")?;
+        let api_key = self.api_key.as_ref().ok_or("Polygon.io requires API key")?;
         let api_symbol = Self::to_polygon_symbol(symbol);
 
         // 股票類: 先嘗試 snapshot（含盤前盤後），失敗再 fallback 到 aggs/prev
@@ -158,17 +158,17 @@ impl DataProvider for PolygonProvider {
             ))
             .send()
             .await
-            .map_err(|e| format!("Polygon 連接失敗: {}", e))?
+            .map_err(|e| format!("Polygon connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("Polygon API 錯誤: {}", e))?
+            .map_err(|e| format!("Polygon API error: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("Polygon 解析失敗: {}", e))?;
+            .map_err(|e| format!("Polygon parse failed: {}", e))?;
 
         let r = &data["results"][0];
         if r.is_null() {
             return Err(format!(
-                "Polygon 找不到: {}。股票用 AAPL，加密用 X:BTCUSD",
+                "Polygon not found: {}. Use AAPL for stocks, X:BTCUSD for crypto",
                 symbol
             ));
         }
@@ -184,7 +184,7 @@ impl DataProvider for PolygonProvider {
             return self.fetch_price(&symbols[0]).await.map(|d| vec![d]);
         }
 
-        let api_key = self.api_key.as_ref().ok_or("Polygon.io 需要 API Key")?;
+        let api_key = self.api_key.as_ref().ok_or("Polygon.io requires API key")?;
 
         // 分成 stock 和 crypto
         let mut stock_syms: Vec<(String, String)> = Vec::new(); // (original, polygon_sym)
@@ -232,7 +232,7 @@ impl DataProvider for PolygonProvider {
                         }
                     }
                 }
-                Err(e) => eprintln!("Polygon stock snapshot 失敗: {}", e),
+                Err(e) => eprintln!("Polygon stock snapshot failed: {}", e),
             }
         }
 

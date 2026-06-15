@@ -6,7 +6,7 @@
  * - 點 pop-up 或 🔔 可開面板
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { transport } from '../../lib/transport';
+import { getTransport } from '../../lib/transport';
 import { t } from '../../lib/i18n';
 import type { NotificationTriggeredEvent } from '../../types';
 import './AlertSidebar.css';
@@ -57,7 +57,7 @@ export function AlertSidebar({ panelOpen, onClose }: Props) {
     if (!panelOpen || loaded) return;
     (async () => {
       try {
-        const history = await transport.invoke<{
+        const history = await getTransport().invoke<{
           id: number;
           rule_id: number;
           channel_id: number;
@@ -93,7 +93,7 @@ export function AlertSidebar({ panelOpen, onClose }: Props) {
 
   // Subscribe to real-time triggered events
   useEffect(() => {
-    const unlisten = transport.listen('notification-triggered', (payload) => {
+    const unlisten = getTransport().listen('notification-triggered', (payload) => {
       const evt = payload as NotificationTriggeredEvent;
       const item: AlertItem = {
         id: nextId++,

@@ -4,6 +4,12 @@ pub struct KuCoinProvider {
     client: reqwest::Client,
 }
 
+impl Default for KuCoinProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl KuCoinProvider {
     pub fn new() -> Self {
         Self {
@@ -49,15 +55,15 @@ impl DataProvider for KuCoinProvider {
             .get(&url)
             .send()
             .await
-            .map_err(|e| format!("KuCoin 連接失敗: {}", e))?
+            .map_err(|e| format!("KuCoin connection failed: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("KuCoin 解析失敗: {}", e))?;
+            .map_err(|e| format!("KuCoin parse failed: {}", e))?;
 
         if resp["code"].as_str() != Some("200000") {
             return Err(format!(
                 "KuCoin: {}",
-                resp["msg"].as_str().unwrap_or("未知錯誤")
+                resp["msg"].as_str().unwrap_or("unknown error")
             ));
         }
         Ok(parse_kucoin_ticker(symbol, &resp["data"]))
@@ -78,12 +84,12 @@ impl DataProvider for KuCoinProvider {
             .get(url)
             .send()
             .await
-            .map_err(|e| format!("KuCoin 批量連接失敗: {}", e))?
+            .map_err(|e| format!("KuCoin batch connection failed: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("KuCoin 批量解析失敗: {}", e))?;
+            .map_err(|e| format!("KuCoin batch parse failed: {}", e))?;
 
-        let tickers = resp["data"]["ticker"].as_array().ok_or("KuCoin: 無結果")?;
+        let tickers = resp["data"]["ticker"].as_array().ok_or("KuCoin: no results")?;
         let mut map = std::collections::HashMap::new();
         for t in tickers {
             if let Some(s) = t["symbol"].as_str() {

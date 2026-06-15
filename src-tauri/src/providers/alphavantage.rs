@@ -21,7 +21,7 @@ impl DataProvider for AlphaVantageProvider {
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {
-        let api_key = self.api_key.as_ref().ok_or("Alpha Vantage 需要 API Key")?;
+        let api_key = self.api_key.as_ref().ok_or("Alpha Vantage requires API key")?;
 
         let data: serde_json::Value = self
             .client
@@ -31,21 +31,21 @@ impl DataProvider for AlphaVantageProvider {
             ))
             .send()
             .await
-            .map_err(|e| format!("AlphaVantage 連接失敗: {}", e))?
+            .map_err(|e| format!("AlphaVantage connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("AlphaVantage API 錯誤: {}", e))?
+            .map_err(|e| format!("AlphaVantage API error: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("AlphaVantage 解析失敗: {}", e))?;
+            .map_err(|e| format!("AlphaVantage parse failed: {}", e))?;
 
         // Check for rate limit message
         if data["Note"].is_string() || data["Information"].is_string() {
-            return Err("Alpha Vantage 已達到速率限制 (25 calls/day)".to_string());
+            return Err("Alpha Vantage rate limit reached (25 calls/day)".to_string());
         }
 
         let q = &data["Global Quote"];
         if q.is_null() || q["05. price"].is_null() {
-            return Err(format!("AlphaVantage 找不到: {}", symbol));
+            return Err(format!("AlphaVantage not found: {}", symbol));
         }
 
         let parse = |key: &str| q[key].as_str().and_then(|s| s.parse::<f64>().ok());
@@ -77,7 +77,7 @@ impl DataProvider for AlphaVantageProvider {
         let api_key = self
             .api_key
             .as_ref()
-            .ok_or("Alpha Vantage 需要 API Key")?
+            .ok_or("Alpha Vantage requires API key")?
             .clone();
         let client = self.client.clone();
 
@@ -95,7 +95,7 @@ impl DataProvider for AlphaVantageProvider {
                 let data_res: Result<serde_json::Value, _> = c
                     .get(format!("https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={}&apikey={}", sym, key))
                     .send().await.map_err(|e| format!("AlphaVantage: {}", e))?
-                    .error_for_status().map_err(|e| format!("AlphaVantage API 錯誤: {}", e))?
+                    .error_for_status().map_err(|e| format!("AlphaVantage API error: {}", e))?
                     .json().await.map_err(|e| format!("AlphaVantage: {}", e));
 
                 let data = match data_res {
@@ -104,11 +104,11 @@ impl DataProvider for AlphaVantageProvider {
                 };
 
                 if data["Note"].is_string() || data["Information"].is_string() {
-                    return Err("Alpha Vantage 已達到速率限制".to_string());
+                    return Err("Alpha Vantage rate limit reached".to_string());
                 }
                 let q = &data["Global Quote"];
                 if q.is_null() || q["05. price"].is_null() {
-                    return Err(format!("AlphaVantage 找不到: {}", sym));
+                    return Err(format!("AlphaVantage not found: {}", sym));
                 }
                 let parse = |key: &str| q[key].as_str().and_then(|s| s.parse::<f64>().ok());
                 let pct = q["10. change percent"].as_str()
@@ -130,7 +130,7 @@ impl DataProvider for AlphaVantageProvider {
         while let Some(Ok(res)) = tasks.join_next().await {
             match res {
                 Ok(data) => results.push(data),
-                Err(e) => eprintln!("AlphaVantage 跳過: {}", e),
+                Err(e) => eprintln!("AlphaVantage skipped: {}", e),
             }
         }
         Ok(results)

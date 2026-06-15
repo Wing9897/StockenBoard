@@ -4,6 +4,12 @@ pub struct MexcProvider {
     client: reqwest::Client,
 }
 
+impl Default for MexcProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MexcProvider {
     pub fn new() -> Self {
         Self {
@@ -52,12 +58,12 @@ impl DataProvider for MexcProvider {
             .get(&url)
             .send()
             .await
-            .map_err(|e| format!("MEXC 連接失敗: {}", e))?
+            .map_err(|e| format!("MEXC connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("MEXC API 錯誤: {}", e))?
+            .map_err(|e| format!("MEXC API error: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("MEXC 解析失敗: {}", e))?;
+            .map_err(|e| format!("MEXC parse failed: {}", e))?;
 
         Ok(parse_mexc_ticker(symbol, &data))
     }
@@ -77,12 +83,12 @@ impl DataProvider for MexcProvider {
             .get(url)
             .send()
             .await
-            .map_err(|e| format!("MEXC 批量連接失敗: {}", e))?
+            .map_err(|e| format!("MEXC batch connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("MEXC 批量 API 錯誤: {}", e))?
+            .map_err(|e| format!("MEXC batch API error: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("MEXC 批量解析失敗: {}", e))?;
+            .map_err(|e| format!("MEXC batch parse failed: {}", e))?;
 
         let mut map = std::collections::HashMap::new();
         for item in &arr {

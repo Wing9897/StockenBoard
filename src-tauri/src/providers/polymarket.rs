@@ -4,6 +4,12 @@ pub struct PolymarketProvider {
     client: reqwest::Client,
 }
 
+impl Default for PolymarketProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PolymarketProvider {
     pub fn new() -> Self {
         Self {
@@ -25,12 +31,12 @@ impl DataProvider for PolymarketProvider {
             .get(format!("https://clob.polymarket.com/markets/{}", symbol))
             .send()
             .await
-            .map_err(|e| format!("Polymarket 連接失敗: {}", e))?
+            .map_err(|e| format!("Polymarket connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("Polymarket API 錯誤: {}", e))?
+            .map_err(|e| format!("Polymarket API error: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("Polymarket 解析失敗: {}", e))?;
+            .map_err(|e| format!("Polymarket parse failed: {}", e))?;
 
         let price = data["outcome_prices"]
             .as_array()
@@ -80,7 +86,7 @@ impl DataProvider for PolymarketProvider {
                         .await
                         .map_err(|e| format!("Polymarket: {}", e))?
                         .error_for_status()
-                        .map_err(|e| format!("Polymarket API 錯誤: {}", e))?
+                        .map_err(|e| format!("Polymarket API error: {}", e))?
                         .json()
                         .await
                         .map_err(|e| format!("Polymarket: {}", e))?;
@@ -117,7 +123,7 @@ impl DataProvider for PolymarketProvider {
         for r in results {
             match r {
                 Ok(data) => out.push(data),
-                Err(e) => eprintln!("Polymarket 跳過: {}", e),
+                Err(e) => eprintln!("Polymarket skipped: {}", e),
             }
         }
         Ok(out)

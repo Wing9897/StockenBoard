@@ -35,7 +35,7 @@ impl DataProvider for EODHDProvider {
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {
-        let api_key = self.api_key.as_ref().ok_or("EODHD 需要 API Key")?;
+        let api_key = self.api_key.as_ref().ok_or("EODHD requires API key")?;
 
         let data: serde_json::Value = self
             .client
@@ -45,12 +45,12 @@ impl DataProvider for EODHDProvider {
             ))
             .send()
             .await
-            .map_err(|e| format!("EODHD 連接失敗: {}", e))?
+            .map_err(|e| format!("EODHD connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("EODHD API 錯誤: {}", e))?
+            .map_err(|e| format!("EODHD API error: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("EODHD 解析失敗: {}", e))?;
+            .map_err(|e| format!("EODHD parse failed: {}", e))?;
 
         Ok(Self::parse_eod(symbol, &data))
     }
@@ -64,7 +64,7 @@ impl DataProvider for EODHDProvider {
             return self.fetch_price(&symbols[0]).await.map(|d| vec![d]);
         }
 
-        let api_key = self.api_key.as_ref().ok_or("EODHD 需要 API Key")?;
+        let api_key = self.api_key.as_ref().ok_or("EODHD requires API key")?;
         let extra = symbols[1..].join(",");
 
         // EODHD batch: first symbol in path, rest in s= param
@@ -78,17 +78,17 @@ impl DataProvider for EODHDProvider {
             .get(&url)
             .send()
             .await
-            .map_err(|e| format!("EODHD 批量連接失敗: {}", e))?
+            .map_err(|e| format!("EODHD batch connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("EODHD 批量 API 錯誤 (請確認 API Key 有效): {}", e))?;
+            .map_err(|e| format!("EODHD batch API error (verify API key is valid): {}", e))?;
 
         let body = resp
             .text()
             .await
-            .map_err(|e| format!("EODHD 批量讀取失敗: {}", e))?;
+            .map_err(|e| format!("EODHD batch read failed: {}", e))?;
 
         let arr: Vec<serde_json::Value> = serde_json::from_str(&body)
-            .map_err(|_| "EODHD 批量解析失敗 (可能含無效 symbol)".to_string())?;
+            .map_err(|_| "EODHD batch parse failed (possibly invalid symbol)".to_string())?;
 
         let response_map: HashMap<String, &serde_json::Value> = arr
             .iter()

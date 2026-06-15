@@ -11,8 +11,6 @@ pub struct YahooProvider {
 
 #[derive(Clone)]
 struct YahooAuth {
-    #[allow(dead_code)]
-    cookie: String,
     crumb: String,
 }
 
@@ -23,6 +21,12 @@ regularMarketOpen,marketCap,currency,exchangeName,marketState,shortName,\
 fiftyTwoWeekHigh,fiftyTwoWeekLow,\
 preMarketPrice,preMarketChange,preMarketChangePercent,\
 postMarketPrice,postMarketChange,postMarketChangePercent";
+
+impl Default for YahooProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl YahooProvider {
     pub fn new() -> Self {
@@ -51,24 +55,23 @@ impl YahooProvider {
             .get("https://fc.yahoo.com")
             .send()
             .await
-            .map_err(|e| format!("Yahoo cookie 獲取失敗: {}", e))?;
+            .map_err(|e| format!("Yahoo cookie fetch failed: {}", e))?;
 
         let crumb = self
             .client
             .get("https://query2.finance.yahoo.com/v1/test/getcrumb")
             .send()
             .await
-            .map_err(|e| format!("Yahoo crumb 獲取失敗: {}", e))?
+            .map_err(|e| format!("Yahoo crumb fetch failed: {}", e))?
             .text()
             .await
-            .map_err(|e| format!("Yahoo crumb 解析失敗: {}", e))?;
+            .map_err(|e| format!("Yahoo crumb parse failed: {}", e))?;
 
         if crumb.is_empty() || crumb.contains("<!DOCTYPE") {
-            return Err("Yahoo crumb 獲取失敗，請稍後重試".to_string());
+            return Err("Yahoo crumb fetch failed, please try again later".to_string());
         }
 
         let auth = YahooAuth {
-            cookie: String::new(),
             crumb,
         };
         let mut cached = self.auth.write().await;
@@ -94,7 +97,7 @@ impl YahooProvider {
             .get(&url)
             .send()
             .await
-            .map_err(|e| format!("Yahoo 連接失敗: {}", e))?;
+            .map_err(|e| format!("Yahoo connection failed: {}", e))?;
 
         if resp.status() == reqwest::StatusCode::UNAUTHORIZED
             || resp.status() == reqwest::StatusCode::FORBIDDEN
@@ -110,20 +113,20 @@ impl YahooProvider {
                 .get(&url2)
                 .send()
                 .await
-                .map_err(|e| format!("Yahoo 重試連接失敗: {}", e))?;
+                .map_err(|e| format!("Yahoo retry connection failed: {}", e))?;
             return resp2
                 .error_for_status()
-                .map_err(|e| format!("Yahoo API 錯誤: {}", e))?
+                .map_err(|e| format!("Yahoo API error: {}", e))?
                 .json()
                 .await
-                .map_err(|e| format!("Yahoo 解析失敗: {}", e));
+                .map_err(|e| format!("Yahoo parse failed: {}", e));
         }
 
         resp.error_for_status()
-            .map_err(|e| format!("Yahoo API 錯誤: {}", e))?
+            .map_err(|e| format!("Yahoo API error: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("Yahoo 解析失敗: {}", e))
+            .map_err(|e| format!("Yahoo parse failed: {}", e))
     }
 }
 
@@ -139,7 +142,7 @@ impl DataProvider for YahooProvider {
         let q = &data["quoteResponse"]["result"][0];
         if q.is_null() {
             return Err(format!(
-                "Yahoo 找不到: {}。請使用股票代號如 AAPL, GOOGL",
+                "Yahoo not found: {}. Use ticker symbols like AAPL, GOOGL",
                 symbol
             ));
         }
@@ -161,10 +164,10 @@ impl DataProvider for YahooProvider {
 
         let arr = data["quoteResponse"]["result"]
             .as_array()
-            .ok_or("Yahoo 批量回應格式錯誤")?;
+            .ok_or("Yahoo batch response format error")?;
 
         if arr.is_empty() {
-            return Err("Yahoo 批量查詢全部失敗: 找不到任何結果".to_string());
+            return Err("Yahoo batch query failed: no results found".to_string());
         }
 
         let mut results = Vec::with_capacity(arr.len());

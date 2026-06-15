@@ -60,8 +60,8 @@ impl DataProvider for AlpacaProvider {
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {
-        let api_key = self.api_key.as_ref().ok_or("Alpaca 需要 API Key")?;
-        let api_secret = self.api_secret.as_ref().ok_or("Alpaca 需要 API Secret")?;
+        let api_key = self.api_key.as_ref().ok_or("Alpaca requires API key")?;
+        let api_secret = self.api_secret.as_ref().ok_or("Alpaca requires API secret")?;
 
         let is_crypto = Self::is_crypto(symbol);
         let api_symbol = if is_crypto {
@@ -89,12 +89,12 @@ impl DataProvider for AlpacaProvider {
             .header("APCA-API-SECRET-KEY", api_secret)
             .send()
             .await
-            .map_err(|e| format!("Alpaca 連接失敗: {}", e))?
+            .map_err(|e| format!("Alpaca connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("Alpaca API 錯誤: {}", e))?
+            .map_err(|e| format!("Alpaca API error: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("Alpaca 解析失敗: {}", e))?;
+            .map_err(|e| format!("Alpaca parse failed: {}", e))?;
 
         let bar = if is_crypto {
             &data["bars"][&api_symbol]
@@ -103,7 +103,7 @@ impl DataProvider for AlpacaProvider {
         };
         if bar.is_null() {
             return Err(format!(
-                "Alpaca 找不到: {}。股票用 AAPL，加密用 BTC/USD",
+                "Alpaca not found: {}. Use AAPL for stocks, BTC/USD for crypto",
                 symbol
             ));
         }
@@ -119,8 +119,8 @@ impl DataProvider for AlpacaProvider {
             return self.fetch_price(&symbols[0]).await.map(|d| vec![d]);
         }
 
-        let api_key = self.api_key.as_ref().ok_or("Alpaca 需要 API Key")?;
-        let api_secret = self.api_secret.as_ref().ok_or("Alpaca 需要 API Secret")?;
+        let api_key = self.api_key.as_ref().ok_or("Alpaca requires API key")?;
+        let api_secret = self.api_secret.as_ref().ok_or("Alpaca requires API secret")?;
 
         // 分成 crypto 和 stock
         let mut crypto_map: Vec<(String, String)> = Vec::new(); // (original, alpaca_sym)

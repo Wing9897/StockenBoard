@@ -30,7 +30,7 @@ impl TiingoProvider {
 
     fn parse_stock(symbol: &str, item: &serde_json::Value) -> Result<AssetData, String> {
         if item.is_null() {
-            return Err(format!("Tiingo 找不到: {}", symbol));
+            return Err(format!("Tiingo not found: {}", symbol));
         }
         let price = item["last"].as_f64().unwrap_or(0.0);
         let prev = item["prevClose"].as_f64().unwrap_or(price);
@@ -61,7 +61,7 @@ impl DataProvider for TiingoProvider {
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {
-        let api_key = self.api_key.as_ref().ok_or("Tiingo 需要 API Key")?;
+        let api_key = self.api_key.as_ref().ok_or("Tiingo requires API key")?;
 
         if Self::is_crypto(symbol) {
             let tiingo_sym = Self::to_tiingo_crypto(symbol);
@@ -74,16 +74,16 @@ impl DataProvider for TiingoProvider {
                 .get(&url)
                 .send()
                 .await
-                .map_err(|e| format!("Tiingo 連接失敗: {}", e))?
+                .map_err(|e| format!("Tiingo connection failed: {}", e))?
                 .error_for_status()
-                .map_err(|e| format!("Tiingo API 錯誤: {}", e))?
+                .map_err(|e| format!("Tiingo API error: {}", e))?
                 .json()
                 .await
-                .map_err(|e| format!("Tiingo 解析失敗: {}", e))?;
+                .map_err(|e| format!("Tiingo parse failed: {}", e))?;
 
             let top = &data[0]["topOfBookData"][0];
             if top.is_null() {
-                return Err(format!("Tiingo 找不到加密貨幣: {}", symbol));
+                return Err(format!("Tiingo crypto not found: {}", symbol));
             }
             Ok(AssetDataBuilder::new(symbol, "tiingo")
                 .price(top["lastPrice"].as_f64().unwrap_or(0.0))
@@ -95,12 +95,12 @@ impl DataProvider for TiingoProvider {
                 .get(&url)
                 .send()
                 .await
-                .map_err(|e| format!("Tiingo 連接失敗: {}", e))?
+                .map_err(|e| format!("Tiingo connection failed: {}", e))?
                 .error_for_status()
-                .map_err(|e| format!("Tiingo API 錯誤: {}", e))?
+                .map_err(|e| format!("Tiingo API error: {}", e))?
                 .json()
                 .await
-                .map_err(|e| format!("Tiingo 解析失敗: {}", e))?;
+                .map_err(|e| format!("Tiingo parse failed: {}", e))?;
 
             Self::parse_stock(symbol, &data[0])
         }
@@ -115,7 +115,7 @@ impl DataProvider for TiingoProvider {
             return self.fetch_price(&symbols[0]).await.map(|d| vec![d]);
         }
 
-        let api_key = self.api_key.as_ref().ok_or("Tiingo 需要 API Key")?;
+        let api_key = self.api_key.as_ref().ok_or("Tiingo requires API key")?;
 
         // 分成 crypto 和 stock 兩組
         let mut crypto_syms: Vec<(String, String)> = Vec::new(); // (original, tiingo_sym)
@@ -159,12 +159,12 @@ impl DataProvider for TiingoProvider {
                                     )
                                 }
                                 Err(e) => {
-                                    eprintln!("Tiingo crypto 跳過 {}: {}", original, e);
+                                    eprintln!("Tiingo crypto skipped {}: {}", original, e);
                                     None
                                 }
                             },
                             Err(e) => {
-                                eprintln!("Tiingo crypto 跳過 {}: {}", original, e);
+                                eprintln!("Tiingo crypto skipped {}: {}", original, e);
                                 None
                             }
                         }
@@ -188,7 +188,7 @@ impl DataProvider for TiingoProvider {
                 .get(&url)
                 .send()
                 .await
-                .map_err(|e| format!("Tiingo stock 批量失敗: {}", e))
+                .map_err(|e| format!("Tiingo stock batch failed: {}", e))
             {
                 Ok(resp) => {
                     if let Ok(arr) = resp
@@ -207,13 +207,13 @@ impl DataProvider for TiingoProvider {
                             if let Some(item) = ticker_map.get(&sym.to_uppercase()) {
                                 match Self::parse_stock(sym, item) {
                                     Ok(asset) => results.push(asset),
-                                    Err(e) => eprintln!("Tiingo stock 跳過 {}: {}", sym, e),
+                                    Err(e) => eprintln!("Tiingo stock skipped {}: {}", sym, e),
                                 }
                             }
                         }
                     }
                 }
-                Err(e) => eprintln!("Tiingo stock 批量失敗: {}", e),
+                Err(e) => eprintln!("Tiingo stock batch failed: {}", e),
             }
         }
 

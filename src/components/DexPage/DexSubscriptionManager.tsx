@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { transport } from '../../lib/transport';
+import { getTransport } from '../../lib/transport';
 import { t } from '../../lib/i18n';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
 
@@ -64,7 +64,7 @@ export function DexSubscriptionManager({ onAdd, existingKeys, onToast, onClose }
     try {
       let lookupAddr = pool;
       if (provider === 'subgraph') lookupAddr = `${protocol}:${pool}`;
-      const info = await transport.invoke<DexPoolInfo>('lookup_dex_pool', { providerId: provider, poolAddress: lookupAddr });
+      const info = await getTransport().invoke<DexPoolInfo>('lookup_dex_pool', { providerId: provider, poolAddress: lookupAddr });
       setPoolInfo(info);
       if (!displayName) setDisplayName(`${info.token0_symbol}/${info.token1_symbol}`);
     } catch (err) {
@@ -116,7 +116,7 @@ export function DexSubscriptionManager({ onAdd, existingKeys, onToast, onClose }
     }
 
     try {
-      await transport.invoke('fetch_asset_price', { providerId: provider, symbol: testSymbol });
+      await getTransport().invoke('fetch_asset_price', { providerId: provider, symbol: testSymbol });
     } catch (err) {
       setError(t.dex.validateFailed(err instanceof Error ? err.message : String(err)));
       setSubmitting(false);

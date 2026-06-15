@@ -161,7 +161,7 @@ async fn handle_ws_connection(socket: WebSocket, state: Arc<CoreState>) {
                                 Ok(t) => t,
                                 Err(_) => continue,
                             };
-                            if sender.send(Message::Text(text.into())).await.is_err() {
+                            if sender.send(Message::Text(text)).await.is_err() {
                                 break;
                             }
                         }
@@ -177,7 +177,7 @@ async fn handle_ws_connection(socket: WebSocket, state: Arc<CoreState>) {
                                 Ok(t) => t,
                                 Err(_) => continue,
                             };
-                            if sender.send(Message::Text(text.into())).await.is_err() {
+                            if sender.send(Message::Text(text)).await.is_err() {
                                 break;
                             }
                         }
@@ -254,12 +254,9 @@ async fn handle_command(
             };
 
             let sender = Arc::new(ws_ticker_tx.clone());
-            match ws_provider.subscribe(symbols, sender).await {
-                Ok(handle) => {
-                    let mut tasks = ws_tasks.lock().await;
-                    tasks.insert(provider_id, handle);
-                }
-                Err(_) => {}
+            if let Ok(handle) = ws_provider.subscribe(symbols, sender).await {
+                let mut tasks = ws_tasks.lock().await;
+                tasks.insert(provider_id, handle);
             }
         }
         "stop_ws_stream" => {

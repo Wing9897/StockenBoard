@@ -27,7 +27,7 @@ impl CryptoCompareProvider {
         let raw = &data["RAW"][base]["USD"];
         if raw.is_null() {
             return Err(format!(
-                "CryptoCompare 找不到: {} (查詢: {})。格式: BTC, ETH",
+                "CryptoCompare not found: {} (query: {}). Format: BTC, ETH",
                 symbol, base
             ));
         }
@@ -60,12 +60,12 @@ impl DataProvider for CryptoCompareProvider {
             .build_request(&url)
             .send()
             .await
-            .map_err(|e| format!("CryptoCompare 連接失敗: {}", e))?
+            .map_err(|e| format!("CryptoCompare connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("CryptoCompare API 錯誤: {}", e))?
+            .map_err(|e| format!("CryptoCompare API error: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("CryptoCompare 解析失敗: {}", e))?;
+            .map_err(|e| format!("CryptoCompare parse failed: {}", e))?;
 
         Self::parse_coin(symbol, &base, &data)
     }
@@ -96,23 +96,23 @@ impl DataProvider for CryptoCompareProvider {
             .build_request(&url)
             .send()
             .await
-            .map_err(|e| format!("CryptoCompare 批量連接失敗: {}", e))?
+            .map_err(|e| format!("CryptoCompare batch connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("CryptoCompare 批量 API 錯誤: {}", e))?;
+            .map_err(|e| format!("CryptoCompare batch API error: {}", e))?;
 
         let body = resp
             .text()
             .await
-            .map_err(|e| format!("CryptoCompare 批量讀取失敗: {}", e))?;
+            .map_err(|e| format!("CryptoCompare batch read failed: {}", e))?;
 
         let data: serde_json::Value =
-            serde_json::from_str(&body).map_err(|_| "CryptoCompare 批量解析失敗".to_string())?;
+            serde_json::from_str(&body).map_err(|_| "CryptoCompare batch parse failed".to_string())?;
 
         let mut results = Vec::new();
         for (symbol, base) in &mappings {
             match Self::parse_coin(symbol, base, &data) {
                 Ok(asset) => results.push(asset),
-                Err(e) => eprintln!("CryptoCompare 批量跳過 {}: {}", symbol, e),
+                Err(e) => eprintln!("CryptoCompare batch skipping {}: {}", symbol, e),
             }
         }
         Ok(results)

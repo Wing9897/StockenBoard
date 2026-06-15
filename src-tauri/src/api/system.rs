@@ -43,14 +43,6 @@ struct SetSystemConfig {
     unattended_polling: Option<bool>,
 }
 
-#[derive(Debug, Serialize)]
-struct LogoDownloadResult {
-    succeeded: u32,
-    skipped: u32,
-    failed: u32,
-    failed_symbols: Vec<String>,
-}
-
 // ─── Router ─────────────────────────────────────────────────────────────────────
 
 pub fn router() -> Router<Arc<CoreState>> {
@@ -137,6 +129,7 @@ async fn reset_all(
         .reset_all_data()
         .map_err(|e| ApiError::internal(e).into_response())?;
 
+    state.notification_engine.reload_rules().await;
     state.polling.reload();
     Ok(ApiResponse::ok(serde_json::json!({ "success": true })).into_response())
 }
@@ -232,66 +225,11 @@ async fn download_logos(
     use axum::response::IntoResponse;
 
     let icons_dir = state.data_dir.join("icons");
-    tokio::fs::create_dir_all(&icons_dir)
+    let result = crate::icons::download_all_logos(&state.db, &icons_dir, None)
         .await
-        .map_err(|e| ApiError::internal(format!("Failed to create icons directory: {}", e)).into_response())?;
-
-    let subs = state
-        .db
-        .list_all_subscriptions()
         .map_err(|e| ApiError::internal(e).into_response())?;
 
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .user_agent("StockenBoard/1.0")
-        .build()
-        .unwrap_or_default();
-
-    let semaphore = Arc::new(tokio::sync::Semaphore::new(3));
-    let mut succeeded = 0u32;
-    let mut skipped = 0u32;
-    let mut failed_list: Vec<String> = Vec::new();
-
-    for sub in &subs {
-        let icon_name = sub.symbol.to_lowercase();
-        let dest = icons_dir.join(format!("{}.png", icon_name));
-
-        // Already exists → skip
-        if dest.exists() {
-            skipped += 1;
-            continue;
-        }
-
-        let query_symbol = to_query_symbol(&sub.symbol, &sub.asset_type);
-        let _permit = semaphore.clone().acquire_owned().await.unwrap();
-
-        let bytes = try_download_png(&client, &query_symbol).await;
-        drop(_permit);
-
-        match bytes {
-            Some(data) => {
-                if let Err(_e) = tokio::fs::write(&dest, &data).await {
-                    failed_list.push(sub.symbol.clone());
-                } else {
-                    succeeded += 1;
-                }
-            }
-            None => {
-                failed_list.push(sub.symbol.clone());
-            }
-        }
-
-        // Rate limit protection
-        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-    }
-
-    Ok(ApiResponse::ok(LogoDownloadResult {
-        succeeded,
-        skipped,
-        failed: failed_list.len() as u32,
-        failed_symbols: failed_list,
-    })
-    .into_response())
+    Ok(ApiResponse::ok(result).into_response())
 }
 
 // ─── Data Handlers ──────────────────────────────────────────────────────────────
@@ -352,45 +290,4 @@ async fn lookup_dex_pool(
         Ok(info) => Ok(ApiResponse::ok(info).into_response()),
         Err(e) => Err(ApiError::internal(e).into_response()),
     }
-}
-
-// ─── Helper Functions ───────────────────────────────────────────────────────────
-
-/// Convert symbol to query format for logo API
-fn to_query_symbol(symbol: &str, asset_type: &str) -> String {
-    match asset_type {
-        "crypto" => {
-            let (base, _quote) = crate::providers::traits::parse_crypto_symbol(symbol);
-            base
-        }
-        _ => symbol.to_uppercase(),
-    }
-}
-
-/// Try downloading a PNG from logo sources
-async fn try_download_png(client: &reqwest::Client, symbol: &str) -> Option<Vec<u8>> {
-    let upper = symbol.to_uppercase();
-    let url = format!("https://assets.parqet.com/logos/symbol/{}", upper);
-    fetch_if_png(client, &url).await
-}
-
-/// Fetch URL, return bytes if response is image/png or image/jpeg
-async fn fetch_if_png(client: &reqwest::Client, url: &str) -> Option<Vec<u8>> {
-    let resp = client.get(url).send().await.ok()?;
-    if !resp.status().is_success() {
-        return None;
-    }
-    let content_type = resp
-        .headers()
-        .get("content-type")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
-    if !content_type.starts_with("image/png") && !content_type.starts_with("image/jpeg") {
-        return None;
-    }
-    let bytes = resp.bytes().await.ok()?;
-    if bytes.len() < 100 {
-        return None;
-    }
-    Some(bytes.to_vec())
 }

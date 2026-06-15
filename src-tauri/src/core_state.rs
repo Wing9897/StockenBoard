@@ -7,6 +7,13 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::broadcast;
 
+#[cfg(feature = "desktop")]
+use std::collections::HashMap;
+#[cfg(feature = "desktop")]
+use tokio::sync::RwLock;
+#[cfg(feature = "desktop")]
+use tokio::task::JoinHandle;
+
 use crate::db::DbPool;
 use crate::events::AppEvent;
 use crate::notifications::engine::NotificationEngine;
@@ -14,6 +21,8 @@ use crate::notifications::ai_scheduler::AiScheduler;
 use crate::notifications::global_cooldown::GlobalCooldown;
 use crate::polling::PollingManager;
 use crate::providers::registry::ProviderRegistry;
+#[cfg(feature = "desktop")]
+use crate::providers::WsTickerUpdate;
 
 /// 確保 DB schema 一致 — 版本不同就刪除重建。
 ///
@@ -25,7 +34,7 @@ pub fn ensure_clean_db(app_dir: &Path) {
     let current = std::fs::read_to_string(&marker).unwrap_or_default();
     if current.trim() != SCHEMA_VER {
         eprintln!(
-            "[DB] Schema 版本不符 (current={:?}, expected={}), 刪除並重建資料庫",
+            "[DB] Schema version mismatch (current={:?}, expected={}), deleting and recreating database",
             current.trim(),
             SCHEMA_VER
         );
@@ -55,6 +64,15 @@ pub struct CoreState {
     pub polling: PollingManager,
     /// 資料目錄路徑（icons、theme_bg 等存放位置）
     pub data_dir: PathBuf,
+
+    // ── Desktop-only fields (Tauri WebSocket relay) ──────────────
+    /// WebSocket ticker update broadcast sender (desktop only)
+    #[cfg(feature = "desktop")]
+    pub ws_sender: broadcast::Sender<WsTickerUpdate>,
+    /// Active WebSocket task handles keyed by provider ID (desktop only)
+    #[cfg(feature = "desktop")]
+    #[allow(clippy::type_complexity)]
+    pub ws_tasks: RwLock<HashMap<String, (JoinHandle<()>, JoinHandle<()>)>>,
 }
 
 impl CoreState {
@@ -117,6 +135,10 @@ impl CoreState {
             global_cooldown,
             polling,
             data_dir: data_dir.to_path_buf(),
+            #[cfg(feature = "desktop")]
+            ws_sender: broadcast::channel(256).0,
+            #[cfg(feature = "desktop")]
+            ws_tasks: RwLock::new(HashMap::new()),
         })
     }
 

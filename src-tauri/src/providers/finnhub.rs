@@ -21,7 +21,7 @@ impl DataProvider for FinnhubProvider {
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {
-        let api_key = self.api_key.as_ref().ok_or("Finnhub 需要 API Key")?;
+        let api_key = self.api_key.as_ref().ok_or("Finnhub requires API key")?;
 
         // Auto-convert crypto symbols: BTCUSDT -> BINANCE:BTCUSDT, BTC-USD -> BINANCE:BTCUSDT
         let api_symbol = if symbol.contains(':') {
@@ -47,18 +47,18 @@ impl DataProvider for FinnhubProvider {
             ))
             .send()
             .await
-            .map_err(|e| format!("Finnhub 連接失敗: {}", e))?
+            .map_err(|e| format!("Finnhub connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("Finnhub API 錯誤: {}", e))?
+            .map_err(|e| format!("Finnhub API error: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("Finnhub 解析失敗: {}", e))?;
+            .map_err(|e| format!("Finnhub parse failed: {}", e))?;
 
         // Finnhub returns c=0 for invalid symbols
         let price = data["c"].as_f64().unwrap_or(0.0);
         if price == 0.0 {
             return Err(format!(
-                "Finnhub 找不到: {}。股票用 AAPL，加密用 BINANCE:BTCUSDT",
+                "Finnhub not found: {}. Use AAPL for stocks, BINANCE:BTCUSDT for crypto",
                 symbol
             ));
         }
@@ -83,7 +83,7 @@ impl DataProvider for FinnhubProvider {
             return self.fetch_price(&symbols[0]).await.map(|d| vec![d]);
         }
 
-        let api_key = self.api_key.as_ref().ok_or("Finnhub 需要 API Key")?.clone();
+        let api_key = self.api_key.as_ref().ok_or("Finnhub requires API key")?.clone();
         let client = self.client.clone();
 
         use futures::stream::{self, StreamExt};
@@ -115,13 +115,13 @@ impl DataProvider for FinnhubProvider {
                         .await
                         .map_err(|e| format!("Finnhub: {}", e))?
                         .error_for_status()
-                        .map_err(|e| format!("Finnhub API 錯誤: {}", e))?
+                        .map_err(|e| format!("Finnhub API error: {}", e))?
                         .json()
                         .await
                         .map_err(|e| format!("Finnhub: {}", e))?;
                     let price = data["c"].as_f64().unwrap_or(0.0);
                     if price == 0.0 {
-                        return Err(format!("Finnhub 找不到: {}", sym));
+                        return Err(format!("Finnhub not found: {}", sym));
                     }
                     Ok(AssetDataBuilder::new(&sym, "finnhub")
                         .price(price)
@@ -142,7 +142,7 @@ impl DataProvider for FinnhubProvider {
         for r in results {
             match r {
                 Ok(data) => out.push(data),
-                Err(e) => eprintln!("Finnhub 跳過: {}", e),
+                Err(e) => eprintln!("Finnhub skipped: {}", e),
             }
         }
         Ok(out)

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { AssetData, Subscription, ProviderInfo, WsTickerUpdate } from '../types';
-import { transport } from '../lib/transport';
+import { getTransport } from '../lib/transport';
 import { priceStore } from '../lib/priceStore';
 import * as api from '../lib/subscriptionApi';
 
@@ -63,13 +63,13 @@ export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
 
       // 設定所有 event listeners
       const fns = [
-        transport.listen('price-update', (payload) => priceStore.updatePrices(payload as AssetData[])),
-        transport.listen('price-error', (payload) => priceStore.updateErrors(payload as Record<string, string>)),
-        transport.listen('poll-tick', (payload) => {
+        getTransport().listen('price-update', (payload) => priceStore.updatePrices(payload as AssetData[])),
+        getTransport().listen('price-error', (payload) => priceStore.updateErrors(payload as Record<string, string>)),
+        getTransport().listen('poll-tick', (payload) => {
           const p = payload as { provider_id: string; fetched_at: number; interval_ms: number };
           priceStore.updateTick(p.provider_id, p.fetched_at, p.interval_ms);
         }),
-        transport.listen('ws-ticker-update', (payload) => {
+        getTransport().listen('ws-ticker-update', (payload) => {
           const p = payload as WsTickerUpdate;
           priceStore.updateWs(p.provider_id, p.symbol, p.data);
         }),
@@ -78,18 +78,18 @@ export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
 
       // 載入快取
       try {
-        const cached = await transport.invoke<AssetData[]>('get_cached_prices');
+        const cached = await getTransport().invoke<AssetData[]>('get_cached_prices');
         if (cached.length > 0) priceStore.updatePrices(cached);
       } catch (e) { silentLog('getCachedPrices', e); }
       try {
-        const ticks = await transport.invoke<{ provider_id: string; fetched_at: number; interval_ms: number }[]>('get_poll_ticks');
+        const ticks = await getTransport().invoke<{ provider_id: string; fetched_at: number; interval_ms: number }[]>('get_poll_ticks');
         for (const t of ticks) priceStore.updateTick(t.provider_id, t.fetched_at, t.interval_ms);
       } catch (e) { silentLog('getPollTicks', e); }
 
       // WebSocket 連線（僅 asset）
       if (subType === 'asset') {
         try {
-          const allSettings = await transport.invoke<{ provider_id: string; connection_type: string }[]>('list_provider_settings');
+          const allSettings = await getTransport().invoke<{ provider_id: string; connection_type: string }[]>('list_provider_settings');
           const wsProviders = new Set(allSettings.filter(s => s.connection_type === 'websocket').map(s => s.provider_id));
           const groups: Record<string, string[]> = {};
           for (const sub of subs) {
@@ -100,7 +100,7 @@ export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
           for (const [pid, syms] of Object.entries(groups)) {
             const key = `${pid}:${syms.join(',')}`;
             if (!wsActiveRef.current.has(key)) {
-              await transport.invoke('start_ws_stream', { providerId: pid, symbols: syms });
+              await getTransport().invoke('start_ws_stream', { providerId: pid, symbols: syms });
               wsActiveRef.current.add(key);
               wsProvidersRef.current.add(pid);
             }
@@ -115,7 +115,7 @@ export function useAssetData(subType: 'asset' | 'dex' = 'asset') {
       // 停止本 hook 啟動的所有 WebSocket 串流，避免 forwarder task 洩漏
       const startedProviders = wsProvidersRef.current;
       for (const pid of startedProviders) {
-        transport.invoke('stop_ws_stream', { providerId: pid }).catch(e => silentLog('stopWsStream', e));
+        getTransport().invoke('stop_ws_stream', { providerId: pid }).catch(e => silentLog('stopWsStream', e));
       }
       startedProviders.clear();
       wsActiveRef.current.clear();

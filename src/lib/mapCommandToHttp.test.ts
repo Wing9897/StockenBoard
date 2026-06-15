@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mapCommandToHttp } from './transport';
+import { mapCommandToHttp } from './transportRoutes';
 
 describe('mapCommandToHttp', () => {
   // --- Subscriptions ---

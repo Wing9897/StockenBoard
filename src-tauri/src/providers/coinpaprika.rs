@@ -14,6 +14,12 @@ pub struct CoinPaprikaProvider {
     client: reqwest::Client,
 }
 
+impl Default for CoinPaprikaProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CoinPaprikaProvider {
     pub fn new() -> Self {
         Self {
@@ -41,12 +47,12 @@ impl CoinPaprikaProvider {
             .get("https://api.coinpaprika.com/v1/coins")
             .send()
             .await
-            .map_err(|e| format!("CoinPaprika coins 連接失敗: {}", e))?
+            .map_err(|e| format!("CoinPaprika coins connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("CoinPaprika coins API 錯誤: {}", e))?
+            .map_err(|e| format!("CoinPaprika coins API error: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("CoinPaprika coins 解析失敗: {}", e))?;
+            .map_err(|e| format!("CoinPaprika coins parse failed: {}", e))?;
 
         let mut map: HashMap<String, (String, u64)> = HashMap::with_capacity(items.len());
         for item in &items {
@@ -126,17 +132,17 @@ impl DataProvider for CoinPaprikaProvider {
             .get(&url)
             .send()
             .await
-            .map_err(|e| format!("CoinPaprika 連接失敗: {}", e))?
+            .map_err(|e| format!("CoinPaprika connection failed: {}", e))?
             .error_for_status()
             .map_err(|e| {
                 format!(
-                    "CoinPaprika API 錯誤: {} (查詢ID: {}，請確認 symbol 正確)",
+                    "CoinPaprika API error: {} (query ID: {}, please verify symbol)",
                     e, id
                 )
             })?
             .json()
             .await
-            .map_err(|e| format!("CoinPaprika 解析失敗: {}", e))?;
+            .map_err(|e| format!("CoinPaprika parse failed: {}", e))?;
 
         Ok(parse_paprika_ticker(symbol, &data))
     }
@@ -155,12 +161,12 @@ impl DataProvider for CoinPaprikaProvider {
             .get("https://api.coinpaprika.com/v1/tickers")
             .send()
             .await
-            .map_err(|e| format!("CoinPaprika 批量連接失敗: {}", e))?
+            .map_err(|e| format!("CoinPaprika batch connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("CoinPaprika 批量 API 錯誤: {}", e))?
+            .map_err(|e| format!("CoinPaprika batch API error: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("CoinPaprika 批量解析失敗: {}", e))?;
+            .map_err(|e| format!("CoinPaprika batch parse failed: {}", e))?;
 
         // 建立 id → ticker 索引
         let mut id_map: HashMap<String, &serde_json::Value> = HashMap::new();
@@ -193,7 +199,7 @@ impl DataProvider for CoinPaprikaProvider {
             if let Some(item) = ticker {
                 out.push(parse_paprika_ticker(sym, item));
             } else {
-                eprintln!("CoinPaprika 找不到: {}", sym);
+                eprintln!("CoinPaprika not found: {}", sym);
             }
         }
         Ok(out)

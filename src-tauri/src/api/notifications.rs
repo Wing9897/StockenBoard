@@ -79,7 +79,7 @@ async fn create_rule(
             .ok_or_else(|| {
                 ApiError::bad_request("ai_config is required when condition_type is \"ai\"")
             })?;
-        ai_config.validate().map_err(|e| ApiError::bad_request(e))?;
+        ai_config.validate().map_err(ApiError::bad_request)?;
         0.0
     } else {
         rule.threshold
@@ -106,7 +106,7 @@ async fn create_rule(
             cooldown,
             ai_config_json.as_deref(),
         )
-        .map_err(|e| ApiError::internal(e))?;
+        .map_err(ApiError::internal)?;
 
     state.notification_engine.reload_rules().await;
 
@@ -123,7 +123,7 @@ async fn list_rules(
     (axum::http::StatusCode, Json<ApiResponse<Vec<NotificationRuleRow>>>),
     (axum::http::StatusCode, Json<ApiError>),
 > {
-    let rules = state.db.list_notification_rules().map_err(|e| ApiError::internal(e))?;
+    let rules = state.db.list_notification_rules().map_err(ApiError::internal)?;
     Ok(ApiResponse::ok(rules))
 }
 
@@ -137,7 +137,7 @@ async fn update_rule(
 > {
     // Validate AI config if provided
     if let Some(Some(ref ai_config)) = rule.ai_config {
-        ai_config.validate().map_err(|e| ApiError::bad_request(e))?;
+        ai_config.validate().map_err(ApiError::bad_request)?;
     }
 
     // If switching to AI type, ensure ai_config is provided
@@ -189,7 +189,7 @@ async fn update_rule(
             rule.cooldown_secs.map(|s| s as i64),
             ai_config_json.as_ref().map(|opt| opt.as_deref()),
         )
-        .map_err(|e| ApiError::internal(e))?;
+        .map_err(ApiError::internal)?;
 
     state.notification_engine.reload_rules().await;
 
@@ -223,7 +223,7 @@ async fn delete_rule(
     state
         .db
         .delete_notification_rule(id)
-        .map_err(|e| ApiError::internal(e))?;
+        .map_err(ApiError::internal)?;
     state.notification_engine.reload_rules().await;
     state.ai_scheduler.remove_rule(id).await;
     Ok(ApiResponse::ok(serde_json::json!({ "success": true })))
@@ -240,7 +240,7 @@ async fn toggle_rule(
     state
         .db
         .toggle_notification_rule(id, body.enabled)
-        .map_err(|e| ApiError::internal(e))?;
+        .map_err(ApiError::internal)?;
     state.notification_engine.reload_rules().await;
 
     if body.enabled {
@@ -272,7 +272,7 @@ async fn save_channel(
             }
             // Encrypt bot_token before storing
             let encrypted_token = crate::notifications::crypto::encrypt_token(&config.bot_token)
-                .map_err(|e| ApiError::internal(e))?;
+                .map_err(ApiError::internal)?;
             let stored_config = serde_json::json!({
                 "bot_token": encrypted_token,
                 "chat_id": config.chat_id,
@@ -284,7 +284,7 @@ async fn save_channel(
                     &channel.name,
                     &stored_config.to_string(),
                 )
-                .map_err(|e| ApiError::internal(e))?
+                .map_err(ApiError::internal)?
         }
         "webhook" => {
             let config: WebhookConfig = serde_json::from_str(&channel.config)
@@ -299,7 +299,7 @@ async fn save_channel(
                     &channel.name,
                     &channel.config,
                 )
-                .map_err(|e| ApiError::internal(e))?
+                .map_err(ApiError::internal)?
         }
         _ => {
             return Err(ApiError::bad_request(format!(
@@ -321,7 +321,7 @@ async fn list_channels(
     let channels = state
         .db
         .list_notification_channels()
-        .map_err(|e| ApiError::internal(e))?;
+        .map_err(ApiError::internal)?;
     Ok(ApiResponse::ok(channels))
 }
 
@@ -335,7 +335,7 @@ async fn delete_channel(
     state
         .db
         .delete_notification_channel(id)
-        .map_err(|e| ApiError::internal(e))?;
+        .map_err(ApiError::internal)?;
     Ok(ApiResponse::ok(serde_json::json!({ "success": true })))
 }
 
@@ -349,7 +349,7 @@ async fn test_channel(
     let channels = state
         .db
         .list_notification_channels()
-        .map_err(|e| ApiError::internal(e))?;
+        .map_err(ApiError::internal)?;
     let channel = channels
         .iter()
         .find(|c| c.id == id)
@@ -368,7 +368,7 @@ async fn test_channel(
                 .as_str()
                 .ok_or_else(|| ApiError::internal("Missing chat_id in config"))?;
             let bot_token = crate::notifications::crypto::decrypt_token(encrypted_token)
-                .map_err(|e| ApiError::internal(e))?;
+                .map_err(ApiError::internal)?;
             let config = TelegramConfig {
                 bot_token,
                 chat_id: chat_id.to_string(),
@@ -377,7 +377,7 @@ async fn test_channel(
                 "🔔 StockenBoard Test Notification\n\nThis is a test message to confirm the Telegram channel is configured correctly.";
             crate::notifications::telegram::send_telegram(&client, &config, test_message)
                 .await
-                .map_err(|e| ApiError::internal(e))?;
+                .map_err(ApiError::internal)?;
         }
         "webhook" => {
             let config: WebhookConfig = serde_json::from_str(&channel.config)
@@ -393,7 +393,7 @@ async fn test_channel(
             };
             crate::notifications::webhook::send_webhook(&client, &config, &test_data)
                 .await
-                .map_err(|e| ApiError::internal(e))?;
+                .map_err(ApiError::internal)?;
         }
         _ => {
             return Err(ApiError::bad_request(format!(
@@ -420,7 +420,7 @@ async fn get_history(
     let history = state
         .db
         .query_notification_history(params.rule_id, params.from, params.to, params.limit)
-        .map_err(|e| ApiError::internal(e))?;
+        .map_err(ApiError::internal)?;
     Ok(ApiResponse::ok(history))
 }
 
@@ -450,7 +450,7 @@ async fn set_cooldown(
             "notification_global_cooldown",
             &body.seconds.to_string(),
         )
-        .map_err(|e| ApiError::internal(e))?;
+        .map_err(ApiError::internal)?;
     // Update in-memory value
     state.global_cooldown.set_cooldown(body.seconds);
     Ok(ApiResponse::ok(

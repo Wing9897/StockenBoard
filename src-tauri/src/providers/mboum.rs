@@ -73,7 +73,7 @@ impl DataProvider for MboumProvider {
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {
-        let api_key = self.api_key.as_ref().ok_or("Mboum 需要 API Key")?;
+        let api_key = self.api_key.as_ref().ok_or("Mboum requires API key")?;
 
         let data: serde_json::Value = self
             .client
@@ -84,16 +84,16 @@ impl DataProvider for MboumProvider {
             .header("Authorization", format!("Bearer {}", api_key))
             .send()
             .await
-            .map_err(|e| format!("Mboum 連接失敗: {}", e))?
+            .map_err(|e| format!("Mboum connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("Mboum API 錯誤: {}", e))?
+            .map_err(|e| format!("Mboum API error: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("Mboum 解析失敗: {}", e))?;
+            .map_err(|e| format!("Mboum parse failed: {}", e))?;
 
         let q = &data["body"][0];
         if q.is_null() {
-            return Err(format!("Mboum 找不到: {}", symbol));
+            return Err(format!("Mboum not found: {}", symbol));
         }
         Ok(Self::parse_quote(symbol, q))
     }
@@ -108,7 +108,7 @@ impl DataProvider for MboumProvider {
             return self.fetch_price(&symbols[0]).await.map(|d| vec![d]);
         }
 
-        let api_key = self.api_key.as_ref().ok_or("Mboum 需要 API Key")?;
+        let api_key = self.api_key.as_ref().ok_or("Mboum requires API key")?;
         let syms_csv = symbols.join(",");
         let url = format!(
             "https://api.mboum.com/v1/markets/stock/quotes?ticker={}",
@@ -121,12 +121,12 @@ impl DataProvider for MboumProvider {
             .header("Authorization", format!("Bearer {}", api_key))
             .send()
             .await
-            .map_err(|e| format!("Mboum 批量連接失敗: {}", e))?;
+            .map_err(|e| format!("Mboum batch connection failed: {}", e))?;
 
         let body = resp
             .text()
             .await
-            .map_err(|e| format!("Mboum 批量讀取失敗: {}", e))?;
+            .map_err(|e| format!("Mboum batch read failed: {}", e))?;
 
         // 嘗試解析批量回應
         if let Ok(data) = serde_json::from_str::<serde_json::Value>(&body) {
@@ -149,7 +149,7 @@ impl DataProvider for MboumProvider {
         }
 
         // 批量失敗或無法獲得任何資料，降級為逐一擷取 (限制並發數 5)
-        eprintln!("Mboum 批量查詢失敗，嘗試限流逐一查詢");
+        eprintln!("Mboum batch query failed, falling back to sequential fetch");
         let client = self.client.clone();
         let api_key_clone = api_key.clone();
         let mut tasks = tokio::task::JoinSet::new();

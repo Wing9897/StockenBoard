@@ -63,3 +63,9 @@ src-tauri/error2.txt
 src-tauri/error_cargo.txt
 src-tauri/error_log.txt
 *.db
+*.db-shm
+*.db-wal
+
+# Test data
+src-tauri/test_data/
+response.json

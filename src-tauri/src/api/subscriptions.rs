@@ -158,7 +158,7 @@ async fn add_batch(
             None,
         ) {
             Ok(_) => succeeded.push(normalized),
-            Err(e) if e.contains("已存在") => duplicates.push(normalized),
+            Err(e) if e.contains("already exists") => duplicates.push(normalized),
             Err(_) => failed.push(normalized),
         }
     }

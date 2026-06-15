@@ -70,8 +70,8 @@ async fn list_views(
     state
         .db
         .list_views(&params.view_type)
-        .map(|views| ApiResponse::ok(views))
-        .map_err(|e| ApiError::internal(e))
+        .map(ApiResponse::ok)
+        .map_err(ApiError::internal)
 }
 
 async fn create_view(
@@ -88,7 +88,7 @@ async fn create_view(
         .db
         .create_view(&body.name, &body.view_type)
         .map(|id| ApiResponse::created(serde_json::json!({ "id": id })))
-        .map_err(|e| ApiError::internal(e))
+        .map_err(ApiError::internal)
 }
 
 async fn rename_view(
@@ -106,7 +106,7 @@ async fn rename_view(
         .db
         .rename_view(id, &body.name)
         .map(|_| ApiResponse::ok(serde_json::json!({ "success": true })))
-        .map_err(|e| ApiError::internal(e))
+        .map_err(ApiError::internal)
 }
 
 async fn delete_view(
@@ -120,7 +120,7 @@ async fn delete_view(
         .db
         .delete_view(id)
         .map(|_| ApiResponse::ok(serde_json::json!({ "success": true })))
-        .map_err(|e| ApiError::internal(e))
+        .map_err(ApiError::internal)
 }
 
 async fn add_sub_to_view(
@@ -135,7 +135,7 @@ async fn add_sub_to_view(
         .db
         .add_sub_to_view(id, body.subscription_id)
         .map(|_| ApiResponse::created(serde_json::json!({ "success": true })))
-        .map_err(|e| ApiError::internal(e))
+        .map_err(ApiError::internal)
 }
 
 async fn remove_sub_from_view(
@@ -149,5 +149,5 @@ async fn remove_sub_from_view(
         .db
         .remove_sub_from_view(id, sub_id)
         .map(|_| ApiResponse::ok(serde_json::json!({ "success": true })))
-        .map_err(|e| ApiError::internal(e))
+        .map_err(ApiError::internal)
 }

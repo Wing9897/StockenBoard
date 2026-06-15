@@ -52,7 +52,6 @@ pub struct ProviderInfo {
 
 #[async_trait::async_trait]
 pub trait DataProvider: Send + Sync {
-    #[allow(dead_code)]
     fn info(&self) -> ProviderInfo;
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String>;
     async fn fetch_prices(&self, symbols: &[String]) -> Result<Vec<AssetData>, String> {
@@ -213,7 +212,6 @@ pub fn get_all_provider_info() -> Vec<ProviderInfo> {
 }
 
 /// O(1) 查找單個 provider info — 各 provider module 透過 `use super::traits::*` 使用
-#[allow(dead_code)]
 pub fn get_provider_info(id: &str) -> Option<ProviderInfo> {
     PROVIDER_INFO_MAP.get(id).cloned()
 }
@@ -223,10 +221,9 @@ pub fn get_provider_info(id: &str) -> Option<ProviderInfo> {
 /// `id` 必須是 `build_all_provider_info()` 中註冊過的字面值。若未註冊則 panic，
 /// 並附帶可定位問題的訊息（取代各處裸 `.unwrap()`，避免 registry 與 `info()` 失步時
 /// 只得到無資訊的 panic）。
-#[allow(dead_code)]
 pub fn provider_info_or_panic(id: &str) -> ProviderInfo {
     get_provider_info(id)
-        .unwrap_or_else(|| panic!("provider info '{id}' 未在 build_all_provider_info() 註冊"))
+        .unwrap_or_else(|| panic!("provider info '{id}' not registered in build_all_provider_info()"))
 }
 
 fn build_all_provider_info() -> Vec<ProviderInfo> {

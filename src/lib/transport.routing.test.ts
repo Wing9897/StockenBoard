@@ -11,7 +11,8 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fc from 'fast-check';
-import { mapCommandToHttp, createTransport } from './transport';
+import { mapCommandToHttp } from './transportRoutes';
+import { createTransport } from './transport';
 
 // --- Mock @tauri-apps/api/core ---
 const mockTauriInvoke = vi.fn().mockResolvedValue({ ok: true });

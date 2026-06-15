@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { transport } from '../lib/transport';
+import { getTransport } from '../lib/transport';
 import { ProviderSettings, ProviderInfo } from '../types';
 import { silentLog } from '../lib/errorLog';
 
@@ -15,7 +15,7 @@ export function useProviders() {
 
   const loadSettings = useCallback(async () => {
     try {
-      const rows = await transport.invoke<ProviderSettings[]>('list_provider_settings');
+      const rows = await getTransport().invoke<ProviderSettings[]>('list_provider_settings');
       const map = new Map<string, ProviderSettings>();
       for (const row of rows) map.set(row.provider_id, row);
       setSettings(map);
@@ -28,7 +28,7 @@ export function useProviders() {
 
   const loadProviderInfos = useCallback(async () => {
     try {
-      setProviderInfos(await transport.invoke<ProviderInfo[]>('get_all_providers'));
+      setProviderInfos(await getTransport().invoke<ProviderInfo[]>('get_all_providers'));
     } catch (e) {
       silentLog('loadProviderInfos', e);
     }
@@ -44,7 +44,7 @@ export function useProviders() {
     record_to_hour?: number | null;
   }) {
     try {
-      await transport.invoke('upsert_provider_settings', {
+      await getTransport().invoke('upsert_provider_settings', {
         providerId,
         apiKey: updates.api_key || null,
         apiSecret: updates.api_secret || null,

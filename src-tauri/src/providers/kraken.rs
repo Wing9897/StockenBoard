@@ -4,6 +4,12 @@ pub struct KrakenProvider {
     client: reqwest::Client,
 }
 
+impl Default for KrakenProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl KrakenProvider {
     pub fn new() -> Self {
         Self {
@@ -40,10 +46,10 @@ impl DataProvider for KrakenProvider {
             .get(&url)
             .send()
             .await
-            .map_err(|e| format!("Kraken 連接失敗: {}", e))?
+            .map_err(|e| format!("Kraken connection failed: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("Kraken 解析失敗: {}", e))?;
+            .map_err(|e| format!("Kraken parse failed: {}", e))?;
 
         if let Some(errs) = data["error"].as_array() {
             if !errs.is_empty() {
@@ -63,7 +69,7 @@ impl DataProvider for KrakenProvider {
         let ticker = result
             .as_object()
             .and_then(|m| m.values().next())
-            .ok_or("Kraken: 找不到交易對數據")?;
+            .ok_or("Kraken: trading pair not found")?;
 
         let price = ticker["c"][0]
             .as_str()
@@ -112,12 +118,12 @@ impl DataProvider for KrakenProvider {
             .get(&url)
             .send()
             .await
-            .map_err(|e| format!("Kraken 批量連接失敗: {}", e))?
+            .map_err(|e| format!("Kraken batch connection failed: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("Kraken 批量解析失敗: {}", e))?;
+            .map_err(|e| format!("Kraken batch parse failed: {}", e))?;
 
-        let result = data["result"].as_object().ok_or("Kraken: 無結果")?;
+        let result = data["result"].as_object().ok_or("Kraken: no results")?;
         // Build lookup: Kraken returns keys like XXBTZUSD (X-prefix for crypto, Z-prefix for fiat)
         // We need to match our requested pairs to the returned keys
         let mut out = Vec::new();

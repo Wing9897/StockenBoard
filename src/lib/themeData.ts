@@ -1,4 +1,4 @@
-import { transport } from './transport';
+import { getTransport } from './transport';
 import { STORAGE_KEYS } from './storageKeys';
 
 export type ThemeEntry = {
@@ -56,9 +56,9 @@ export async function loadBgForTheme(themeId: string): Promise<string | null> {
     return null;
   }
   try {
-    const filePath = await transport.invoke<string | null>('get_theme_bg_path', { themeId });
+    const filePath = await getTransport().invoke<string | null>('get_theme_bg_path', { themeId });
     if (filePath) {
-      const dataUrl = await transport.invoke<string>('read_local_file_base64', { path: filePath });
+      const dataUrl = await getTransport().invoke<string>('read_local_file_base64', { path: filePath });
       const opacity = parseFloat(localStorage.getItem(STORAGE_KEYS.themeBgOpacity(themeId)) || '0.3');
       applyBgImage(dataUrl, opacity);
       return dataUrl;

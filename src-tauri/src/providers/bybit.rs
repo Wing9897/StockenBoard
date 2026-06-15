@@ -4,6 +4,12 @@ pub struct BybitProvider {
     client: reqwest::Client,
 }
 
+impl Default for BybitProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BybitProvider {
     pub fn new() -> Self {
         Self {
@@ -53,15 +59,15 @@ impl DataProvider for BybitProvider {
             .get(&url)
             .send()
             .await
-            .map_err(|e| format!("Bybit 連接失敗: {}", e))?
+            .map_err(|e| format!("Bybit connection failed: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("Bybit 解析失敗: {}", e))?;
+            .map_err(|e| format!("Bybit parse failed: {}", e))?;
 
         let item = data["result"]["list"]
             .as_array()
             .and_then(|a| a.first())
-            .ok_or("Bybit: 找不到交易對數據")?;
+            .ok_or("Bybit: trading pair not found")?;
 
         Ok(parse_bybit_ticker(symbol, item))
     }
@@ -81,12 +87,12 @@ impl DataProvider for BybitProvider {
             .get(url)
             .send()
             .await
-            .map_err(|e| format!("Bybit 批量連接失敗: {}", e))?
+            .map_err(|e| format!("Bybit batch connection failed: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("Bybit 批量解析失敗: {}", e))?;
+            .map_err(|e| format!("Bybit batch parse failed: {}", e))?;
 
-        let list = data["result"]["list"].as_array().ok_or("Bybit: 無結果")?;
+        let list = data["result"]["list"].as_array().ok_or("Bybit: no results")?;
         let mut map = std::collections::HashMap::new();
         for item in list {
             if let Some(s) = item["symbol"].as_str() {

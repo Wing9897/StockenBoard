@@ -31,7 +31,7 @@ pub async fn dispatch_notification(
     let channels = match db.list_notification_channels() {
         Ok(ch) => ch,
         Err(e) => {
-            eprintln!("[Dispatcher] 無法載入通道列表: {}", e);
+            eprintln!("[Dispatcher] Failed to load channel list: {}", e);
             return;
         }
     };
@@ -40,7 +40,7 @@ pub async fn dispatch_notification(
         let channel = match channels.iter().find(|c| c.id == *channel_id) {
             Some(c) => c,
             None => {
-                eprintln!("[Dispatcher] 通道 {} 不存在，跳過", channel_id);
+                eprintln!("[Dispatcher] Channel {} not found, skipping", channel_id);
                 continue;
             }
         };
@@ -49,7 +49,7 @@ pub async fn dispatch_notification(
             Ok(ct) => ct,
             Err(_) => {
                 eprintln!(
-                    "[Dispatcher] 通道 {} 類型無效: {}",
+                    "[Dispatcher] Channel {} type invalid: {}",
                     channel_id, channel.channel_type
                 );
                 continue;
@@ -116,7 +116,7 @@ pub async fn dispatch_notification(
                 );
             }
             Err(e) => {
-                eprintln!("[Dispatcher] 通道 {} 發送失敗: {}", channel_id, e);
+                eprintln!("[Dispatcher] Channel {} send failed: {}", channel_id, e);
                 record_history(
                     db,
                     rule.id,
@@ -134,14 +134,14 @@ pub async fn dispatch_notification(
 /// 解析 Telegram 設定並解密 bot_token
 fn parse_telegram_config(config_json: &str) -> Result<TelegramConfig, String> {
     let stored: serde_json::Value =
-        serde_json::from_str(config_json).map_err(|e| format!("Telegram 設定解析失敗: {}", e))?;
+        serde_json::from_str(config_json).map_err(|e| format!("Failed to parse Telegram config: {}", e))?;
 
     let encrypted_token = stored["bot_token"]
         .as_str()
-        .ok_or_else(|| "缺少 bot_token".to_string())?;
+        .ok_or_else(|| "Missing bot_token".to_string())?;
     let chat_id = stored["chat_id"]
         .as_str()
-        .ok_or_else(|| "缺少 chat_id".to_string())?;
+        .ok_or_else(|| "Missing chat_id".to_string())?;
 
     let bot_token = crypto::decrypt_token(encrypted_token)?;
 
@@ -164,6 +164,6 @@ fn record_history(
     if let Err(e) =
         db.insert_notification_history(rule_id, channel_id, status, price, message, error)
     {
-        eprintln!("[Dispatcher] 寫入通知歷史失敗: {}", e);
+        eprintln!("[Dispatcher] Failed to write notification history: {}", e);
     }
 }

@@ -52,12 +52,12 @@ impl CoinGeckoProvider {
             .build_request("https://api.coingecko.com/api/v3/coins/list")
             .send()
             .await
-            .map_err(|e| format!("CoinGecko coins/list 連接失敗: {}", e))?
+            .map_err(|e| format!("CoinGecko coins/list connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("CoinGecko coins/list API 錯誤: {}", e))?
+            .map_err(|e| format!("CoinGecko coins/list API error: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("CoinGecko coins/list 解析失敗: {}", e))?;
+            .map_err(|e| format!("CoinGecko coins/list parse failed: {}", e))?;
 
         let mut map = HashMap::with_capacity(items.len());
         for item in &items {
@@ -109,7 +109,7 @@ impl CoinGeckoProvider {
     ) -> Result<AssetData, String> {
         if coin.is_null() {
             return Err(format!(
-                "CoinGecko 找不到: {} (查詢ID: {})。請到 coingecko.com 搜尋正確 ID",
+                "CoinGecko not found: {} (query ID: {}). Check coingecko.com for the correct ID",
                 symbol, coin_id
             ));
         }
@@ -139,17 +139,17 @@ impl DataProvider for CoinGeckoProvider {
             .build_request(&url)
             .send()
             .await
-            .map_err(|e| format!("CoinGecko 連接失敗: {}", e))?
+            .map_err(|e| format!("CoinGecko connection failed: {}", e))?
             .error_for_status()
             .map_err(|e| {
                 format!(
-                    "CoinGecko API 錯誤 (可能達到速率限制，建議設定API Key): {}",
+                    "CoinGecko API error (possible rate limit, consider setting API key): {}",
                     e
                 )
             })?
             .json()
             .await
-            .map_err(|e| format!("CoinGecko 解析失敗: {}", e))?;
+            .map_err(|e| format!("CoinGecko parse failed: {}", e))?;
 
         Self::parse_coin(symbol, &coin_id, &data[&coin_id])
     }
@@ -182,23 +182,23 @@ impl DataProvider for CoinGeckoProvider {
             .build_request(&url)
             .send()
             .await
-            .map_err(|e| format!("CoinGecko 批量連接失敗: {}", e))?
+            .map_err(|e| format!("CoinGecko batch connection failed: {}", e))?
             .error_for_status()
             .map_err(|e| {
                 format!(
-                    "CoinGecko 批量 API 錯誤 (可能達到速率限制，建議設定API Key): {}",
+                    "CoinGecko batch API error (possible rate limit, consider setting API key): {}",
                     e
                 )
             })?
             .json()
             .await
-            .map_err(|e| format!("CoinGecko 批量解析失敗: {}", e))?;
+            .map_err(|e| format!("CoinGecko batch parse failed: {}", e))?;
 
         let mut results = Vec::new();
         for (symbol, coin_id) in &mappings {
             match Self::parse_coin(symbol, coin_id, &data[coin_id]) {
                 Ok(asset) => results.push(asset),
-                Err(e) => eprintln!("CoinGecko 批量查詢跳過 {}: {}", symbol, e),
+                Err(e) => eprintln!("CoinGecko batch skipped {}: {}", symbol, e),
             }
         }
         Ok(results)

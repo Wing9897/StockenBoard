@@ -105,7 +105,7 @@ impl DataProvider for FMPProvider {
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {
-        let api_key = self.api_key.as_ref().ok_or("FMP 需要 API Key")?;
+        let api_key = self.api_key.as_ref().ok_or("FMP requires API key")?;
         let api_symbol = Self::to_fmp_symbol(symbol);
 
         let data: serde_json::Value = self
@@ -116,16 +116,16 @@ impl DataProvider for FMPProvider {
             ))
             .send()
             .await
-            .map_err(|e| format!("FMP 連接失敗: {}", e))?
+            .map_err(|e| format!("FMP connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("FMP API 錯誤: {}", e))?
+            .map_err(|e| format!("FMP API error: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("FMP 解析失敗: {}", e))?;
+            .map_err(|e| format!("FMP parse failed: {}", e))?;
 
         let q = &data[0];
         if q.is_null() {
-            return Err(format!("FMP 找不到: {}", symbol));
+            return Err(format!("FMP not found: {}", symbol));
         }
         Ok(Self::parse_quote(symbol, q))
     }
@@ -139,7 +139,7 @@ impl DataProvider for FMPProvider {
             return self.fetch_price(&symbols[0]).await.map(|d| vec![d]);
         }
 
-        let api_key = self.api_key.as_ref().ok_or("FMP 需要 API Key")?;
+        let api_key = self.api_key.as_ref().ok_or("FMP requires API key")?;
         let mappings: Vec<(String, String)> = symbols
             .iter()
             .map(|s| (s.clone(), Self::to_fmp_symbol(s)))
@@ -155,17 +155,17 @@ impl DataProvider for FMPProvider {
             ))
             .send()
             .await
-            .map_err(|e| format!("FMP 批量連接失敗: {}", e))?
+            .map_err(|e| format!("FMP batch connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("FMP 批量 API 錯誤: {}", e))?;
+            .map_err(|e| format!("FMP batch API error: {}", e))?;
 
         let body = resp
             .text()
             .await
-            .map_err(|e| format!("FMP 批量讀取失敗: {}", e))?;
+            .map_err(|e| format!("FMP batch read failed: {}", e))?;
 
         let arr: Vec<serde_json::Value> = serde_json::from_str(&body)
-            .map_err(|_| "FMP 批量解析失敗 (可能含無效 symbol)".to_string())?;
+            .map_err(|_| "FMP batch parse failed (possibly invalid symbol)".to_string())?;
 
         // 建立 fmp_symbol -> response 查找表
         let response_map: HashMap<String, &serde_json::Value> = arr

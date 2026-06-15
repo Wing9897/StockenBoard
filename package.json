@@ -29,7 +29,8 @@
     "version:bump": "node scripts/bump-version.mjs",
     "docker:build": "docker build -t stockenboard .",
     "docker:run": "docker run -d -p 8080:8080 -v stockenboard-data:/data stockenboard",
-    "lint": "tsc --noEmit && cd src-tauri && cargo clippy --no-default-features --features server -- -D warnings"
+    "check:i18n": "node check_i18n.js",
+    "lint": "tsc --noEmit && node check_i18n.js && cd src-tauri && cargo clippy --no-default-features --features server -- -D warnings"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

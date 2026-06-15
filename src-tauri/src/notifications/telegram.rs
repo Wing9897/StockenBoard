@@ -11,11 +11,11 @@ use tokio::time::sleep;
 /// 將條件類型轉換為中文描述，並格式化閾值
 fn format_condition_description(condition_type: &ConditionType, threshold: f64) -> String {
     match condition_type {
-        ConditionType::PriceAbove => format!("價格高於 {}", format_price(threshold)),
-        ConditionType::PriceBelow => format!("價格低於 {}", format_price(threshold)),
-        ConditionType::ChangePctAbove => format!("24h漲幅超過 {:.2}%", threshold),
-        ConditionType::ChangePctBelow => format!("24h跌幅超過 {:.2}%", threshold),
-        ConditionType::Ai => "AI 分析觸發".to_string(),
+        ConditionType::PriceAbove => format!("Price above {}", format_price(threshold)),
+        ConditionType::PriceBelow => format!("Price below {}", format_price(threshold)),
+        ConditionType::ChangePctAbove => format!("24h change above {:.2}%", threshold),
+        ConditionType::ChangePctBelow => format!("24h change below {:.2}%", threshold),
+        ConditionType::Ai => "AI analysis triggered".to_string(),
     }
 }
 
@@ -86,7 +86,7 @@ pub fn format_telegram_message(data: &NotificationData) -> String {
 
     if data.condition_type == ConditionType::Ai {
         return format!(
-            "🤖 AI 通知\n\
+            "🤖 AI Notification\n\
              📊 {}\n\
              💡 {}\n\
              ⏰ {}",
@@ -100,12 +100,12 @@ pub fn format_telegram_message(data: &NotificationData) -> String {
     let price_display = format_price(data.price);
 
     format!(
-        "📊 StockenBoard 價格警報\n\n\
+        "📊 StockenBoard Price Alert\n\n\
          Symbol: {}\n\
          Provider: {}\n\
-         當前價格: {}\n\
-         觸發條件: {}\n\
-         觸發時間: {}",
+         Current Price: {}\n\
+         Condition: {}\n\
+         Triggered At: {}",
         data.symbol, data.provider, price_display, condition_desc, time_display
     )
 }
@@ -188,12 +188,12 @@ mod tests {
 
         let message = format_telegram_message(&data);
 
-        assert!(message.contains("📊 StockenBoard 價格警報"));
+        assert!(message.contains("📊 StockenBoard Price Alert"));
         assert!(message.contains("Symbol: BTC/USDT"));
         assert!(message.contains("Provider: binance"));
-        assert!(message.contains("當前價格: $67,500.00"));
-        assert!(message.contains("觸發條件: 價格高於 $65,000.00"));
-        assert!(message.contains("觸發時間: 2024-01-15 14:30:00 UTC"));
+        assert!(message.contains("Current Price: $67,500.00"));
+        assert!(message.contains("Condition: Price above $65,000.00"));
+        assert!(message.contains("Triggered At: 2024-01-15 14:30:00 UTC"));
     }
 
     #[test]
@@ -212,8 +212,8 @@ mod tests {
 
         assert!(message.contains("Symbol: ETH/USDT"));
         assert!(message.contains("Provider: coinbase"));
-        assert!(message.contains("當前價格: $2,800.50"));
-        assert!(message.contains("觸發條件: 價格低於 $3,000.00"));
+        assert!(message.contains("Current Price: $2,800.50"));
+        assert!(message.contains("Condition: Price below $3,000.00"));
     }
 
     #[test]
@@ -230,7 +230,7 @@ mod tests {
 
         let message = format_telegram_message(&data);
 
-        assert!(message.contains("觸發條件: 24h漲幅超過 10.00%"));
+        assert!(message.contains("Condition: 24h change above 10.00%"));
     }
 
     #[test]
@@ -249,8 +249,8 @@ mod tests {
 
         let message = format_telegram_message(&data);
 
-        assert!(message.contains("當前價格: $0.08"));
-        assert!(message.contains("觸發條件: 24h跌幅超過 -5.00%"));
+        assert!(message.contains("Current Price: $0.08"));
+        assert!(message.contains("Condition: 24h change below -5.00%"));
     }
 
     #[test]
@@ -266,19 +266,19 @@ mod tests {
     fn test_format_condition_description() {
         assert_eq!(
             format_condition_description(&ConditionType::PriceAbove, 65000.0),
-            "價格高於 $65,000.00"
+            "Price above $65,000.00"
         );
         assert_eq!(
             format_condition_description(&ConditionType::PriceBelow, 3000.0),
-            "價格低於 $3,000.00"
+            "Price below $3,000.00"
         );
         assert_eq!(
             format_condition_description(&ConditionType::ChangePctAbove, 10.0),
-            "24h漲幅超過 10.00%"
+            "24h change above 10.00%"
         );
         assert_eq!(
             format_condition_description(&ConditionType::ChangePctBelow, -5.0),
-            "24h跌幅超過 -5.00%"
+            "24h change below -5.00%"
         );
     }
 
@@ -298,13 +298,13 @@ mod tests {
 
         let message = format_telegram_message(&data);
 
-        assert!(message.contains("🤖 AI 通知"));
+        assert!(message.contains("🤖 AI Notification"));
         assert!(message.contains("📊 BTC/USDT"));
         assert!(message.contains("💡 價格在最近 5 筆紀錄中上升了 6.2%，超過設定的 5% 閾值"));
         assert!(message.contains("⏰ 2024-01-15 14:30:00 UTC"));
         // Should NOT contain the generic price alert format
-        assert!(!message.contains("StockenBoard 價格警報"));
-        assert!(!message.contains("當前價格"));
+        assert!(!message.contains("StockenBoard Price Alert"));
+        assert!(!message.contains("Current Price"));
     }
 
     #[test]
@@ -322,7 +322,7 @@ mod tests {
 
         let message = format_telegram_message(&data);
 
-        assert!(message.contains("🤖 AI 通知"));
+        assert!(message.contains("🤖 AI Notification"));
         assert!(message.contains("📊 ETH/USDT"));
         assert!(message.contains("💡 直接的 reason 文字"));
         assert!(message.contains("⏰ 2024-06-01 09:00:00 UTC"));

@@ -1,5 +1,5 @@
 import { useState, useEffect, memo } from 'react';
-import { transport } from '../../lib/transport';
+import { getTransport } from '../../lib/transport';
 import { t } from '../../lib/i18n';
 
 /**
@@ -16,7 +16,7 @@ let _iconsDirPromise: Promise<string> | null = null;
 function getIconsDir(): Promise<string> {
   if (_iconsDirCache) return Promise.resolve(_iconsDirCache);
   if (!_iconsDirPromise) {
-    _iconsDirPromise = transport.invoke<string>('get_icons_dir').then(dir => {
+    _iconsDirPromise = getTransport().invoke<string>('get_icons_dir').then(dir => {
       _iconsDirCache = dir;
       return dir;
     });
@@ -37,7 +37,7 @@ async function loadIconDataUrl(iconName: string): Promise<string | null> {
       const dir = await getIconsDir();
       const sep = dir.endsWith('\\') || dir.endsWith('/') ? '' : '/';
       const filePath = `${dir}${sep}${iconName}.png`;
-      const dataUrl = await transport.invoke<string>('read_local_file_base64', { path: filePath });
+      const dataUrl = await getTransport().invoke<string>('read_local_file_base64', { path: filePath });
       _dataUrlCache.set(iconName, dataUrl);
       return dataUrl;
     } catch {

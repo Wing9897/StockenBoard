@@ -30,13 +30,13 @@ impl JupiterProvider {
     fn parse_dex_symbol(symbol: &str) -> Result<(&str, &str), String> {
         let parts: Vec<&str> = symbol.splitn(3, ':').collect();
         if parts.len() < 3 {
-            return Err("Jupiter DEX 格式: auto:inputMint:outputMint".into());
+            return Err("Jupiter DEX format: auto:inputMint:outputMint".into());
         }
         // parts[0] = pool (ignored, always "auto" for Jupiter)
         let input_mint = parts[1].trim();
         let output_mint = parts[2].trim();
         if input_mint.is_empty() || output_mint.is_empty() {
-            return Err("inputMint 和 outputMint 不能為空".into());
+            return Err("inputMint and outputMint must not be empty".into());
         }
         Ok((input_mint, output_mint))
     }
@@ -51,7 +51,7 @@ impl JupiterProvider {
         let api_key = self
             .api_key
             .as_deref()
-            .ok_or_else(|| "Jupiter 需要 API Key（在 portal.jup.ag 免費申請）".to_string())?;
+            .ok_or_else(|| "Jupiter requires API key (free at portal.jup.ag)".to_string())?;
 
         let url = format!(
             "https://api.jup.ag/swap/v1/quote?inputMint={}&outputMint={}&amount={}&slippageBps=50&restrictIntermediateTokens=true",
@@ -63,20 +63,20 @@ impl JupiterProvider {
             .header("x-api-key", api_key)
             .send()
             .await
-            .map_err(|e| format!("Jupiter Quote 連接失敗: {}", e))?;
+            .map_err(|e| format!("Jupiter Quote connection failed: {}", e))?;
 
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
             return Err(format!(
-                "Jupiter Quote API 錯誤: HTTP {} — {}",
+                "Jupiter Quote API error: HTTP {} — {}",
                 status, body
             ));
         }
 
         resp.json()
             .await
-            .map_err(|e| format!("Jupiter Quote 解析失敗: {}", e))
+            .map_err(|e| format!("Jupiter Quote parse failed: {}", e))
     }
 
     /// DEX 模式的 fetch_price
@@ -98,7 +98,7 @@ impl JupiterProvider {
             .get("outAmount")
             .and_then(|v| v.as_str())
             .and_then(|s| s.parse::<f64>().ok())
-            .ok_or("Jupiter Quote 缺少 outAmount")?;
+            .ok_or("Jupiter Quote missing outAmount")?;
 
         // 取得 output token decimals
         let out_decimals = self.get_token_decimals(output_mint).await.unwrap_or(6);
@@ -275,22 +275,22 @@ impl DataProvider for JupiterProvider {
         let api_key = self
             .api_key
             .as_deref()
-            .ok_or_else(|| "Jupiter 需要 API Key（在 portal.jup.ag 免費申請）".to_string())?;
+            .ok_or_else(|| "Jupiter requires API key (free at portal.jup.ag)".to_string())?;
         let mint = to_mint_address(symbol);
         let url = format!("https://api.jup.ag/price/v3?ids={}", mint);
         let req = self.client.get(&url).header("x-api-key", api_key);
         let data: serde_json::Value = req
             .send()
             .await
-            .map_err(|e| format!("Jupiter 連接失敗: {}", e))?
+            .map_err(|e| format!("Jupiter connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("Jupiter API 錯誤: {}", e))?
+            .map_err(|e| format!("Jupiter API error: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("Jupiter 解析失敗: {}", e))?;
+            .map_err(|e| format!("Jupiter parse failed: {}", e))?;
 
         parse_jupiter_price(symbol, &mint, &data)
-            .ok_or_else(|| format!("Jupiter 找不到 {} 的價格", symbol))
+            .ok_or_else(|| format!("Jupiter price not found for {}", symbol))
     }
 
     async fn fetch_prices(&self, symbols: &[String]) -> Result<Vec<AssetData>, String> {
@@ -317,7 +317,7 @@ impl DataProvider for JupiterProvider {
             let api_key = self
                 .api_key
                 .as_deref()
-                .ok_or_else(|| "Jupiter 需要 API Key（在 portal.jup.ag 免費申請）".to_string())?;
+                .ok_or_else(|| "Jupiter requires API key (free at portal.jup.ag)".to_string())?;
 
             let mint_map: HashMap<String, String> = spot_syms
                 .iter()
@@ -332,12 +332,12 @@ impl DataProvider for JupiterProvider {
                 let data: serde_json::Value = req
                     .send()
                     .await
-                    .map_err(|e| format!("Jupiter 批量連接失敗: {}", e))?
+                    .map_err(|e| format!("Jupiter batch connection failed: {}", e))?
                     .error_for_status()
-                    .map_err(|e| format!("Jupiter 批量 API 錯誤: {}", e))?
+                    .map_err(|e| format!("Jupiter batch API error: {}", e))?
                     .json()
                     .await
-                    .map_err(|e| format!("Jupiter 批量解析失敗: {}", e))?;
+                    .map_err(|e| format!("Jupiter batch parse failed: {}", e))?;
 
                 for (mint, original_symbol) in &mint_map {
                     if chunk.contains(&mint.as_str()) {
@@ -360,7 +360,7 @@ impl DexPoolLookup for JupiterProvider {
     async fn lookup_pool(&self, pool_address: &str) -> Result<DexPoolInfo, String> {
         // 解析: "SOL,USDC" 或 "mintA,mintB"
         let (input_raw, output_raw) = pool_address.split_once(',').ok_or_else(|| {
-            "Jupiter 查詢格式: SOL,USDC 或 inputMint,outputMint（逗號分隔）".to_string()
+            "Jupiter query format: SOL,USDC or inputMint,outputMint (comma-separated)".to_string()
         })?;
 
         let input_mint = to_mint_address(input_raw.trim());

@@ -17,7 +17,7 @@ impl CoinMarketCapProvider {
         let coin = &data["data"][base];
         if coin.is_null() {
             return Err(format!(
-                "CMC 找不到: {} (查詢: {})。格式: BTC, ETH",
+                "CMC not found: {} (query: {}). Format: BTC, ETH",
                 symbol, base
             ));
         }
@@ -43,7 +43,7 @@ impl DataProvider for CoinMarketCapProvider {
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {
-        let api_key = self.api_key.as_ref().ok_or("CoinMarketCap 需要 API Key")?;
+        let api_key = self.api_key.as_ref().ok_or("CoinMarketCap requires API key")?;
         let base = to_base_symbol(symbol);
         let url = format!(
             "https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol={}",
@@ -55,12 +55,12 @@ impl DataProvider for CoinMarketCapProvider {
             .header("X-CMC_PRO_API_KEY", api_key)
             .send()
             .await
-            .map_err(|e| format!("CMC 連接失敗: {}", e))?
+            .map_err(|e| format!("CMC connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("CMC API 錯誤: {}", e))?
+            .map_err(|e| format!("CMC API error: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("CMC 解析失敗: {}", e))?;
+            .map_err(|e| format!("CMC parse failed: {}", e))?;
 
         Self::parse_coin(symbol, &base, &data)
     }
@@ -74,7 +74,7 @@ impl DataProvider for CoinMarketCapProvider {
             return self.fetch_price(&symbols[0]).await.map(|d| vec![d]);
         }
 
-        let api_key = self.api_key.as_ref().ok_or("CoinMarketCap 需要 API Key")?;
+        let api_key = self.api_key.as_ref().ok_or("CoinMarketCap requires API key")?;
         let mappings: Vec<(String, String)> = symbols
             .iter()
             .map(|s| (s.clone(), to_base_symbol(s)))
@@ -92,23 +92,23 @@ impl DataProvider for CoinMarketCapProvider {
             .header("X-CMC_PRO_API_KEY", api_key)
             .send()
             .await
-            .map_err(|e| format!("CMC 批量連接失敗: {}", e))?
+            .map_err(|e| format!("CMC batch connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("CMC 批量 API 錯誤: {}", e))?;
+            .map_err(|e| format!("CMC batch API error: {}", e))?;
 
         let body = resp
             .text()
             .await
-            .map_err(|e| format!("CMC 批量讀取失敗: {}", e))?;
+            .map_err(|e| format!("CMC batch read failed: {}", e))?;
 
         let data: serde_json::Value = serde_json::from_str(&body)
-            .map_err(|_| "CMC 批量解析失敗 (可能含無效 symbol)".to_string())?;
+            .map_err(|_| "CMC batch parse failed (possibly invalid symbol)".to_string())?;
 
         let mut results = Vec::new();
         for (symbol, base) in &mappings {
             match Self::parse_coin(symbol, base, &data) {
                 Ok(asset) => results.push(asset),
-                Err(e) => eprintln!("CMC 批量跳過 {}: {}", symbol, e),
+                Err(e) => eprintln!("CMC batch skipping {}: {}", symbol, e),
             }
         }
         Ok(results)

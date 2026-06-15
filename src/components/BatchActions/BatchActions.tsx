@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { transport } from '../../lib/transport';
+import { getTransport } from '../../lib/transport';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { t } from '../../lib/i18n';
 import './BatchActions.css';
@@ -21,7 +21,7 @@ export function BatchActions({ mode, expandAll, showPrePost, onToggleExpandAll, 
   // 啟動時將 localStorage 的狀態同步到後端
   useEffect(() => {
     const saved = localStorage.getItem('sb_unattended') === '1';
-    if (saved) transport.invoke('set_unattended_polling', { enabled: true }).catch(() => {});
+    if (saved) getTransport().invoke('set_unattended_polling', { enabled: true }).catch(() => {});
   }, []);
 
   const toggleUnattended = async () => {
@@ -29,7 +29,7 @@ export function BatchActions({ mode, expandAll, showPrePost, onToggleExpandAll, 
     setUnattended(next);
     localStorage.setItem('sb_unattended', next ? '1' : '0');
     try {
-      await transport.invoke('set_unattended_polling', { enabled: next });
+      await getTransport().invoke('set_unattended_polling', { enabled: next });
     } catch {
       setUnattended(!next); // rollback
       localStorage.setItem('sb_unattended', !next ? '1' : '0');

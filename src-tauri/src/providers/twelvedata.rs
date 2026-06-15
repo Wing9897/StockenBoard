@@ -27,7 +27,7 @@ impl TwelveDataProvider {
 
     fn parse_quote(symbol: &str, data: &serde_json::Value) -> Result<AssetData, String> {
         if data["code"].is_number() {
-            let msg = data["message"].as_str().unwrap_or("未知錯誤");
+            let msg = data["message"].as_str().unwrap_or("unknown error");
             return Err(format!("TwelveData: {}", msg));
         }
         let parse = |key: &str| data[key].as_str().and_then(|s| s.parse::<f64>().ok());
@@ -77,7 +77,7 @@ impl DataProvider for TwelveDataProvider {
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {
-        let api_key = self.api_key.as_ref().ok_or("Twelve Data 需要 API Key")?;
+        let api_key = self.api_key.as_ref().ok_or("Twelve Data requires an API key")?;
         let api_symbol = Self::to_td_symbol(symbol);
 
         let data: serde_json::Value = self
@@ -88,12 +88,12 @@ impl DataProvider for TwelveDataProvider {
             ))
             .send()
             .await
-            .map_err(|e| format!("TwelveData 連接失敗: {}", e))?
+            .map_err(|e| format!("TwelveData connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("TwelveData API 錯誤: {}", e))?
+            .map_err(|e| format!("TwelveData API error: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("TwelveData 解析失敗: {}", e))?;
+            .map_err(|e| format!("TwelveData parse failed: {}", e))?;
 
         Self::parse_quote(symbol, &data)
     }
@@ -107,7 +107,7 @@ impl DataProvider for TwelveDataProvider {
             return self.fetch_price(&symbols[0]).await.map(|d| vec![d]);
         }
 
-        let api_key = self.api_key.as_ref().ok_or("Twelve Data 需要 API Key")?;
+        let api_key = self.api_key.as_ref().ok_or("Twelve Data requires an API key")?;
         let mappings: Vec<(String, String)> = symbols
             .iter()
             .map(|s| (s.clone(), Self::to_td_symbol(s)))
@@ -123,17 +123,17 @@ impl DataProvider for TwelveDataProvider {
             ))
             .send()
             .await
-            .map_err(|e| format!("TwelveData 批量連接失敗: {}", e))?
+            .map_err(|e| format!("TwelveData batch connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("TwelveData 批量 API 錯誤: {}", e))?;
+            .map_err(|e| format!("TwelveData batch API error: {}", e))?;
 
         let body = resp
             .text()
             .await
-            .map_err(|e| format!("TwelveData 批量讀取失敗: {}", e))?;
+            .map_err(|e| format!("TwelveData batch read failed: {}", e))?;
 
         let data: serde_json::Value =
-            serde_json::from_str(&body).map_err(|_| "TwelveData 批量解析失敗".to_string())?;
+            serde_json::from_str(&body).map_err(|_| "TwelveData batch parse failed".to_string())?;
 
         let mut results = Vec::new();
         // TwelveData: 單個返回 object，多個返回 { "AAPL": {...}, "BTC/USD": {...} }
@@ -143,14 +143,14 @@ impl DataProvider for TwelveDataProvider {
                 if !item.is_null() {
                     match Self::parse_quote(original, item) {
                         Ok(asset) => results.push(asset),
-                        Err(e) => eprintln!("TwelveData 批量跳過 {}: {}", original, e),
+                        Err(e) => eprintln!("TwelveData batch skipped {}: {}", original, e),
                     }
                 }
             }
         } else {
             match Self::parse_quote(&mappings[0].0, &data) {
                 Ok(asset) => results.push(asset),
-                Err(e) => eprintln!("TwelveData 跳過 {}: {}", mappings[0].0, e),
+                Err(e) => eprintln!("TwelveData skipped {}: {}", mappings[0].0, e),
             }
         }
         Ok(results)

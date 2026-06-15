@@ -28,7 +28,7 @@ impl DataProvider for CoinApiProvider {
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {
         if self.api_key.is_empty() {
-            return Err("CoinAPI: 需要 API Key".into());
+            return Err("CoinAPI: requires API key".into());
         }
         let base = to_coinapi_base(symbol);
         let url = format!("https://rest.coinapi.io/v1/exchangerate/{}/USD", base);
@@ -38,12 +38,12 @@ impl DataProvider for CoinApiProvider {
             .header("X-CoinAPI-Key", &self.api_key)
             .send()
             .await
-            .map_err(|e| format!("CoinAPI 連接失敗: {}", e))?
+            .map_err(|e| format!("CoinAPI connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("CoinAPI API 錯誤: {}", e))?
+            .map_err(|e| format!("CoinAPI API error: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("CoinAPI 解析失敗: {}", e))?;
+            .map_err(|e| format!("CoinAPI parse failed: {}", e))?;
 
         let price = data["rate"].as_f64().unwrap_or(0.0);
         Ok(AssetDataBuilder::new(symbol, "coinapi")
@@ -57,7 +57,7 @@ impl DataProvider for CoinApiProvider {
             return Ok(vec![]);
         }
         if self.api_key.is_empty() {
-            return Err("CoinAPI: 需要 API Key".into());
+            return Err("CoinAPI: requires API key".into());
         }
 
         // CoinAPI supports batch via /v1/exchangerate/{base} but one at a time
@@ -79,9 +79,9 @@ impl DataProvider for CoinApiProvider {
                                     .currency("USD")
                                     .build())
                             }
-                            Err(e) => Err(format!("CoinAPI 解析失敗: {}", e)),
+                            Err(e) => Err(format!("CoinAPI parse failed: {}", e)),
                         },
-                        Err(e) => Err(format!("CoinAPI 連接失敗: {}", e)),
+                        Err(e) => Err(format!("CoinAPI connection failed: {}", e)),
                     }
                 }
             })

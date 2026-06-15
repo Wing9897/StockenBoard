@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { createTransport } from './lib/transport';
-import { TransportProvider } from './lib/TransportProvider';
+import { TransportProvider } from './lib/transportProvider';
 import { ANIME_IDS, loadBgForTheme } from './lib/themeData';
 import { STORAGE_KEYS } from './lib/storageKeys';
 import App from "./App";

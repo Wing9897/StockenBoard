@@ -4,6 +4,12 @@ pub struct HtxProvider {
     client: reqwest::Client,
 }
 
+impl Default for HtxProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HtxProvider {
     pub fn new() -> Self {
         Self {
@@ -56,15 +62,15 @@ impl DataProvider for HtxProvider {
             .get(&url)
             .send()
             .await
-            .map_err(|e| format!("HTX 連接失敗: {}", e))?
+            .map_err(|e| format!("HTX connection failed: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("HTX 解析失敗: {}", e))?;
+            .map_err(|e| format!("HTX parse failed: {}", e))?;
 
         if data["status"].as_str() != Some("ok") {
             return Err(format!(
                 "HTX: {}",
-                data["err-msg"].as_str().unwrap_or("未知錯誤")
+                data["err-msg"].as_str().unwrap_or("unknown error")
             ));
         }
         Ok(parse_htx_ticker(symbol, &data["tick"]))
@@ -85,12 +91,12 @@ impl DataProvider for HtxProvider {
             .get(url)
             .send()
             .await
-            .map_err(|e| format!("HTX 批量連接失敗: {}", e))?
+            .map_err(|e| format!("HTX batch connection failed: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("HTX 批量解析失敗: {}", e))?;
+            .map_err(|e| format!("HTX batch parse failed: {}", e))?;
 
-        let tickers = data["data"].as_array().ok_or("HTX: 無結果")?;
+        let tickers = data["data"].as_array().ok_or("HTX: no results")?;
         let mut map = std::collections::HashMap::new();
         for t in tickers {
             if let Some(s) = t["symbol"].as_str() {

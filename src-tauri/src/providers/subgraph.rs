@@ -93,8 +93,8 @@ struct PoolData {
 struct TokenData {
     id: Option<String>,
     symbol: Option<String>,
-    #[allow(dead_code)]
-    decimals: Option<String>,
+    #[serde(alias = "decimals")]
+    _decimals: Option<String>,
 }
 
 #[async_trait::async_trait]
@@ -250,7 +250,7 @@ impl DataProvider for SubgraphProvider {
                 {
                     Ok(r) => r,
                     Err(e) => {
-                        eprintln!("Subgraph 連接失敗: {}", e);
+                        eprintln!("Subgraph connection failed: {}", e);
                         return None;
                     }
                 };

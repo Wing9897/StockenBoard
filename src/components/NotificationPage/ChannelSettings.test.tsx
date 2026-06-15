@@ -2,15 +2,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, act, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-// Mock the transport layer. The component imports `transport` from
+// Mock the transport layer. The component imports `getTransport` from
 // '../../lib/transport'; route each command to a controllable mock so the
 // tests never touch a real backend.
 const invokeMock = vi.fn();
 vi.mock('../../lib/transport', () => ({
-  transport: {
+  getTransport: () => ({
     invoke: (...args: unknown[]) => invokeMock(...args),
     listen: () => () => {},
-  },
+  }),
   createTransport: () => ({
     invoke: (...args: unknown[]) => invokeMock(...args),
     listen: () => () => {},

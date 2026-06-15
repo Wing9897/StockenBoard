@@ -90,7 +90,7 @@ pub fn parse_ai_response(raw: &str) -> Result<AiResponse, AiEvalError> {
     }
 
     // Neither direct parse nor markdown extraction worked
-    eprintln!("[AiEvaluator] AI 回應非合法 JSON，原始回應: {}", raw);
+    eprintln!("[AiEvaluator] AI response is not valid JSON, raw: {}", raw);
     Err(AiEvalError::InvalidJson(raw.to_string()))
 }
 
@@ -137,7 +137,7 @@ fn validate_ai_response_json(
     let obj = match value.as_object() {
         Some(obj) => obj,
         None => {
-            eprintln!("[AiEvaluator] AI 回應不是 JSON 物件，原始回應: {}", raw);
+            eprintln!("[AiEvaluator] AI response is not a JSON object, raw: {}", raw);
             return Err(AiEvalError::MissingField(
                 "response is not a JSON object".to_string(),
             ));
@@ -149,14 +149,14 @@ fn validate_ai_response_json(
         Some(v) => match v.as_bool() {
             Some(b) => b,
             None => {
-                eprintln!("[AiEvaluator] 'trigger' 欄位不是布林值，原始回應: {}", raw);
+                eprintln!("[AiEvaluator] 'trigger' field is not boolean, raw: {}", raw);
                 return Err(AiEvalError::MissingField(
                     "\"trigger\" field is not a boolean".to_string(),
                 ));
             }
         },
         None => {
-            eprintln!("[AiEvaluator] 缺少 'trigger' 欄位，原始回應: {}", raw);
+            eprintln!("[AiEvaluator] Missing 'trigger' field, raw: {}", raw);
             return Err(AiEvalError::MissingField(
                 "missing \"trigger\" field".to_string(),
             ));
@@ -168,14 +168,14 @@ fn validate_ai_response_json(
         Some(v) => match v.as_str() {
             Some(s) => s.to_string(),
             None => {
-                eprintln!("[AiEvaluator] 'reason' 欄位不是字串，原始回應: {}", raw);
+                eprintln!("[AiEvaluator] 'reason' field is not a string, raw: {}", raw);
                 return Err(AiEvalError::MissingField(
                     "\"reason\" field is not a string".to_string(),
                 ));
             }
         },
         None => {
-            eprintln!("[AiEvaluator] 缺少 'reason' 欄位，原始回應: {}", raw);
+            eprintln!("[AiEvaluator] Missing 'reason' field, raw: {}", raw);
             return Err(AiEvalError::MissingField(
                 "missing \"reason\" field".to_string(),
             ));
@@ -292,13 +292,13 @@ pub async fn evaluate_ai_rule(
     let history_rows = db
         .get_price_history(subscription_id, None, None, ai_config.history_window as i64)
         .map_err(|e| {
-            eprintln!("[AiEvaluator] rule_id={} 取得價格歷史失敗: {}", rule_id, e);
+            eprintln!("[AiEvaluator] rule_id={} failed to get price history: {}", rule_id, e);
             AiEvalError::DatabaseError(e)
         })?;
 
     if history_rows.is_empty() {
         eprintln!(
-            "[AiEvaluator] rule_id={} subscription_id={} 無可用價格歷史紀錄",
+            "[AiEvaluator] rule_id={} subscription_id={} no price history available",
             rule_id, subscription_id
         );
         return Err(AiEvalError::NoPriceHistory);
@@ -342,7 +342,7 @@ pub async fn evaluate_ai_rule(
     }
 
     let response = request.json(&request_body).send().await.map_err(|e| {
-        eprintln!("[AiEvaluator] rule_id={} AI API 請求失敗: {}", rule_id, e);
+        eprintln!("[AiEvaluator] rule_id={} AI API request failed: {}", rule_id, e);
         AiEvalError::RequestFailed(e.to_string())
     })?;
 
@@ -351,7 +351,7 @@ pub async fn evaluate_ai_rule(
     if !status.is_success() {
         let error_body = response.text().await.unwrap_or_default();
         eprintln!(
-            "[AiEvaluator] rule_id={} AI API 回傳 HTTP {}: {}",
+            "[AiEvaluator] rule_id={} AI API returned HTTP {}: {}",
             rule_id, status, error_body
         );
         return Err(AiEvalError::RequestFailed(format!(
@@ -363,7 +363,7 @@ pub async fn evaluate_ai_rule(
     // Step 5: Parse response body to extract AI's message content
     let response_json: serde_json::Value = response.json().await.map_err(|e| {
         eprintln!(
-            "[AiEvaluator] rule_id={} 解析 AI API 回應 JSON 失敗: {}",
+            "[AiEvaluator] rule_id={} failed to parse AI API response JSON: {}",
             rule_id, e
         );
         AiEvalError::RequestFailed(format!("Failed to parse response body: {}", e))
@@ -390,7 +390,7 @@ pub async fn evaluate_ai_rule(
         })
         .ok_or_else(|| {
             eprintln!(
-                "[AiEvaluator] rule_id={} AI API 回應格式不正確，無法提取 content: {}",
+                "[AiEvaluator] rule_id={} AI API response format invalid, cannot extract content: {}",
                 rule_id, response_json
             );
             AiEvalError::RequestFailed(
@@ -401,7 +401,7 @@ pub async fn evaluate_ai_rule(
     // Step 6: Parse AI response content
     let ai_response = parse_ai_response(content).map_err(|e| {
         eprintln!(
-            "[AiEvaluator] rule_id={} 解析 AI 回應內容失敗: {}",
+            "[AiEvaluator] rule_id={} failed to parse AI response content: {}",
             rule_id, e
         );
         e

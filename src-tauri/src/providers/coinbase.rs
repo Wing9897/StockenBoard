@@ -4,6 +4,12 @@ pub struct CoinbaseProvider {
     client: reqwest::Client,
 }
 
+impl Default for CoinbaseProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CoinbaseProvider {
     pub fn new() -> Self {
         Self {
@@ -27,12 +33,12 @@ impl DataProvider for CoinbaseProvider {
             .get(&url)
             .send()
             .await
-            .map_err(|e| format!("Coinbase 連接失敗: {}", e))?
+            .map_err(|e| format!("Coinbase connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("Coinbase API 錯誤: {}。格式: BTC-USD", e))?
+            .map_err(|e| format!("Coinbase API error: {}. Format: BTC-USD", e))?
             .json()
             .await
-            .map_err(|e| format!("Coinbase 解析失敗: {}", e))?;
+            .map_err(|e| format!("Coinbase parse failed: {}", e))?;
 
         let price = data["data"]["amount"]
             .as_str()
@@ -80,9 +86,9 @@ impl DataProvider for CoinbaseProvider {
                                     .currency(currency)
                                     .build())
                             }
-                            Err(e) => Err(format!("Coinbase 解析失敗: {}", e)),
+                            Err(e) => Err(format!("Coinbase parse failed: {}", e)),
                         },
-                        Err(e) => Err(format!("Coinbase 連接失敗: {}", e)),
+                        Err(e) => Err(format!("Coinbase connection failed: {}", e)),
                     }
                 }
             })
@@ -94,7 +100,7 @@ impl DataProvider for CoinbaseProvider {
         for r in results {
             match r {
                 Ok(data) => out.push(data),
-                Err(e) => eprintln!("Coinbase 跳過: {}", e),
+                Err(e) => eprintln!("Coinbase skipped: {}", e),
             }
         }
         Ok(out)

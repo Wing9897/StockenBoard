@@ -100,7 +100,6 @@ impl AiProviderConfig {
     /// - base_url: 非空字串
     /// - model: 非空字串
     /// - api_key: 可為 None（適用於本地 Ollama 等無需認證的服務）
-    #[allow(dead_code)]
     pub fn validate(&self) -> Result<(), String> {
         if self.base_url.trim().is_empty() {
             return Err("base_url must not be empty".to_string());
@@ -156,7 +155,6 @@ pub struct WebhookConfig {
 
 // === 通知規則（記憶體中的完整結構）===
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct NotificationRule {
     pub id: i64,
     pub name: String,

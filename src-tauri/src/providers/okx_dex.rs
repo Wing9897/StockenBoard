@@ -185,7 +185,7 @@ impl DataProvider for OkxDexProvider {
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {
         let api_key = self.api_key.as_deref().ok_or_else(|| {
-            "OKX DEX 需要 API Key（在 OKX Web3 Developer Portal 免費申請）".to_string()
+            "OKX DEX requires API key (free at OKX Web3 Developer Portal)".to_string()
         })?;
 
         let (chain_id, token_address, decimals) = parse_okx_dex_symbol(symbol);
@@ -206,17 +206,17 @@ impl DataProvider for OkxDexProvider {
             .header("OK-ACCESS-KEY", api_key)
             .send()
             .await
-            .map_err(|e| format!("OKX DEX 連接失敗: {}", e))?
+            .map_err(|e| format!("OKX DEX connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("OKX DEX API 錯誤: {}", e))?
+            .map_err(|e| format!("OKX DEX API error: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("OKX DEX 解析失敗: {}", e))?;
+            .map_err(|e| format!("OKX DEX parse failed: {}", e))?;
 
         let code = resp["code"].as_str().unwrap_or("");
         if code != "0" {
-            let msg = resp["msg"].as_str().unwrap_or("未知錯誤");
-            return Err(format!("OKX DEX 錯誤 ({}): {}", code, msg));
+            let msg = resp["msg"].as_str().unwrap_or("unknown error");
+            return Err(format!("OKX DEX error ({}): {}", code, msg));
         }
 
         let data = &resp["data"][0];

@@ -86,7 +86,7 @@ impl AiScheduler {
         let rules = match self.db.list_notification_rules() {
             Ok(rules) => rules,
             Err(e) => {
-                eprintln!("[AiScheduler] 載入通知規則失敗: {}", e);
+                eprintln!("[AiScheduler] Failed to load notification rules: {}", e);
                 return;
             }
         };
@@ -95,11 +95,11 @@ impl AiScheduler {
         let provider_config = match self.db.load_ai_provider_config() {
             Ok(Some(config)) => config,
             Ok(None) => {
-                eprintln!("[AiScheduler] AI Provider 未設定，所有 AI 規則暫停評估");
+                eprintln!("[AiScheduler] AI Provider not configured, all AI rules paused");
                 return;
             }
             Err(e) => {
-                eprintln!("[AiScheduler] 載入 AI Provider 設定失敗: {}", e);
+                eprintln!("[AiScheduler] Failed to load AI Provider config: {}", e);
                 return;
             }
         };
@@ -116,7 +116,7 @@ impl AiScheduler {
                     Ok(config) => config,
                     Err(e) => {
                         eprintln!(
-                            "[AiScheduler] rule_id={} 解析 ai_config 失敗: {}",
+                            "[AiScheduler] rule_id={} failed to parse ai_config: {}",
                             rule.id, e
                         );
                         continue;
@@ -124,7 +124,7 @@ impl AiScheduler {
                 },
                 None => {
                     eprintln!(
-                        "[AiScheduler] rule_id={} 為 AI 規則但缺少 ai_config",
+                        "[AiScheduler] rule_id={} is AI rule but missing ai_config",
                         rule.id
                     );
                     continue;
@@ -150,7 +150,7 @@ impl AiScheduler {
         }
 
         eprintln!(
-            "[AiScheduler] 啟動完成，共 {} 條 AI 規則正在執行",
+            "[AiScheduler] Started, {} AI rules running",
             tasks.len()
         );
     }
@@ -168,7 +168,7 @@ impl AiScheduler {
             let mut tasks = self.tasks.write().await;
             if let Some(handle) = tasks.remove(&rule_id) {
                 handle.abort_handle.abort();
-                eprintln!("[AiScheduler] rule_id={} 已停止舊 task", rule_id);
+                eprintln!("[AiScheduler] rule_id={} stopped old task", rule_id);
             }
         }
 
@@ -176,11 +176,11 @@ impl AiScheduler {
         let rule = match self.db.get_notification_rule(rule_id) {
             Ok(Some(rule)) => rule,
             Ok(None) => {
-                eprintln!("[AiScheduler] rule_id={} 不存在", rule_id);
+                eprintln!("[AiScheduler] rule_id={} not found", rule_id);
                 return;
             }
             Err(e) => {
-                eprintln!("[AiScheduler] rule_id={} 載入規則失敗: {}", rule_id, e);
+                eprintln!("[AiScheduler] rule_id={} failed to load rule: {}", rule_id, e);
                 return;
             }
         };
@@ -196,7 +196,7 @@ impl AiScheduler {
                 Ok(config) => config,
                 Err(e) => {
                     eprintln!(
-                        "[AiScheduler] rule_id={} 解析 ai_config 失敗: {}",
+                        "[AiScheduler] rule_id={} failed to parse ai_config: {}",
                         rule_id, e
                     );
                     return;
@@ -204,7 +204,7 @@ impl AiScheduler {
             },
             None => {
                 eprintln!(
-                    "[AiScheduler] rule_id={} 為 AI 規則但缺少 ai_config",
+                    "[AiScheduler] rule_id={} is AI rule but missing ai_config",
                     rule_id
                 );
                 return;
@@ -216,14 +216,14 @@ impl AiScheduler {
             Ok(Some(config)) => config,
             Ok(None) => {
                 eprintln!(
-                    "[AiScheduler] AI Provider 未設定，rule_id={} 無法啟動",
+                    "[AiScheduler] AI Provider not configured, rule_id={} cannot start",
                     rule_id
                 );
                 return;
             }
             Err(e) => {
                 eprintln!(
-                    "[AiScheduler] rule_id={} 載入 AI Provider 設定失敗: {}",
+                    "[AiScheduler] rule_id={} Failed to load AI Provider config: {}",
                     rule_id, e
                 );
                 return;
@@ -248,7 +248,7 @@ impl AiScheduler {
 
         let mut tasks = self.tasks.write().await;
         tasks.insert(rule_id, TaskHandle { abort_handle });
-        eprintln!("[AiScheduler] rule_id={} 已啟動新 task", rule_id);
+        eprintln!("[AiScheduler] rule_id={} started new task", rule_id);
     }
 
     /// 停止某條規則的 task
@@ -261,7 +261,7 @@ impl AiScheduler {
         let mut tasks = self.tasks.write().await;
         if let Some(handle) = tasks.remove(&rule_id) {
             handle.abort_handle.abort();
-            eprintln!("[AiScheduler] rule_id={} task 已停止並移除", rule_id);
+            eprintln!("[AiScheduler] rule_id={} task stopped and removed", rule_id);
         }
     }
 
@@ -281,12 +281,12 @@ impl AiScheduler {
             let mut tasks = self.tasks.write().await;
             for (rule_id, handle) in tasks.drain() {
                 handle.abort_handle.abort();
-                eprintln!("[AiScheduler] reload: rule_id={} task 已停止", rule_id);
+                eprintln!("[AiScheduler] reload: rule_id={} task stopped", rule_id);
             }
         }
 
         // Step 2: Re-run start logic
-        eprintln!("[AiScheduler] 重新載入所有 AI 規則...");
+        eprintln!("[AiScheduler] Reloading all AI rules...");
         self.start().await;
     }
 
@@ -309,7 +309,7 @@ impl AiScheduler {
             let mut last_trigger_time: Option<Instant> = None;
 
             eprintln!(
-                "[AiScheduler] rule_id={} task 啟動，間隔 {}s，cooldown {}s",
+                "[AiScheduler] rule_id={} task started, interval {}s, cooldown {}s",
                 rule_id, ai_config.analysis_interval_secs, cooldown_secs
             );
 
@@ -337,7 +337,7 @@ impl AiScheduler {
 
                             if in_cooldown {
                                 eprintln!(
-                                    "[AiScheduler] rule_id={} 觸發但處於冷卻期，忽略",
+                                    "[AiScheduler] rule_id={} triggered but in cooldown, ignoring",
                                     rule_id
                                 );
                                 continue;
@@ -347,7 +347,7 @@ impl AiScheduler {
                             if let Some(ref gc) = global_cooldown {
                                 if !gc.check_and_trigger() {
                                     eprintln!(
-                                        "[AiScheduler] rule_id={} 全局冷卻期未過，跳過觸發",
+                                        "[AiScheduler] rule_id={} global cooldown active, skipping",
                                         rule_id
                                     );
                                     continue;
@@ -360,7 +360,7 @@ impl AiScheduler {
                                 Some(s) => s,
                                 None => {
                                     eprintln!(
-                                        "[AiScheduler] rule_id={} 無法取得 subscription_id={} 的 symbol",
+                                        "[AiScheduler] rule_id={} cannot get symbol for subscription_id={}",
                                         rule_id, subscription_id
                                     );
                                     continue;
@@ -422,20 +422,20 @@ impl AiScheduler {
                             last_trigger_time = Some(Instant::now());
 
                             eprintln!(
-                                "[AiScheduler] rule_id={} AI 觸發通知已派發，reason: {}",
+                                "[AiScheduler] rule_id={} AI notification dispatched, reason: {}",
                                 rule_id, response.reason
                             );
                         } else {
                             // Step 4: trigger = false, log and continue
                             eprintln!(
-                                "[AiScheduler] rule_id={} AI 判斷未觸發: {}",
+                                "[AiScheduler] rule_id={} AI decided not to trigger: {}",
                                 rule_id, response.reason
                             );
                         }
                     }
                     Err(e) => {
                         // Step 4: Error — log and continue to next iteration
-                        eprintln!("[AiScheduler] rule_id={} AI 評估錯誤: {}", rule_id, e);
+                        eprintln!("[AiScheduler] rule_id={} AI evaluation error: {}", rule_id, e);
                     }
                 }
                 // Step 5: Evaluation is complete; loop back to sleep for next interval

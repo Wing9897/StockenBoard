@@ -21,6 +21,12 @@ pub struct ProviderRegistry {
     limiters: RwLock<HashMap<String, Arc<Semaphore>>>,
 }
 
+impl Default for ProviderRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ProviderRegistry {
     pub fn new() -> Self {
         Self {
@@ -62,33 +68,6 @@ impl ProviderRegistry {
         Some(provider)
     }
 
-    /// 取得或建立 provider（直接指定 key，用於 enable_provider 場景）
-    #[allow(dead_code)]
-    pub async fn get_or_create_with_key(
-        &self,
-        id: &str,
-        api_key: Option<String>,
-        api_secret: Option<String>,
-        api_url: Option<String>,
-    ) -> Option<Arc<dyn DataProvider>> {
-        // 如果沒提供 key，嘗試用快取
-        if api_key.is_none() {
-            let p = self.providers.read().await;
-            if let Some(provider) = p.get(id) {
-                return Some(provider.clone());
-            }
-        }
-
-        let has_key = api_key.is_some();
-        let provider = create_provider_with_url(id, api_key, api_secret, api_url)?;
-        self.providers
-            .write()
-            .await
-            .insert(id.to_string(), provider.clone());
-        self.ensure_limiter(id, has_key).await;
-        Some(provider)
-    }
-
     /// 帶 rate limiting 的 fetch_prices
     pub async fn fetch_with_limit(
         &self,
@@ -99,7 +78,7 @@ impl ProviderRegistry {
         let provider = self
             .get_or_create(id, db)
             .await
-            .ok_or_else(|| format!("找不到數據源: {}", id))?;
+            .ok_or_else(|| format!("Provider not found: {}", id))?;
         let limiter = self.get_limiter(id).await;
         let _permit = limiter
             .acquire()
@@ -133,13 +112,6 @@ impl ProviderRegistry {
                 .await
                 .insert(id.to_string(), Arc::new(Semaphore::new(limit)));
         }
-    }
-
-    /// 移除 provider instance（例如 API key 被刪除）
-    #[allow(dead_code)]
-    pub async fn remove_provider(&self, id: &str) {
-        self.providers.write().await.remove(id);
-        self.limiters.write().await.remove(id);
     }
 
     /// 取得 rate limiter（如果不存在則建立默認的）

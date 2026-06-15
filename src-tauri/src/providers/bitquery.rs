@@ -24,7 +24,7 @@ impl DataProvider for BitqueryProvider {
         let api_key = self
             .api_key
             .as_ref()
-            .ok_or("Bitquery 需要 API Key (OAuth token)")?;
+            .ok_or("Bitquery requires API key (OAuth token)")?;
 
         // Bitquery v2 uses streaming.bitquery.io/graphql with Bearer token
         let query = format!(
@@ -53,12 +53,12 @@ impl DataProvider for BitqueryProvider {
             .json(&serde_json::json!({ "query": query }))
             .send()
             .await
-            .map_err(|e| format!("Bitquery 連接失敗: {}", e))?
+            .map_err(|e| format!("Bitquery connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("Bitquery API 錯誤: {}", e))?
+            .map_err(|e| format!("Bitquery API error: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("Bitquery 解析失敗: {}", e))?;
+            .map_err(|e| format!("Bitquery parse failed: {}", e))?;
 
         let trade = &data["data"]["EVM"]["DEXTradeByTokens"][0]["Trade"];
 
@@ -80,7 +80,7 @@ impl DataProvider for BitqueryProvider {
         let api_key = self
             .api_key
             .as_ref()
-            .ok_or("Bitquery 需要 API Key")?
+            .ok_or("Bitquery requires API key")?
             .clone();
         let client = self.client.clone();
 
@@ -111,7 +111,7 @@ impl DataProvider for BitqueryProvider {
                         .await
                         .map_err(|e| format!("Bitquery: {}", e))?
                         .error_for_status()
-                        .map_err(|e| format!("Bitquery API 錯誤: {}", e))?
+                        .map_err(|e| format!("Bitquery API error: {}", e))?
                         .json()
                         .await
                         .map_err(|e| format!("Bitquery: {}", e))?;
@@ -132,7 +132,7 @@ impl DataProvider for BitqueryProvider {
         for r in results {
             match r {
                 Ok(data) => out.push(data),
-                Err(e) => eprintln!("Bitquery 跳過: {}", e),
+                Err(e) => eprintln!("Bitquery skipped: {}", e),
             }
         }
         Ok(out)

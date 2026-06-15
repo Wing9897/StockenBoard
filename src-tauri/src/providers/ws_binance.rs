@@ -9,6 +9,12 @@ pub struct BinanceWsProvider;
 const MAX_RECONNECT_ATTEMPTS: u32 = 10;
 const INITIAL_RECONNECT_DELAY_MS: u64 = 1000;
 
+impl Default for BinanceWsProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BinanceWsProvider {
     pub fn new() -> Self {
         Self
@@ -62,7 +68,7 @@ impl WebSocketProvider for BinanceWsProvider {
 
         let (ws_stream, _) = connect_async(&url)
             .await
-            .map_err(|e| format!("Binance WS 連接失敗: {}", e))?;
+            .map_err(|e| format!("Binance WS connection failed: {}", e))?;
 
         let (write, read) = ws_stream.split();
 
@@ -100,20 +106,20 @@ impl BinanceWsProvider {
                 }
                 Some(Ok(Message::Ping(payload))) => {
                     if let Err(e) = write.send(Message::Pong(payload)).await {
-                        eprintln!("Binance WS pong 發送失敗: {}", e);
+                        eprintln!("Binance WS pong send failed: {}", e);
                         break;
                     }
                 }
                 Some(Ok(Message::Close(_))) => {
-                    eprintln!("Binance WS 連接已關閉，準備重連...");
+                    eprintln!("Binance WS connection closed, reconnecting...");
                     break;
                 }
                 Some(Err(e)) => {
-                    eprintln!("Binance WS 錯誤: {}，準備重連...", e);
+                    eprintln!("Binance WS error: {}, reconnecting...", e);
                     break;
                 }
                 None => {
-                    eprintln!("Binance WS stream 結束，準備重連...");
+                    eprintln!("Binance WS stream ended, reconnecting...");
                     break;
                 }
                 _ => {}
@@ -125,24 +131,24 @@ impl BinanceWsProvider {
         loop {
             if attempt >= MAX_RECONNECT_ATTEMPTS {
                 eprintln!(
-                    "Binance WS 重連失敗次數已達上限 ({})",
+                    "Binance WS reconnect attempts exhausted ({})",
                     MAX_RECONNECT_ATTEMPTS
                 );
                 break;
             }
             let delay = INITIAL_RECONNECT_DELAY_MS * 2u64.pow(attempt.min(6));
-            eprintln!("Binance WS 第 {} 次重連，等待 {}ms...", attempt + 1, delay);
+            eprintln!("Binance WS reconnect attempt {}, waiting {}ms...", attempt + 1, delay);
             tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
 
             match connect_async(&url).await {
                 Ok((new_ws, _)) => {
-                    eprintln!("Binance WS 重連成功");
+                    eprintln!("Binance WS reconnected successfully");
                     let (new_write, new_read) = new_ws.split();
                     Box::pin(Self::run_ws_loop(url, symbols, sender, new_write, new_read)).await;
                     return;
                 }
                 Err(e) => {
-                    eprintln!("Binance WS 重連失敗: {}", e);
+                    eprintln!("Binance WS reconnect failed: {}", e);
                     attempt += 1;
                 }
             }

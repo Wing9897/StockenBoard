@@ -48,7 +48,7 @@ impl NotificationEngine {
         let global_cooldown = self.global_cooldown.clone();
 
         tokio::spawn(async move {
-            eprintln!("[NotificationEngine] 啟動，開始監聯事件");
+            eprintln!("[NotificationEngine] Started, listening for events");
             loop {
                 match event_rx.recv().await {
                     Ok(AppEvent::PriceUpdate { data, .. }) => {
@@ -67,7 +67,7 @@ impl NotificationEngine {
                                 // Check global cooldown (atomically marks as triggered if passes)
                                 if !global_cooldown.check_and_trigger() {
                                     eprintln!(
-                                        "[NotificationEngine] rule_id={} 全局冷卻期未過，跳過觸發",
+                                        "[NotificationEngine] rule_id={} global cooldown active, skipping trigger",
                                         rule.id
                                     );
                                     continue;
@@ -113,10 +113,10 @@ impl NotificationEngine {
                     }
                     Ok(_) => {}
                     Err(broadcast::error::RecvError::Lagged(n)) => {
-                        eprintln!("[NotificationEngine] 事件落後 {} 筆，繼續接收", n);
+                        eprintln!("[NotificationEngine] Lagged {} events, continuing", n);
                     }
                     Err(broadcast::error::RecvError::Closed) => {
-                        eprintln!("[NotificationEngine] Event Bus 已關閉，引擎停止");
+                        eprintln!("[NotificationEngine] Event Bus closed, engine stopping");
                         break;
                     }
                 }
@@ -131,12 +131,12 @@ impl NotificationEngine {
                 let mut rules_guard = self.rules.write().await;
                 *rules_guard = new_rules;
                 eprintln!(
-                    "[NotificationEngine] 規則已重新載入，共 {} 條",
+                    "[NotificationEngine] Rules reloaded, total: {}",
                     rules_guard.len()
                 );
             }
             Err(e) => {
-                eprintln!("[NotificationEngine] 載入規則失敗: {}", e);
+                eprintln!("[NotificationEngine] Failed to load rules: {}", e);
             }
         }
     }
@@ -158,7 +158,7 @@ impl NotificationEngine {
                     Ok(ct) => ct,
                     Err(_) => {
                         eprintln!(
-                            "[NotificationEngine] 規則 {} 的條件類型無效: {}",
+                            "[NotificationEngine] Rule {} has invalid condition type: {}",
                             row.id, row.condition_type
                         );
                         continue;
@@ -181,7 +181,7 @@ impl NotificationEngine {
                 });
             } else {
                 eprintln!(
-                    "[NotificationEngine] 規則 {} 的訂閱 {} 不存在，跳過",
+                    "[NotificationEngine] Rule {} subscription {} not found, skipping",
                     row.id, row.subscription_id
                 );
             }

@@ -25,7 +25,7 @@ impl DataProvider for FcsApiProvider {
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {
         if self.api_key.is_empty() {
-            return Err("FCS API: 需要 API Key".into());
+            return Err("FCS API requires API key".into());
         }
         let url = format!(
             "https://api-v4.fcsapi.com/stock/latest?symbol={}&access_key={}",
@@ -37,17 +37,17 @@ impl DataProvider for FcsApiProvider {
             .get(&url)
             .send()
             .await
-            .map_err(|e| format!("FCS API 連接失敗: {}", e))?
+            .map_err(|e| format!("FCS API connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("FCS API 錯誤 (請確認 API Key 有效): {}", e))?
+            .map_err(|e| format!("FCS API error (verify API key is valid): {}", e))?
             .json()
             .await
-            .map_err(|e| format!("FCS API 解析失敗: {}", e))?;
+            .map_err(|e| format!("FCS API parse failed: {}", e))?;
 
         let item = data["response"]
             .as_array()
             .and_then(|a| a.first())
-            .ok_or("FCS API: 找不到數據")?;
+            .ok_or("FCS API: data not found")?;
 
         Ok(parse_fcs_item(symbol, item))
     }
@@ -57,7 +57,7 @@ impl DataProvider for FcsApiProvider {
             return Ok(vec![]);
         }
         if self.api_key.is_empty() {
-            return Err("FCS API: 需要 API Key".into());
+            return Err("FCS API requires API key".into());
         }
 
         // FCS supports comma-separated symbols
@@ -75,14 +75,14 @@ impl DataProvider for FcsApiProvider {
             .get(&url)
             .send()
             .await
-            .map_err(|e| format!("FCS API 批量連接失敗: {}", e))?
+            .map_err(|e| format!("FCS API batch connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("FCS API 批量錯誤 (請確認 API Key 有效): {}", e))?
+            .map_err(|e| format!("FCS API batch error (verify API key is valid): {}", e))?
             .json()
             .await
-            .map_err(|e| format!("FCS API 批量解析失敗: {}", e))?;
+            .map_err(|e| format!("FCS API batch parse failed: {}", e))?;
 
-        let arr = data["response"].as_array().ok_or("FCS API: 無結果")?;
+        let arr = data["response"].as_array().ok_or("FCS API: no results")?;
         let mut map = std::collections::HashMap::new();
         for item in arr {
             if let Some(s) = item["s"].as_str() {

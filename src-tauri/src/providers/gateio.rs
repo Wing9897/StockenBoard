@@ -4,6 +4,12 @@ pub struct GateioProvider {
     client: reqwest::Client,
 }
 
+impl Default for GateioProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GateioProvider {
     pub fn new() -> Self {
         Self {
@@ -56,14 +62,14 @@ impl DataProvider for GateioProvider {
             .get(&url)
             .send()
             .await
-            .map_err(|e| format!("Gate.io 連接失敗: {}", e))?
+            .map_err(|e| format!("Gate.io connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("Gate.io API 錯誤: {}", e))?
+            .map_err(|e| format!("Gate.io API error: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("Gate.io 解析失敗: {}", e))?;
+            .map_err(|e| format!("Gate.io parse failed: {}", e))?;
 
-        let item = arr.first().ok_or("Gate.io: 找不到交易對數據")?;
+        let item = arr.first().ok_or("Gate.io: trading pair not found")?;
         Ok(parse_gateio_ticker(symbol, item))
     }
 
@@ -82,12 +88,12 @@ impl DataProvider for GateioProvider {
             .get(url)
             .send()
             .await
-            .map_err(|e| format!("Gate.io 批量連接失敗: {}", e))?
+            .map_err(|e| format!("Gate.io batch connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("Gate.io 批量 API 錯誤: {}", e))?
+            .map_err(|e| format!("Gate.io batch API error: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("Gate.io 批量解析失敗: {}", e))?;
+            .map_err(|e| format!("Gate.io batch parse failed: {}", e))?;
 
         let mut map = std::collections::HashMap::new();
         for item in &arr {

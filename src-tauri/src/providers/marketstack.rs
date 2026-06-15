@@ -44,7 +44,7 @@ impl DataProvider for MarketstackProvider {
     }
 
     async fn fetch_price(&self, symbol: &str) -> Result<AssetData, String> {
-        let api_key = self.api_key.as_ref().ok_or("Marketstack 需要 API Key")?;
+        let api_key = self.api_key.as_ref().ok_or("Marketstack requires API key")?;
 
         let data: serde_json::Value = self
             .client
@@ -54,24 +54,24 @@ impl DataProvider for MarketstackProvider {
             ))
             .send()
             .await
-            .map_err(|e| format!("Marketstack 連接失敗: {}", e))?
+            .map_err(|e| format!("Marketstack connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("Marketstack API 錯誤: {}", e))?
+            .map_err(|e| format!("Marketstack API error: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("Marketstack 解析失敗: {}", e))?;
+            .map_err(|e| format!("Marketstack parse failed: {}", e))?;
 
         if let Some(err) = data["error"].as_object() {
             let msg = err
                 .get("message")
                 .and_then(|v| v.as_str())
-                .unwrap_or("未知錯誤");
+                .unwrap_or("unknown error");
             return Err(format!("Marketstack: {}", msg));
         }
 
         let eod = &data["data"][0];
         if eod.is_null() {
-            return Err(format!("Marketstack 找不到: {}", symbol));
+            return Err(format!("Marketstack not found: {}", symbol));
         }
         Ok(Self::parse_eod(symbol, eod))
     }
@@ -85,7 +85,7 @@ impl DataProvider for MarketstackProvider {
             return self.fetch_price(&symbols[0]).await.map(|d| vec![d]);
         }
 
-        let api_key = self.api_key.as_ref().ok_or("Marketstack 需要 API Key")?;
+        let api_key = self.api_key.as_ref().ok_or("Marketstack requires API key")?;
         let syms = symbols.join(",");
 
         let resp = self
@@ -96,29 +96,29 @@ impl DataProvider for MarketstackProvider {
             ))
             .send()
             .await
-            .map_err(|e| format!("Marketstack 批量連接失敗: {}", e))?
+            .map_err(|e| format!("Marketstack batch connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("Marketstack 批量 API 錯誤: {}", e))?;
+            .map_err(|e| format!("Marketstack batch API error: {}", e))?;
 
         let body = resp
             .text()
             .await
-            .map_err(|e| format!("Marketstack 批量讀取失敗: {}", e))?;
+            .map_err(|e| format!("Marketstack batch read failed: {}", e))?;
 
         let data: serde_json::Value =
-            serde_json::from_str(&body).map_err(|_| "Marketstack 批量解析失敗".to_string())?;
+            serde_json::from_str(&body).map_err(|_| "Marketstack batch parse failed".to_string())?;
 
         if let Some(err) = data["error"].as_object() {
             let msg = err
                 .get("message")
                 .and_then(|v| v.as_str())
-                .unwrap_or("未知錯誤");
+                .unwrap_or("unknown error");
             return Err(format!("Marketstack: {}", msg));
         }
 
         let arr = data["data"]
             .as_array()
-            .ok_or("Marketstack 批量回應格式錯誤")?;
+            .ok_or("Marketstack batch response format error")?;
         // 建立 symbol -> eod 查找表（取每個 symbol 最新的一筆）
         let mut latest: HashMap<String, &serde_json::Value> = HashMap::new();
         for eod in arr {

@@ -2,7 +2,7 @@
  * LogoDownloader — 一鍵下載所有缺少 icon 的訂閱 logo（含進度條）
  */
 import { useState, useEffect } from 'react';
-import { transport } from '../../lib/transport';
+import { getTransport } from '../../lib/transport';
 import { t } from '../../lib/i18n';
 import { clearAllIcons } from '../AssetCard/AssetIcon';
 
@@ -28,7 +28,7 @@ export function LogoDownloader({ onToast }: Props) {
   const [progress, setProgress] = useState<ProgressPayload | null>(null);
 
   useEffect(() => {
-    const unlisten = transport.listen('logo-download-progress', (payload) => {
+    const unlisten = getTransport().listen('logo-download-progress', (payload) => {
       setProgress(payload as ProgressPayload);
     });
     return () => { unlisten(); };
@@ -38,7 +38,7 @@ export function LogoDownloader({ onToast }: Props) {
     setDownloading(true);
     setProgress(null);
     try {
-      const result = await transport.invoke<LogoDownloadResult>('download_logos');
+      const result = await getTransport().invoke<LogoDownloadResult>('download_logos');
       clearAllIcons();
       onToast?.('success', t.settings.downloadLogos,
         t.settings.downloadLogosDone(result.succeeded, result.skipped, result.failed));

@@ -2,7 +2,7 @@
  * 歷史頁面 — 精簡版，子元件已抽出到 HistorySidebar / HistoryChart / HistoryTable
  */
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { transport } from '../../lib/transport';
+import { getTransport } from '../../lib/transport';
 
 import { t } from '../../lib/i18n';
 import { silentLog } from '../../lib/errorLog';
@@ -62,8 +62,8 @@ export function HistoryPage({ onToast }: Props) {
   // ── 載入訂閱 ──
   const loadSubs = useCallback(async () => {
     try {
-      const assetSubs = await transport.invoke<Subscription[]>('list_subscriptions', { subType: 'asset' });
-      const dexSubs = await transport.invoke<Subscription[]>('list_subscriptions', { subType: 'dex' });
+      const assetSubs = await getTransport().invoke<Subscription[]>('list_subscriptions', { subType: 'asset' });
+      const dexSubs = await getTransport().invoke<Subscription[]>('list_subscriptions', { subType: 'dex' });
       setSubs([...assetSubs, ...dexSubs]);
     } catch (e) { silentLog('HistoryPage.loadSubs', e); }
   }, []);
@@ -73,7 +73,7 @@ export function HistoryPage({ onToast }: Props) {
 
   // ── 切換紀錄 ──
   const toggle = useCallback(async (id: number, on: boolean) => {
-    await transport.invoke('toggle_record', { subscriptionId: id, enabled: on });
+    await getTransport().invoke('toggle_record', { subscriptionId: id, enabled: on });
     setSubs(p => p.map(s => s.id === id ? { ...s, record_enabled: on ? 1 : 0 } : s));
   }, []);
 
@@ -86,7 +86,7 @@ export function HistoryPage({ onToast }: Props) {
     if (kw.length) list = list.filter(s => kw.some(q => `${s.display_name || ''} ${s.symbol} ${s.selected_provider_id}`.toLowerCase().includes(q)));
     const targets = list.filter(s => on ? !s.record_enabled : s.record_enabled);
     if (!targets.length) return;
-    for (const s of targets) await transport.invoke('toggle_record', { subscriptionId: s.id, enabled: on });
+    for (const s of targets) await getTransport().invoke('toggle_record', { subscriptionId: s.id, enabled: on });
     const ids = new Set(targets.map(s => s.id));
     setSubs(p => p.map(s => ids.has(s.id) ? { ...s, record_enabled: on ? 1 : 0 } : s));
     onToast.success(t.history.batchDone(targets.length, on));
@@ -94,7 +94,7 @@ export function HistoryPage({ onToast }: Props) {
 
   // ── 紀錄時段 ──
   const saveRecordHours = useCallback(async (id: number, from: number | null, to: number | null) => {
-    await transport.invoke('set_record_hours', { subscriptionId: id, fromHour: from, toHour: to });
+    await getTransport().invoke('set_record_hours', { subscriptionId: id, fromHour: from, toHour: to });
     setSubs(p => p.map(s => s.id === id ? { ...s, record_from_hour: from, record_to_hour: to } : s));
     onToast.success(t.history.recordHoursSaved);
   }, [onToast]);
@@ -113,7 +113,7 @@ export function HistoryPage({ onToast }: Props) {
         fromTs = now - (RANGE_MAP[range as keyof typeof RANGE_MAP] || DAY);
         toTs = now;
       }
-      setRecords(await transport.invoke<PriceHistoryRecord[]>('get_price_history', { subscriptionId: selectedId, fromTs, toTs, limit: 10000 }));
+      setRecords(await getTransport().invoke<PriceHistoryRecord[]>('get_price_history', { subscriptionId: selectedId, fromTs, toTs, limit: 10000 }));
     } catch (e) {
       silentLog('HistoryPage.loadHistory', e);
       setRecords([]);
@@ -131,7 +131,7 @@ export function HistoryPage({ onToast }: Props) {
     if (!selectedId) return;
     if (!await requestConfirm(t.history.cleanupCurrentConfirm)) return;
     try {
-      const n = await transport.invoke<number>('delete_subscription_history', { subscriptionId: selectedId });
+      const n = await getTransport().invoke<number>('delete_subscription_history', { subscriptionId: selectedId });
       onToast.success(t.history.purgeAllDone(n));
       setRecords([]);
     } catch (e) { onToast.error(String(e)); }
@@ -140,7 +140,7 @@ export function HistoryPage({ onToast }: Props) {
   const purgeAll = useCallback(async () => {
     if (!await requestConfirm(t.history.purgeAllConfirm)) return;
     try {
-      const n = await transport.invoke<number>('purge_all_history');
+      const n = await getTransport().invoke<number>('purge_all_history');
       onToast.success(t.history.purgeAllDone(n));
       setRecords([]);
     } catch (e) { onToast.error(String(e)); }
@@ -148,7 +148,7 @@ export function HistoryPage({ onToast }: Props) {
 
   const cleanup90 = useCallback(async () => {
     try {
-      const n = await transport.invoke<number>('cleanup_history', { retentionDays: 90 });
+      const n = await getTransport().invoke<number>('cleanup_history', { retentionDays: 90 });
       if (n === 0) {
         onToast.info(t.history.noOldData);
       } else {
@@ -160,7 +160,7 @@ export function HistoryPage({ onToast }: Props) {
 
   const openDir = useCallback(async () => {
     try {
-      await transport.invoke<string>('get_data_dir');
+      await getTransport().invoke<string>('get_data_dir');
       onToast.success(t.history.openDataDir);
     } catch (e) { onToast.error(String(e)); }
   }, [onToast]);

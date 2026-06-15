@@ -5,15 +5,15 @@ import { t } from '../../lib/i18n';
 import type { Subscription, EditRuleData } from '../../types';
 
 // RuleForm loads subscriptions through loadAllSubscriptions(), which wraps
-// transport.invoke('list_all_subscriptions'). It also calls transport.invoke('list_notification_channels')
-// and transport.invoke('get_ai_provider_config') on mount. We mock the transport module so
+// getTransport().invoke('list_all_subscriptions'). It also calls getTransport().invoke('list_notification_channels')
+// and getTransport().invoke('get_ai_provider_config') on mount. We mock the transport module so
 // invoke resolves/rejects per command name without touching a real backend.
 const mockInvoke = vi.fn();
 vi.mock('../../lib/transport', () => ({
-  transport: {
+  getTransport: () => ({
     invoke: (...args: unknown[]) => mockInvoke(...args),
     listen: () => () => {},
-  },
+  }),
   createTransport: () => ({
     invoke: (...args: unknown[]) => mockInvoke(...args),
     listen: () => () => {},

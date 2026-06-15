@@ -4,6 +4,12 @@ pub struct BitfinexProvider {
     client: reqwest::Client,
 }
 
+impl Default for BitfinexProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BitfinexProvider {
     pub fn new() -> Self {
         Self {
@@ -52,15 +58,15 @@ impl DataProvider for BitfinexProvider {
             .get(&url)
             .send()
             .await
-            .map_err(|e| format!("Bitfinex 連接失敗: {}", e))?
+            .map_err(|e| format!("Bitfinex connection failed: {}", e))?
             .error_for_status()
-            .map_err(|e| format!("Bitfinex API 錯誤: {}", e))?
+            .map_err(|e| format!("Bitfinex API error: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("Bitfinex 解析失敗: {}", e))?;
+            .map_err(|e| format!("Bitfinex parse failed: {}", e))?;
 
         if arr.len() < 10 {
-            return Err("Bitfinex: 回應格式不正確".into());
+            return Err("Bitfinex: invalid response format".into());
         }
         Ok(parse_bitfinex_arr(symbol, &arr))
     }
@@ -81,10 +87,10 @@ impl DataProvider for BitfinexProvider {
             .get(&url)
             .send()
             .await
-            .map_err(|e| format!("Bitfinex 批量連接失敗: {}", e))?
+            .map_err(|e| format!("Bitfinex batch connection failed: {}", e))?
             .json()
             .await
-            .map_err(|e| format!("Bitfinex 批量解析失敗: {}", e))?;
+            .map_err(|e| format!("Bitfinex batch parse failed: {}", e))?;
 
         let mut map = std::collections::HashMap::new();
         for row in &data {
