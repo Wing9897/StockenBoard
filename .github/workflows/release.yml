@@ -8,6 +8,8 @@ on:
 jobs:
   check-version:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       version: ${{ steps.check.outputs.version }}
     steps:
@@ -28,26 +30,18 @@ jobs:
             echo "version=v$VERSION" >> $GITHUB_OUTPUT
           fi
 
-  create-tag:
-    needs: check-version
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-
       - name: Create and push tag
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag ${{ needs.check-version.outputs.version }}
-          git push origin ${{ needs.check-version.outputs.version }}
+          git tag ${{ steps.check.outputs.version }}
+          git push origin ${{ steps.check.outputs.version }}
 
   # ═══════════════════════════════════════════════════════════════════════════════
   # Desktop (Tauri) — 5 targets
   # ═══════════════════════════════════════════════════════════════════════════════
   build-tauri:
-    needs: [check-version, create-tag]
+    needs: [check-version]
     permissions:
       contents: write
     strategy:
@@ -106,34 +100,10 @@ jobs:
           tagName: ${{ needs.check-version.outputs.version }}
           releaseName: "StockenBoard ${{ needs.check-version.outputs.version }}"
           releaseBody: |
-            ## StockenBoard ${{ needs.check-version.outputs.version }}
+            See [Installation & Usage](https://github.com/Wing9897/StockenBoard#-快速開始) for setup instructions.
             
-            ### Desktop App
-            | OS | Arch | Format |
-            |----|------|--------|
-            | Windows | x64 | `.exe` / `.msi` |
-            | Windows | ARM64 | `.exe` / `.msi` |
-            | macOS | Intel | `.dmg` |
-            | macOS | Apple Silicon | `.dmg` |
-            | Linux | x64 | `.deb` / `.AppImage` |
-            
-            ### Web Server (Headless)
-            | OS | Arch | File |
-            |----|------|------|
-            | Linux | x64 | `stockenboard-server-linux-amd64` |
-            | Linux | ARM64 | `stockenboard-server-linux-arm64` |
-            | macOS | Apple Silicon | `stockenboard-server-darwin-arm64` |
-            | Windows | x64 | `stockenboard-server-windows-amd64.exe` |
-            | Docker | multi-arch | `ghcr.io/wing/stockenboard:latest` |
-            
-            ### Web Server 使用方式
-            ```bash
-            # 直接運行
-            SB_PORT=8080 SB_DATA_DIR=./data ./stockenboard-server-linux-amd64
-            
-            # Docker
-            docker run -d -p 8080:8080 -v sb-data:/data ghcr.io/wing/stockenboard:latest
-            ```
+            **Desktop:** Download the installer for your OS below.
+            **Web Server:** Download `stockenboard-server-*` or use Docker: `docker run -p 8080:8080 ghcr.io/wing9897/stockenboard:${{ needs.check-version.outputs.version }}`
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
@@ -142,7 +112,7 @@ jobs:
   # Server Binary — 4 targets (cross-compiled)
   # ═══════════════════════════════════════════════════════════════════════════════
   build-server:
-    needs: [check-version, create-tag]
+    needs: [check-version]
     permissions:
       contents: write
     strategy:
@@ -210,7 +180,7 @@ jobs:
   # Docker Image (multi-arch)
   # ═══════════════════════════════════════════════════════════════════════════════
   build-docker:
-    needs: [check-version, create-tag]
+    needs: [check-version]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -228,6 +198,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Lowercase owner name
+        id: lower
+        run: echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
@@ -235,7 +209,7 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ghcr.io/${{ github.repository_owner }}/stockenboard:latest
-            ghcr.io/${{ github.repository_owner }}/stockenboard:${{ needs.check-version.outputs.version }}
+            ghcr.io/${{ steps.lower.outputs.owner }}/stockenboard:latest
+            ghcr.io/${{ steps.lower.outputs.owner }}/stockenboard:${{ needs.check-version.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

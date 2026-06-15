@@ -7,7 +7,7 @@
 33 データソース対応 | マルチページ管理 | HTTP API | 履歴データ記録
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Release](https://github.com/yourusername/stockenboard/actions/workflows/release.yml/badge.svg)](https://github.com/yourusername/stockenboard/actions/workflows/release.yml)
+[![Release](https://github.com/Wing9897/stockenboard/actions/workflows/release.yml/badge.svg)](https://github.com/Wing9897/stockenboard/actions/workflows/release.yml)
 [![Tauri](https://img.shields.io/badge/Tauri-2.0-24C8DB?logo=tauri)](https://tauri.app/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)
 [![Rust](https://img.shields.io/badge/Rust-1.93-orange?logo=rust)](https://www.rust-lang.org/)
@@ -95,7 +95,7 @@
 
 ### インストール
 
-[Releases](https://github.com/yourusername/StockenBoard/releases) から最新版をダウンロード。
+[Releases](https://github.com/Wing9897/StockenBoard/releases) から最新版をダウンロード。
 
 ### 開発
 
@@ -221,7 +221,7 @@ All market data provided by this software is for informational purposes only and
 
 <div align="center">
 
-**[⭐ Star this project](https://github.com/yourusername/StockenBoard)** if you find it useful!
+**[⭐ Star this project](https://github.com/Wing9897/StockenBoard)** if you find it useful!
 
 Made with ❤️ using Tauri + React + Rust
 

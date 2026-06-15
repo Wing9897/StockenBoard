@@ -166,7 +166,6 @@ pub fn run() {
                     );
                 });
 
-                // 啟動 Event Forwarder（將 AppEvent 轉發到前端 + DB）
                 let db_for_forwarder = core.db.clone();
                 let app_for_forwarder = app.handle().clone();
                 let mut event_rx = core.event_bus.subscribe();
@@ -179,9 +178,7 @@ pub fn run() {
                                     data,
                                     record_symbols,
                                 } => {
-                                    // 轉發到前端
                                     let _ = app_for_forwarder.emit("price-update", &data);
-                                    // 寫入 price_history
                                     if !record_symbols.is_empty() {
                                         let record_set: HashSet<String> =
                                             record_symbols.into_iter().collect();
@@ -256,7 +253,6 @@ pub fn run() {
 
                 app.manage(core.clone());
 
-                // 啟動 Notification Engine
                 let engine_for_start = core.notification_engine.clone();
                 let notification_event_rx = core.event_bus.subscribe();
                 tauri::async_runtime::spawn(async move {
@@ -264,13 +260,11 @@ pub fn run() {
                     engine_for_start.start(notification_event_rx);
                 });
 
-                // 啟動 AI Scheduler（載入所有已啟用的 AI 規則並啟動定期評估）
                 let ai_scheduler_for_start = core.ai_scheduler.clone();
                 tauri::async_runtime::spawn(async move {
                     ai_scheduler_for_start.start().await;
                 });
 
-                // 啟動 API Server (uses the unified api/ module router)
                 let core_for_api = core.clone();
                 tauri::async_runtime::spawn(async move {
                     let enabled = core_for_api

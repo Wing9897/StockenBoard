@@ -87,20 +87,15 @@ impl CoreState {
     /// 7. 建立 AiScheduler
     /// 8. 建立 PollingManager
     pub fn new(data_dir: &Path) -> Result<Self, Box<dyn std::error::Error>> {
-        // 確保 DB schema 一致
         ensure_clean_db(data_dir);
 
-        // 開啟資料庫
         let db_path = data_dir.join("stockenboard.db");
         let db = Arc::new(DbPool::open(&db_path)?);
 
-        // 建立共享 Provider Registry（含 rate limiting）
         let registry = Arc::new(ProviderRegistry::new());
 
-        // 建立 Event Bus（解耦 Polling ↔ DB ↔ 前端）
         let (event_bus, _) = broadcast::channel::<AppEvent>(512);
 
-        // 建立 Global Cooldown（從 DB 讀取設定值，預設 30 秒）
         let cooldown_secs: u64 = db
             .get_setting("notification_global_cooldown")
             .ok()
@@ -109,21 +104,18 @@ impl CoreState {
             .unwrap_or(30);
         let global_cooldown = Arc::new(GlobalCooldown::new(cooldown_secs));
 
-        // 建立 Notification Engine
         let notification_engine = Arc::new(NotificationEngine::new(
             db.clone(),
             event_bus.clone(),
             global_cooldown.clone(),
         ));
 
-        // 建立 AI Scheduler
         let ai_scheduler = Arc::new(
             AiScheduler::new(db.clone())
                 .with_event_bus(event_bus.clone())
                 .with_global_cooldown(global_cooldown.clone()),
         );
 
-        // 建立 Polling Manager
         let polling = PollingManager::new();
 
         Ok(Self {

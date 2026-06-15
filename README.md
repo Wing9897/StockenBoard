@@ -7,7 +7,7 @@
 支援 33 個數據源 | 多頁面管理 | HTTP API | AI 智能通知 | 獨立 Web Server 模式
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Release](https://github.com/nicekid1/stockenboard/actions/workflows/release.yml/badge.svg)](https://github.com/nicekid1/stockenboard/actions/workflows/release.yml)
+[![Release](https://github.com/Wing9897/stockenboard/actions/workflows/release.yml/badge.svg)](https://github.com/Wing9897/stockenboard/actions/workflows/release.yml)
 [![Tauri](https://img.shields.io/badge/Tauri-2.0-24C8DB?logo=tauri)](https://tauri.app/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)
 [![Rust](https://img.shields.io/badge/Rust-1.93-orange?logo=rust)](https://www.rust-lang.org/)
@@ -22,53 +22,14 @@
 
 ### 📊 數據源支援（33 個）
 
-<details>
-<summary><b>加密貨幣交易所（10 個）</b></summary>
-
-- Binance、Coinbase、Kraken、Bybit、KuCoin
-- OKX、Gate.io、Bitfinex、HTX、MEXC
-
-</details>
-
-<details>
-<summary><b>加密貨幣聚合器（4 個）</b></summary>
-
-- CoinGecko、CoinMarketCap、CoinPaprika、CryptoCompare
-
-</details>
-
-<details>
-<summary><b>股票 / 多資產（12 個）</b></summary>
-
-- Yahoo Finance、Finnhub、Alpha Vantage、Polygon
-- Twelve Data、Alpaca、Tiingo、FMP
-- Marketstack、EODHD、Mboum、FCS API
-
-</details>
-
-<details>
-<summary><b>DEX 聚合器（4 個）</b></summary>
-
-- Jupiter（Solana）
-- OKX DEX（多鏈）
-- Raydium（Solana）
-- Subgraph（Uniswap/Sushi/Pancake）
-
-</details>
-
-<details>
-<summary><b>預測市場（2 個）</b></summary>
-
-- Polymarket、Bitquery
-
-</details>
-
-<details>
-<summary><b>多資產聚合器（1 個）</b></summary>
-
-- CoinAPI
-
-</details>
+| 類別 | 數據源 |
+|------|--------|
+| 加密貨幣交易所 | Binance、Coinbase、Kraken、Bybit、KuCoin、OKX、Gate.io、Bitfinex、HTX、MEXC |
+| 加密貨幣聚合器 | CoinGecko、CoinMarketCap、CoinPaprika、CryptoCompare |
+| 股票 / 多資產 | Yahoo Finance、Finnhub、Alpha Vantage、Polygon、Twelve Data、Alpaca、Tiingo、FMP、Marketstack、EODHD、Mboum、FCS API |
+| DEX | Jupiter、OKX DEX、Raydium、Subgraph (Uniswap/Sushi/Pancake) |
+| 預測市場 | Polymarket、Bitquery |
+| 聚合器 | CoinAPI |
 
 ### 🎯 核心功能
 
@@ -82,42 +43,27 @@
 - 🌍 **多語言** - 繁中、簡中、英文、日文、韓文
 - 🔔 **推播通知** - 條件觸發 + AI 智能評估，支援 Telegram Bot 及 Webhook，全局冷卻期防止過度通知
 
-### 🏗️ 技術架構
-
-- **雙模式運行** - Tauri 桌面版 + Standalone Web Server（Docker / 原生）
-- **後端統一 Polling** - Rust 端定時 fetch + 指數退避，前端零 setInterval
-- **細粒度訂閱** - 每張卡片只在自己的價格變化時 re-render
-- **頁面感知** - 只為可見訂閱發送 API 請求，節省資源
-- **單例資料庫** - 全局共享 SQLite 連接，避免鎖定問題
-- **AI 通知引擎** - 支援本地 Ollama 或 OpenAI-compatible API，定期分析價格歷史
-
 ---
 
 ## 🚀 快速開始
 
 ### 桌面版安裝
 
-從 [Releases](https://github.com/nicekid1/StockenBoard/releases) 下載最新版本（Windows / macOS / Linux）。
+從 [Releases](https://github.com/Wing9897/StockenBoard/releases) 下載最新版本（Windows / macOS / Linux）。
 
 ### 🌐 Web Server 模式（無需 GUI）
 
 StockenBoard 支援獨立 Web Server 模式，無需桌面環境即可運行：
 
 ```bash
-# 使用 Docker
-docker run -p 8080:8080 -v stockenboard-data:/data ghcr.io/nicekid1/stockenboard:latest
+# Docker（最簡單）
+docker run -p 8080:8080 ghcr.io/wing9897/stockenboard:latest
 
-# 或直接執行二進位檔
-SB_PORT=8080 SB_DATA_DIR=./data ./stockenboard-server
+# 或直接執行
+./stockenboard-server
 ```
 
-**環境變數：**
-| 變數 | 預設值 | 說明 |
-|------|--------|------|
-| `SB_BIND` | `0.0.0.0` | 綁定地址 |
-| `SB_PORT` | `8080` | HTTP 端口 |
-| `SB_DATA_DIR` | `./data` | 資料目錄 |
-| `SB_STATIC_DIR` | `./static` | 前端靜態檔案路徑 |
+預設監聽 `0.0.0.0:8080`，資料存放於 `./data`。可透過環境變數覆蓋：`SB_PORT`、`SB_BIND`、`SB_DATA_DIR`。
 
 ### 開發
 
@@ -129,51 +75,43 @@ npm install
 npm run tauri dev
 
 # 啟動 Web Server 開發模式
-cd src-tauri && cargo run --no-default-features --features server --bin server
+npm run server:dev
+```
 
-# 建置桌面版
+### 建置
+
+```bash
+# 桌面版
 npm run tauri build
 
-# 建置 Web Server
-cd src-tauri && cargo build --no-default-features --features server --release --bin server
+# Web Server（當前平台）
+npm run server:build
+
+# Docker
+npm run docker:build
+```
+
+> 跨平台 build：`npm run server:build:linux-x64` / `server:build:mac-arm64` / `server:build:win-x64`
+
+### 測試
+
+```bash
+npm run test:all    # 前端 + Rust 全部
+npm run lint        # TypeScript + i18n + Clippy
 ```
 
 ---
 
 ## 🔌 HTTP API
 
-StockenBoard 提供完整 REST API，供 AI、自動化腳本或第三方應用程式存取數據。
-
-### 核心端點
-
-| 端點 | 方法 | 說明 |
-|------|------|------|
-| `/api/system/config` | GET | 系統配置 |
-| `/api/subscriptions` | GET/POST | 訂閱列表 / 新增訂閱 |
-| `/api/subscriptions/{id}` | PUT/DELETE | 更新 / 刪除訂閱 |
-| `/api/prices/cached` | GET | 所有最新快取價格 |
-| `/api/prices/fetch/{provider}/{symbol}` | GET | 即時抓取特定價格 |
-| `/api/history/{sub_id}` | GET | 歷史數據查詢 |
-| `/api/providers` | GET | 所有數據源資訊 |
-| `/api/providers/{id}` | PUT | 更新數據源設定 |
-| `/api/notifications/rules` | GET/POST | 通知規則 CRUD |
-| `/api/notifications/channels` | GET/POST | 通知通道管理 |
-| `/api/notifications/history` | GET | 通知觸發歷史 |
-| `/api/ai/config` | GET/POST | AI Provider 設定 |
-| `/api/ai/test` | POST | 測試 AI 連線 |
-| `/api/ws` | WebSocket | 即時價格推播 |
-
-### 快速範例
+StockenBoard 提供完整 REST API + WebSocket，供 AI、自動化腳本或第三方應用程式存取。
 
 ```python
 import requests
-
 BASE = "http://localhost:8080"
 
 # 獲取所有快取價格
 prices = requests.get(f"{BASE}/api/prices/cached").json()
-for key, p in prices['data'].items():
-    print(f"{p['symbol']}: ${p['price']}")
 
 # 新增訂閱
 requests.post(f"{BASE}/api/subscriptions", json={
@@ -181,15 +119,14 @@ requests.post(f"{BASE}/api/subscriptions", json={
     "asset_type": "crypto", "sub_type": "asset"
 })
 
-# 設定 AI 通知（搭配本地 Ollama）
+# 設定 AI 通知（搭配 Ollama）
 requests.post(f"{BASE}/api/ai/config", json={
     "base_url": "http://localhost:11434/v1",
-    "model": "qwen2.5:3b",
-    "api_key": None
+    "model": "qwen2.5:3b", "api_key": None
 })
 ```
 
-> 💡 **提示**：桌面版 API 端口可在設定頁面修改。Web Server 模式透過 `SB_PORT` 環境變數設定。
+主要端點：`/api/prices/cached`、`/api/subscriptions`、`/api/history/{id}`、`/api/notifications/rules`、`/api/ai/config`、`/api/ws`（WebSocket）。完整文檔見應用內「設定 → API 使用說明」。
 
 ---
 
@@ -228,7 +165,10 @@ StockenBoard/
 │       ├── core_state.rs   # 共享核心狀態
 │       ├── icons.rs        # Logo 批量下載邏輯
 │       └── polling.rs      # 統一 Polling + 指數退避
-└── check_i18n.js           # i18n 完整性檢查
+└── scripts/
+    ├── build-server.mjs    # Server 建置腳本
+    ├── bump-version.mjs    # 版本號更新腳本
+    └── check-i18n.js       # i18n 完整性檢查
 ```
 
 ---
@@ -271,7 +211,7 @@ All market data provided by this software is for informational purposes only and
 
 <div align="center">
 
-**[⭐ Star this project](https://github.com/nicekid1/StockenBoard)** if you find it useful!
+**[⭐ Star this project](https://github.com/Wing9897/StockenBoard)** if you find it useful!
 
 Made with ❤️ using Tauri + React + Rust
 
