@@ -20,6 +20,18 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: (...args: unknown[]) => mockTauriInvoke(...args),
 }));
 
+// --- Mock webFileOps to prevent file-picker hangs in tests ---
+vi.mock('./webFileOps', () => ({
+  webModeHandlers: {
+    set_icon: vi.fn().mockResolvedValue({ path: '/icons/test.png' }),
+    export_file: vi.fn().mockResolvedValue(undefined),
+    import_file: vi.fn().mockResolvedValue('{"imported":"data"}'),
+  },
+}));
+
+// --- Commands intercepted by web mode handlers (never reach HTTP fetch) ---
+const WEB_MODE_COMMANDS = ['set_icon', 'export_file', 'import_file'];
+
 // --- Known command names from the route map ---
 const KNOWN_COMMANDS = [
   'list_all_subscriptions',
@@ -96,6 +108,23 @@ const argsArb = fc.record({
   view_id: fc.string({ minLength: 1, maxLength: 20 }),
   sub_id: fc.string({ minLength: 1, maxLength: 20 }),
   name: fc.string({ minLength: 0, maxLength: 30 }),
+  // camelCase fields used by fixed route mappers
+  subType: fc.constantFrom('asset', 'dex', 'stock', 'crypto'),
+  viewType: fc.constantFrom('asset', 'dex'),
+  providerId: fc.string({ minLength: 1, maxLength: 15 }),
+  viewId: fc.string({ minLength: 1, maxLength: 20 }),
+  subscriptionId: fc.string({ minLength: 1, maxLength: 20 }),
+  apiKey: fc.string({ minLength: 1, maxLength: 20 }),
+  fromHour: fc.integer({ min: 0, max: 23 }),
+  toHour: fc.integer({ min: 0, max: 23 }),
+  enabled: fc.boolean(),
+  items: fc.array(
+    fc.record({
+      subType: fc.constantFrom('asset', 'dex'),
+      symbol: fc.string({ minLength: 1, maxLength: 10 }),
+    }),
+    { minLength: 1, maxLength: 3 }
+  ),
 });
 
 describe('Property 5: Transport layer routing correctness', () => {
@@ -155,12 +184,24 @@ describe('Property 5: Transport layer routing correctness', () => {
 
     const transport = createTransport();
 
+    // Only test commands that are NOT intercepted by web mode handlers
+    const httpCommandArb = fc.constantFrom(
+      ...KNOWN_COMMANDS.filter(c => !WEB_MODE_COMMANDS.includes(c))
+    );
+
     await fc.assert(
-      fc.asyncProperty(commandArb, argsArb, async (command, args) => {
+      fc.asyncProperty(httpCommandArb, argsArb, async (command, args) => {
+        const { method, path, body, extractField } = mapCommandToHttp(command, args);
+
+        // Construct mock response data that handles extractField
+        const mockData = extractField
+          ? { [extractField]: 'test_value' }
+          : { fetched: true };
+
         mockFetch.mockResolvedValue({
           ok: true,
           status: 200,
-          json: () => Promise.resolve({ data: { fetched: true } }),
+          json: () => Promise.resolve({ data: mockData }),
           text: () => Promise.resolve(''),
         });
 
@@ -170,7 +211,6 @@ describe('Property 5: Transport layer routing correctness', () => {
         expect(mockFetch).toHaveBeenCalled();
 
         // Verify the fetch URL and method match mapCommandToHttp output
-        const { method, path, body } = mapCommandToHttp(command, args);
         const lastCall = mockFetch.mock.calls[mockFetch.mock.calls.length - 1];
         const fetchUrl = lastCall[0] as string;
         const fetchOptions = lastCall[1] as RequestInit;
@@ -187,7 +227,11 @@ describe('Property 5: Transport layer routing correctness', () => {
         }
 
         // The result should be unwrapped from the response envelope
-        expect(result).toEqual({ fetched: true });
+        if (extractField) {
+          expect(result).toBe('test_value');
+        } else {
+          expect(result).toEqual({ fetched: true });
+        }
       }),
       { numRuns: 100 },
     );
@@ -223,8 +267,13 @@ describe('Property 5: Transport layer routing correctness', () => {
 
     const transport = createTransport();
 
+    // Only test commands that are NOT intercepted by web mode handlers
+    const httpCommandArb = fc.constantFrom(
+      ...KNOWN_COMMANDS.filter(c => !WEB_MODE_COMMANDS.includes(c))
+    );
+
     await fc.assert(
-      fc.asyncProperty(commandArb, argsArb, async (command, args) => {
+      fc.asyncProperty(httpCommandArb, argsArb, async (command, args) => {
         mockTauriInvoke.mockClear();
         mockFetch.mockResolvedValue({
           ok: true,

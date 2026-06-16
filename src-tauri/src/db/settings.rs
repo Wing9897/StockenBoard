@@ -36,6 +36,7 @@ impl DbPool {
         base_url: &str,
         model: &str,
         api_key: Option<&str>,
+        disable_thinking: bool,
     ) -> Result<(), String> {
         // 驗證必要欄位
         if base_url.trim().is_empty() {
@@ -69,6 +70,12 @@ impl DbPool {
             params![encrypted_key],
         )
         .map_err(|e| format!("Failed to save ai_api_key: {}", e))?;
+
+        conn.execute(
+            "INSERT INTO app_settings (key, value) VALUES ('ai_disable_thinking', ?1) ON CONFLICT(key) DO UPDATE SET value = ?1",
+            params![if disable_thinking { "1" } else { "0" }],
+        )
+        .map_err(|e| format!("Failed to save ai_disable_thinking: {}", e))?;
 
         Ok(())
     }
@@ -126,6 +133,17 @@ impl DbPool {
             base_url,
             model,
             api_key,
+            disable_thinking: {
+                let val: Option<String> = conn
+                    .query_row(
+                        "SELECT value FROM app_settings WHERE key = 'ai_disable_thinking'",
+                        [],
+                        |row| row.get(0),
+                    )
+                    .ok();
+                // Default to true (disabled) if not set
+                val.map(|v| v != "0").unwrap_or(true)
+            },
         }))
     }
 

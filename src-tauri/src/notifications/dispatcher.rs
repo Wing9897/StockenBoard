@@ -100,6 +100,20 @@ pub async fn dispatch_notification(
                     serde_json::to_string(&build_webhook_payload(data)).unwrap_or_default();
                 (send_result, payload_str)
             }
+            ChannelType::Local => {
+                // Local channel: no external HTTP call needed.
+                // Format the message and return Ok — history is recorded by the
+                // shared record_history path below.
+                let message = format!("[{}] {} @ ${}", data.symbol, data.rule_name, data.price);
+                (Ok(()), message)
+            }
+            ChannelType::System => {
+                // System notification: uses OS native notification.
+                // The actual OS notification is sent via the event bus (handled by the frontend/Tauri layer).
+                // Here we just format and succeed — the notification engine emits the event upstream.
+                let message = format!("[{}] {} @ ${}", data.symbol, data.rule_name, data.price);
+                (Ok(()), message)
+            }
         };
 
         let (send_result, message) = result;

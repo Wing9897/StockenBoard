@@ -1,7 +1,7 @@
 import { getTransport } from './transport';
 import { STORAGE_KEYS } from './storageKeys';
 
-export type ThemeEntry = {
+type ThemeEntry = {
   id: string;
   name: string;
   colors: string[];

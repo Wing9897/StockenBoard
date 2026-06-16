@@ -72,26 +72,26 @@ docker run -p 8080:8080 ghcr.io/wing9897/stockenboard:latest
 npm install
 
 # 啟動桌面開發模式
-npm run tauri dev
+npm run dev:desktop
 
 # 啟動 Web Server 開發模式
-npm run server:dev
+npm run dev:server
 ```
 
 ### 建置
 
 ```bash
 # 桌面版
-npm run tauri build
+npm run build:desktop
 
 # Web Server（當前平台）
-npm run server:build
+npm run build:server
 
 # Docker
 npm run docker:build
 ```
 
-> 跨平台 build：`npm run server:build:linux-x64` / `server:build:mac-arm64` / `server:build:win-x64`
+> 跨平台 build：`npm run build:server:linux-x64` / `build:server:mac-arm64` / `build:server:win-x64`
 
 ### 測試
 

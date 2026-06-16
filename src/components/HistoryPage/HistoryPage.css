@@ -27,11 +27,11 @@
 .hseg.lg button { padding: 5px 14px; font-size: 12px; }
 
 /* 全頁空狀態 */
-.history-full-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--subtext0); font-size: 15px; }
+.history-full-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--subtext0); font-size: 14px; }
 .history-empty-icon { font-size: 36px; opacity: 0.5; }
 
 /* Sidebar */
-.history-sidebar { width: 250px; min-width: 210px; display: flex; flex-direction: column; gap: 8px; overflow: hidden; padding: 12px; }
+.history-sidebar { width: 250px; min-width: 210px; display: flex; flex-direction: column; gap: 8px; overflow: hidden; padding: 12px; border-right: 1px solid var(--surface0); }
 .history-sidebar-header { display: flex; align-items: center; gap: 6px; }
 .history-sidebar-title { font-size: 13px; font-weight: 600; color: var(--text); letter-spacing: 0.3px; }
 .history-recording-badge { font-size: 10px; color: var(--green); font-weight: 500; margin-right: auto; }
@@ -119,7 +119,7 @@
 
 /* 圖表 */
 .history-chart-wrapper { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 300px; }
-.history-chart-container { flex: 1; overflow: hidden; position: relative; min-height: 0; }
+.history-chart-container { flex: 1; overflow: hidden; position: relative; min-height: 300px; }
 
 /* 表格 */
 .history-table-container { flex: 1; overflow: auto; }
@@ -139,3 +139,20 @@
 .history-hours-hint { font-size: 9px; color: var(--overlay0); }
 
 .history-hours-hint.priority { color: var(--teal); font-weight: 500; }
+
+/* ===== Unattended Label ===== */
+.history-unattended-label { font-size: 12px; color: var(--text); user-select: none; font-weight: 500; }
+
+/* ===== Toolbar Responsive ===== */
+@media (max-width: 899px) {
+  .history-toolbar-row { flex-wrap: wrap; gap: 10px; }
+}
+@media (min-width: 900px) {
+  .history-toolbar-row { flex-wrap: nowrap; gap: 10px; }
+}
+
+/* ===== Status Indicator ===== */
+.history-unattended-status { display: flex; align-items: center; gap: 6px; padding: 4px 0; pointer-events: none; }
+.history-status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--overlay0); flex-shrink: 0; transition: background var(--transition-fast); }
+.history-status-dot.active { background: var(--green); }
+.history-unattended-status .history-unattended-label { font-size: 11px; color: var(--subtext0); font-weight: 400; }

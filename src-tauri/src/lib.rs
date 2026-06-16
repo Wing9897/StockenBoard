@@ -17,7 +17,7 @@ use commands::{
     delete_subscription_history, delete_view, download_logos, enable_provider, export_data,
     export_file, fetch_asset_price, fetch_multiple_prices, get_ai_provider_config, get_all_providers,
     get_api_enabled, get_api_port, get_cached_prices, get_data_dir, get_history_stats,
-    get_icons_dir, get_notification_global_cooldown, get_notification_history, get_poll_ticks,
+    get_icons_dir, get_notification_global_cooldown, get_notification_history, get_poll_ticks, open_icons_folder,
     get_price_history, get_theme_bg_path, get_unattended_polling, get_view_sub_counts,
     get_view_subscription_ids, has_api_key, import_data, import_file, list_all_subscriptions,
     list_notification_channels, list_notification_rules,
@@ -52,6 +52,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             // 注意：部分指令目前前端尚未呼叫（如 enable_provider、get_unattended_polling、
             // remove_icon、set_provider_record_hours、get_history_stats），屬刻意保留的 IPC 介面：
@@ -98,6 +99,7 @@ pub fn run() {
             set_icon,
             remove_icon,
             get_icons_dir,
+            open_icons_folder,
             download_logos,
             read_local_file_base64,
             // Theme
@@ -147,18 +149,32 @@ pub fn run() {
             list_ai_models,
         ])
         .setup(|app| {
-            if let Ok(app_dir) = app.path().app_data_dir() {
+            // Portable data directory: use SB_DATA_DIR env var if set,
+            // otherwise fall back to `./data` relative to current working directory.
+            // This ensures the same path in dev mode, release build, and server mode.
+            let data_dir = std::env::var("SB_DATA_DIR")
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|_| std::path::PathBuf::from("./data"));
+
+            {
                 // Build unified CoreState (handles DB, registry, event bus, etc.)
-                let core = CoreState::new(&app_dir)
+                let core = CoreState::new(&data_dir)
                     .expect("Failed to initialize CoreState");
                 let core = Arc::new(core);
 
                 // Start polling inside async context so tokio::spawn works
                 let polling_ref = core.polling.clone();
                 let db_for_polling = core.db.clone();
+                let db_for_unattended = core.db.clone();
                 let registry_for_polling = core.registry.clone();
                 let event_bus_for_polling = core.event_bus.clone();
                 tauri::async_runtime::spawn(async move {
+                    // Auto-set unattended based on active recordings at startup
+                    let active_count = db_for_unattended.count_active_recordings().unwrap_or(0);
+                    if active_count > 0 {
+                        polling_ref.set_unattended(true).await;
+                    }
+
                     polling_ref.start(
                         db_for_polling,
                         registry_for_polling,
@@ -241,6 +257,19 @@ pub fn run() {
                                 AppEvent::NotificationTriggered(payload) => {
                                     let _ = app_for_forwarder
                                         .emit("notification-triggered", &payload);
+                                }
+                                AppEvent::SystemNotification { title, body } => {
+                                    use tauri_plugin_notification::NotificationExt;
+                                    let _ = app_for_forwarder
+                                        .notification()
+                                        .builder()
+                                        .title(&title)
+                                        .body(&body)
+                                        .show();
+                                }
+                                AppEvent::LogoDownloadProgress(progress) => {
+                                    let _ = app_for_forwarder
+                                        .emit("logo-download-progress", &progress);
                                 }
                             },
                             Err(broadcast::error::RecvError::Lagged(n)) => {

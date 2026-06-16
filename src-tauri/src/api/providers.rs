@@ -42,15 +42,23 @@ pub struct UpsertProviderSettingsBody {
     pub record_to_hour: Option<i64>,
 }
 
+/// Body for `PUT /provider-settings/:id/record-hours`
+#[derive(Debug, Deserialize)]
+pub struct SetProviderRecordHoursBody {
+    pub from_hour: Option<i64>,
+    pub to_hour: Option<i64>,
+}
+
 // ─── Router ─────────────────────────────────────────────────────────────────────
 
 pub fn router() -> Router<Arc<CoreState>> {
     Router::new()
         .route("/providers", get(list_providers))
-        .route("/providers/{id}/enable", post(enable_provider))
+        .route("/providers/:id/enable", post(enable_provider))
         .route("/provider-settings", get(list_settings))
-        .route("/provider-settings/{id}", put(upsert_settings))
-        .route("/provider-settings/{id}/has-key", get(has_key))
+        .route("/provider-settings/:id", put(upsert_settings))
+        .route("/provider-settings/:id/has-key", get(has_key))
+        .route("/provider-settings/:id/record-hours", put(set_provider_record_hours))
 }
 
 // ─── Handlers ───────────────────────────────────────────────────────────────────
@@ -144,5 +152,17 @@ async fn has_key(
     Path(id): Path<String>,
 ) -> impl axum::response::IntoResponse {
     let exists = state.db.has_api_key(&id);
-    ApiResponse::ok(serde_json::json!({ "has_key": exists }))
+    ApiResponse::ok(exists)
+}
+
+/// `PUT /provider-settings/:id/record-hours` — set recording hours for a provider.
+async fn set_provider_record_hours(
+    State(state): State<Arc<CoreState>>,
+    Path(id): Path<String>,
+    Json(body): Json<SetProviderRecordHoursBody>,
+) -> impl axum::response::IntoResponse {
+    match state.db.set_provider_record_hours(&id, body.from_hour, body.to_hour) {
+        Ok(()) => Ok(ApiResponse::ok(serde_json::json!({ "success": true }))),
+        Err(e) => Err(ApiError::internal(e)),
+    }
 }

@@ -94,6 +94,19 @@ impl NotificationEngine {
                                 )
                                 .await;
 
+                                // If the rule has a system channel, emit OS notification event
+                                if let Ok(channels) = db.list_notification_channels() {
+                                    let has_system = rule.channel_ids.iter().any(|cid| {
+                                        channels.iter().any(|ch| ch.id == *cid && ch.channel_type == "system")
+                                    });
+                                    if has_system {
+                                        let _ = event_bus.send(AppEvent::SystemNotification {
+                                            title: format!("StockenBoard — {}", notif_data.rule_name),
+                                            body: format!("{} @ ${}", notif_data.symbol, notif_data.price),
+                                        });
+                                    }
+                                }
+
                                 // 發布觸發事件供前端側欄即時顯示（閾值規則，非 AI）
                                 let _ = event_bus.send(AppEvent::NotificationTriggered(
                                     NotificationTriggeredPayload {

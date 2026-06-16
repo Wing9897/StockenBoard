@@ -26,9 +26,11 @@ export function HistoryChart({ records, session }: HistoryChartProps) {
     return r.price;
   }, [session]);
 
-  const chartData = useMemo(() =>
-    records.map(r => ({ time: (r.recorded_at + TZ_OFFSET_SEC) as Time, value: getPrice(r) })),
-  [records, getPrice]);
+  const chartData = useMemo(() => {
+    // Backend returns records in DESC order; lightweight-charts requires ASC.
+    const sorted = [...records].sort((a, b) => a.recorded_at - b.recorded_at);
+    return sorted.map(r => ({ time: (r.recorded_at + TZ_OFFSET_SEC) as Time, value: getPrice(r) }));
+  }, [records, getPrice]);
 
   const chartColor = useCallback(() => {
     const cs = getComputedStyle(document.documentElement);
@@ -45,8 +47,10 @@ export function HistoryChart({ records, session }: HistoryChartProps) {
 
     const el = chartRef.current;
     const cs = getComputedStyle(document.documentElement);
+    const width = el.clientWidth || 600;
+    const height = el.clientHeight || 300;
     const chart = createChart(el, {
-      width: el.clientWidth, height: el.clientHeight,
+      width, height,
       layout: { background: { color: 'transparent' }, textColor: cs.getPropertyValue('--subtext0').trim() || 'gray' },
       grid: { vertLines: { color: 'rgba(128,128,128,0.1)' }, horzLines: { color: 'rgba(128,128,128,0.1)' } },
       timeScale: { timeVisible: true, secondsVisible: false },
@@ -57,7 +61,21 @@ export function HistoryChart({ records, session }: HistoryChartProps) {
     s.setData(chartData);
     chart.timeScale().fitContent();
 
-    const ro = new ResizeObserver(() => chart.applyOptions({ width: el.clientWidth, height: el.clientHeight }));
+    // Ensure chart redraws after layout settles (fixes initial render with invisible data)
+    requestAnimationFrame(() => {
+      if (chartApi.current === chart) {
+        const w = el.clientWidth || 600;
+        const h = el.clientHeight || 300;
+        chart.applyOptions({ width: w, height: h });
+        chart.timeScale().fitContent();
+      }
+    });
+
+    const ro = new ResizeObserver(() => {
+      const w = el.clientWidth || 600;
+      const h = el.clientHeight || 300;
+      chart.applyOptions({ width: w, height: h });
+    });
     ro.observe(el);
     return () => { ro.disconnect(); chart.remove(); chartApi.current = null; };
   }, [chartData, chartColor]);

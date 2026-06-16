@@ -4,7 +4,7 @@
 
 **Real-time Stock & Cryptocurrency Dashboard**
 
-33 Data Sources | Multi-page Management | HTTP API | Historical Data Recording
+33 Data Sources | AI Notifications | Desktop & Web Server | Docker | Historical Charts
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Release](https://github.com/Wing9897/stockenboard/actions/workflows/release.yml/badge.svg)](https://github.com/Wing9897/stockenboard/actions/workflows/release.yml)
@@ -95,7 +95,10 @@ English | [繁體中文](README.md) | [简体中文](README.zh-CN.md) | [日本�
 
 ### Installation
 
-Download the latest version from [Releases](https://github.com/Wing9897/StockenBoard/releases).
+Download the latest version from [Releases](https://github.com/Wing9897/StockenBoard/releases):
+- **Desktop**: Download the installer for your OS (Windows/macOS/Linux)
+- **Web Server**: Download `stockenboard-server-*` binary
+- **Docker**: `docker run -d -p 8080:8080 -v stockenboard-data:/data ghcr.io/wing9897/stockenboard:latest`
 
 ### Development
 
@@ -103,48 +106,68 @@ Download the latest version from [Releases](https://github.com/Wing9897/StockenB
 # Install dependencies
 npm install
 
-# Start development mode
-npm run tauri dev
+# Start desktop development mode
+npm run dev:desktop
 
-# Build
-npm run tauri build
+# Start web server development mode
+npm run dev:server
+
+# Build desktop
+npm run build:desktop
+
+# Build web server (cross-platform)
+npm run build:server              # current platform
+npm run build:server:linux-x64    # Linux x86_64
+npm run build:server:mac-arm64    # macOS ARM64
+npm run build:server:win-x64      # Windows x86_64
+
+# Run all tests
+npm run test:all
 ```
 
 ---
 
 ## 🔌 HTTP API
 
-StockenBoard provides HTTP API for external programs (e.g., AI, Python scripts) to access data.
+StockenBoard provides a full REST API + WebSocket for AI, automation scripts, or third-party applications.
 
-### Endpoints
+### Main Endpoints
 
 | Endpoint | Description |
 |----------|-------------|
-| `GET /api/status` | System status |
+| `GET /api/prices/cached` | All latest cached prices |
 | `GET /api/subscriptions` | All subscriptions |
-| `GET /api/prices` | All latest prices |
-| `GET /api/prices/{provider}/{symbol}` | Specific price |
-| `GET /api/history` | Historical data query |
+| `POST /api/subscriptions` | Add subscription |
+| `GET /api/history/{id}` | Price history for a subscription |
+| `POST /api/history/cleanup` | Clean up old history records |
+| `GET /api/notifications/rules` | Notification rules |
+| `POST /api/ai/config` | Configure AI provider |
+| `POST /api/ai/test` | Test AI connection |
+| `GET /api/ws` | WebSocket real-time updates |
 
 ### Quick Example
 
 ```python
 import requests
+BASE = "http://localhost:8080"
 
-# Get all prices
-prices = requests.get("http://localhost:8080/api/prices").json()
-for p in prices['prices']:
-    print(f"{p['symbol']}: ${p['price']}")
+# Get all cached prices
+prices = requests.get(f"{BASE}/api/prices/cached").json()
 
-# Get historical data
-history = requests.get("http://localhost:8080/api/history", params={
-    "symbol": "BTCUSDT",
-    "provider": "binance",
-    "limit": 1000
-}).json()
+# Add a subscription
+requests.post(f"{BASE}/api/subscriptions", json={
+    "symbol": "ETH", "provider_id": "binance",
+    "asset_type": "crypto", "sub_type": "asset"
+})
+
+# Configure AI notifications (with Ollama)
+requests.post(f"{BASE}/api/ai/config", json={
+    "base_url": "http://localhost:11434/v1",
+    "model": "qwen2.5:7b", "api_key": None
+})
 ```
 
-> 💡 **Tip**: API port can be modified in "Settings → API Guide" within the application. See that page for detailed documentation and more examples.
+> 💡 **Tip**: API port can be modified in "Settings → API Guide". See that page for detailed documentation and more examples.
 
 ---
 
@@ -154,10 +177,12 @@ history = requests.get("http://localhost:8080/api/history", params={
 |----------|------------|
 | **Frontend** | React 19 + TypeScript 5.8 + Vite 7 |
 | **Backend** | Tauri 2 + Rust 1.93 |
-| **Database** | SQLite (tauri-plugin-sql) |
+| **Database** | SQLite (rusqlite) |
 | **API** | Axum 0.7 + Tower |
 | **Charts** | lightweight-charts 5.1 |
+| **AI** | OpenAI-compatible API (Ollama, OpenAI, OpenRouter) |
 | **Theme** | Catppuccin Mocha |
+| **Deploy** | Desktop (Tauri) / Web Server / Docker |
 
 ---
 
@@ -165,20 +190,24 @@ history = requests.get("http://localhost:8080/api/history", params={
 
 ```
 StockenBoard/
-├── src/                    # Frontend code
+├── src/                    # Frontend (React + TypeScript)
 │   ├── components/         # React components
 │   ├── hooks/              # Custom hooks
-│   ├── lib/                # Utilities and i18n
+│   ├── lib/                # Utilities, i18n, transport layer
 │   └── types/              # TypeScript type definitions
-├── src-tauri/              # Backend code
+├── src-tauri/              # Backend (Rust)
 │   └── src/
+│       ├── api/            # HTTP REST API (Axum routes)
+│       ├── commands/       # Tauri IPC commands
+│       ├── db/             # SQLite database layer
+│       ├── notifications/  # AI evaluator, engine, scheduler, Telegram/Webhook
 │       ├── providers/      # 33 data source implementations
-│       ├── api_server.rs   # HTTP API Server
+│       ├── bin/server.rs   # Standalone web server entry point
 │       ├── polling.rs      # Unified polling manager
-│       ├── commands.rs     # Tauri commands
-│       └── db.rs           # Database schema
-├── test_api.py             # API test script
-└── example_ai_usage.py     # AI usage example
+│       └── core_state.rs   # Shared application state
+├── scripts/                # Build & utility scripts
+├── data/                   # Runtime data (DB, icons)
+└── .github/workflows/      # CI/CD (cross-platform builds)
 ```
 
 ---

@@ -51,7 +51,7 @@ pub async fn create_notification_rule(
 
     let channel_ids_json = serde_json::to_string(&rule.channel_ids)
         .map_err(|e| format!("Failed to serialize channel_ids: {}", e))?;
-    let cooldown = rule.cooldown_secs.unwrap_or(300) as i64;
+    let cooldown = rule.cooldown_secs.unwrap_or(0) as i64;
     let ai_config_json = rule
         .ai_config
         .as_ref()
@@ -256,12 +256,20 @@ pub async fn delete_notification_channel(
     state: tauri::State<'_, Arc<CoreState>>,
     id: i64,
 ) -> Result<(), String> {
+    // Prevent deletion of the built-in local and system channels
+    let channels = state.db.list_notification_channels()?;
+    if let Some(ch) = channels.iter().find(|c| c.id == id) {
+        if ch.channel_type == "local" || ch.channel_type == "system" {
+            return Err("Cannot delete the built-in notification channel".to_string());
+        }
+    }
     state.db.delete_notification_channel(id)
 }
 
 #[tauri::command]
 pub async fn test_notification_channel(
     state: tauri::State<'_, Arc<CoreState>>,
+    app: tauri::AppHandle,
     id: i64,
 ) -> Result<(), String> {
     let channels = state.db.list_notification_channels()?;
@@ -304,6 +312,35 @@ pub async fn test_notification_channel(
             };
             crate::notifications::webhook::send_webhook(&client, &config, &test_data).await
         }
+        "local" => {
+            // Emit a test notification event to the frontend
+            use tauri::Emitter;
+            let payload = crate::events::NotificationTriggeredPayload {
+                rule_name: "Test Notification".to_string(),
+                symbol: "TEST/USD".to_string(),
+                provider: "test".to_string(),
+                price: 0.0,
+                condition_type: "price_above".to_string(),
+                threshold: 0.0,
+                triggered_at: chrono::Utc::now().timestamp(),
+                is_ai: false,
+                ai_reason: None,
+            };
+            app.emit("notification-triggered", &payload)
+                .map_err(|e| format!("Failed to emit test notification: {}", e))?;
+            Ok(())
+        }
+        "system" => {
+            // Send a native OS notification
+            use tauri_plugin_notification::NotificationExt;
+            app.notification()
+                .builder()
+                .title("StockenBoard")
+                .body("🔔 Test system notification — working correctly!")
+                .show()
+                .map_err(|e| format!("Failed to send system notification: {}", e))?;
+            Ok(())
+        }
         _ => Err(format!("Unsupported channel type: {}", channel.channel_type)),
     }
 }
@@ -331,10 +368,11 @@ pub async fn save_ai_provider_config(
     base_url: String,
     model: String,
     api_key: Option<String>,
+    disable_thinking: Option<bool>,
 ) -> Result<(), String> {
     state
         .db
-        .save_ai_provider_config(&base_url, &model, api_key.as_deref())?;
+        .save_ai_provider_config(&base_url, &model, api_key.as_deref(), disable_thinking.unwrap_or(true))?;
     state.ai_scheduler.reload().await;
     Ok(())
 }
@@ -349,39 +387,67 @@ pub async fn get_ai_provider_config(
             base_url: c.base_url,
             model: c.model,
             has_api_key: c.api_key.is_some(),
+            disable_thinking: c.disable_thinking,
         }),
     )
 }
 
 #[tauri::command]
-pub async fn test_ai_connection(state: tauri::State<'_, Arc<CoreState>>) -> Result<String, String> {
-    // 1. Load AI provider config from DB
-    let config = state
-        .db
-        .load_ai_provider_config()?
-        .ok_or_else(|| "AI provider not configured, please set base_url and model first".to_string())?;
+pub async fn test_ai_connection(
+    state: tauri::State<'_, Arc<CoreState>>,
+    base_url: Option<String>,
+    model: Option<String>,
+    api_key: Option<String>,
+) -> Result<String, String> {
+    // 1. Determine config: use provided values or fall back to DB
+    let db_config = state.db.load_ai_provider_config()?;
+
+    let effective_base_url = base_url
+        .filter(|u| !u.is_empty())
+        .or_else(|| db_config.as_ref().map(|c| c.base_url.clone()))
+        .ok_or_else(|| "No base_url provided and none saved".to_string())?;
+
+    let effective_model = model
+        .filter(|m| !m.is_empty())
+        .or_else(|| db_config.as_ref().map(|c| c.model.clone()))
+        .ok_or_else(|| "No model provided and none saved".to_string())?;
+
+    let effective_api_key = api_key
+        .filter(|k| !k.is_empty())
+        .or_else(|| db_config.and_then(|c| c.api_key));
 
     // 2. Build the test request URL
-    let url = format!("{}/chat/completions", config.base_url.trim_end_matches('/'));
+    let url = format!("{}/chat/completions", effective_base_url.trim_end_matches('/'));
 
-    // 3. Build the request body
+    // 3. Build a test prompt that validates JSON output capability
+    //    Use response_format to force JSON mode and reasoning_effort "none" to disable thinking
     let body = serde_json::json!({
-        "model": config.model,
-        "messages": [{"role": "user", "content": "Hello"}],
-        "max_tokens": 5
+        "model": effective_model,
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are a JSON output validator. Respond ONLY with valid JSON."
+            },
+            {
+                "role": "user",
+                "content": "Respond with exactly this JSON: {\"trigger\": false, \"reason\": \"test\"}"
+            }
+        ],
+        "max_tokens": 50,
+        "response_format": {"type": "json_object"},
+        "reasoning_effort": "none"
     });
 
-    // 4. Create HTTP client with 10s timeout and send request
+    // 4. Create HTTP client with 15s timeout and send request
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(15))
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
     let mut request = client.post(&url).json(&body);
 
-    // Include Authorization header if api_key is set
-    if let Some(ref api_key) = config.api_key {
-        request = request.header("Authorization", format!("Bearer {}", api_key));
+    if let Some(ref key) = effective_api_key {
+        request = request.header("Authorization", format!("Bearer {}", key));
     }
 
     let response = request
@@ -400,18 +466,56 @@ pub async fn test_ai_connection(state: tauri::State<'_, Arc<CoreState>>) -> Resu
         ));
     }
 
-    // 6. Parse response to extract model name
+    // 6. Parse response and check JSON output capability
     let resp_json: serde_json::Value = response
         .json()
         .await
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
+        .map_err(|e| format!("Failed to parse API response: {}", e))?;
 
     let model_name = resp_json
         .get("model")
         .and_then(|v| v.as_str())
-        .unwrap_or(&config.model);
+        .unwrap_or(&effective_model);
 
-    Ok(format!("Connection successful! Model: {}", model_name))
+    // Extract the AI's message content (support thinking models that use "reasoning" field)
+    let content = resp_json
+        .get("choices")
+        .and_then(|c| c.get(0))
+        .and_then(|choice| {
+            choice.get("message").and_then(|m| {
+                m.get("content")
+                    .and_then(|c| c.as_str())
+                    .filter(|s| !s.is_empty())
+                    .or_else(|| m.get("reasoning").and_then(|r| r.as_str()))
+            })
+        })
+        .unwrap_or("");
+
+    // 7. Validate JSON output capability
+    let trimmed = content.trim();
+    let json_ok = if trimmed.is_empty() {
+        false
+    } else {
+        serde_json::from_str::<serde_json::Value>(trimmed).is_ok()
+            || extract_json_block(trimmed)
+                .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+                .is_some()
+    };
+
+    if json_ok {
+        Ok(format!("✓ {} — JSON output OK", model_name))
+    } else {
+        Ok(format!("⚠ {} — connected but JSON output may be unreliable (got: {})", model_name, &trimmed[..trimmed.len().min(80)]))
+    }
+}
+
+/// Extract JSON content from markdown code blocks (```json ... ``` or ``` ... ```)
+fn extract_json_block(text: &str) -> Option<String> {
+    let start_marker = if text.contains("```json") { "```json" } else if text.contains("```") { "```" } else { return None };
+    let start = text.find(start_marker)? + start_marker.len();
+    let rest = &text[start..];
+    let end = rest.find("```")?;
+    Some(rest[..end].trim().to_string())
 }
 
 #[tauri::command]

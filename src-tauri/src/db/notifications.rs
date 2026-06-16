@@ -49,6 +49,28 @@ impl DbPool {
         Ok(())
     }
 
+    /// Ensures a default "Local" notification channel exists.
+    /// Called once at application startup. Idempotent.
+    pub fn ensure_local_channel(&self) -> Result<(), String> {
+        let channels = self.list_notification_channels()?;
+        let has_local = channels.iter().any(|c| c.channel_type == "local");
+        if !has_local {
+            self.create_notification_channel("local", "Local", "{}")?;
+        }
+        Ok(())
+    }
+
+    /// Ensures a default "System" notification channel exists.
+    /// Called once at application startup. Idempotent.
+    pub fn ensure_system_channel(&self) -> Result<(), String> {
+        let channels = self.list_notification_channels()?;
+        let has_system = channels.iter().any(|c| c.channel_type == "system");
+        if !has_system {
+            self.create_notification_channel("system", "System", "{}")?;
+        }
+        Ok(())
+    }
+
     // ── Notification Rules ──────────────────────────────────────
 
     // 引數對應 notification_rules 資料表欄位，刻意保持平面簽章

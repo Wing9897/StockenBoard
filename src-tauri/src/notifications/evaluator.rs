@@ -3,7 +3,7 @@
 //! 根據 ConditionType 和 AssetData 判斷是否觸發通知。
 
 use crate::notifications::models::{ConditionType, NotificationRule};
-use crate::providers::traits::AssetData;
+use crate::providers::types::AssetData;
 
 /// 評估單一條件是否滿足
 /// Returns Some(true) if the condition is triggered, Some(false) if not triggered,

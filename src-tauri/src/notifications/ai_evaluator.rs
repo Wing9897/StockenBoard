@@ -324,12 +324,17 @@ pub async fn evaluate_ai_rule(
         provider_config.base_url.trim_end_matches('/')
     );
 
-    let request_body = serde_json::json!({
+    let mut request_body = serde_json::json!({
         "model": provider_config.model,
         "messages": messages,
         "temperature": 0.1,
-        "max_tokens": 2000
+        "max_tokens": 2000,
+        "response_format": {"type": "json_object"}
     });
+    // Disable thinking if configured (helps thinking models produce clean JSON)
+    if provider_config.disable_thinking {
+        request_body["reasoning_effort"] = serde_json::json!("none");
+    }
 
     let mut request = http_client
         .post(&url)

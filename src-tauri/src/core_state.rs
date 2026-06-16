@@ -92,6 +92,14 @@ impl CoreState {
         let db_path = data_dir.join("stockenboard.db");
         let db = Arc::new(DbPool::open(&db_path)?);
 
+        // Ensure the built-in local notification channel exists
+        db.ensure_local_channel()
+            .map_err(|e| format!("Failed to ensure local channel: {}", e))?;
+
+        // Ensure the built-in system notification channel exists
+        db.ensure_system_channel()
+            .map_err(|e| format!("Failed to ensure system channel: {}", e))?;
+
         let registry = Arc::new(ProviderRegistry::new());
 
         let (event_bus, _) = broadcast::channel::<AppEvent>(512);
@@ -152,5 +160,61 @@ impl CoreState {
         tokio::spawn(async move {
             scheduler.start().await;
         });
+
+        // 啟動 Price History Recorder（監聽 PriceUpdate 事件並寫入紀錄）
+        // 在 desktop 模式下，此工作由 lib.rs 中的 event forwarder 負責。
+        // 在 server 模式下，由此處負責。
+        #[cfg(not(feature = "desktop"))]
+        {
+            let db = self.db.clone();
+            let mut history_rx = self.event_bus.subscribe();
+            tokio::spawn(async move {
+                use std::collections::HashSet;
+                loop {
+                    match history_rx.recv().await {
+                        Ok(AppEvent::PriceUpdate {
+                            provider_id,
+                            data,
+                            record_symbols,
+                        }) => {
+                            if !record_symbols.is_empty() {
+                                let record_set: HashSet<String> =
+                                    record_symbols.into_iter().collect();
+                                let records: Vec<crate::db::PriceRecord> = data
+                                    .iter()
+                                    .filter(|d| record_set.contains(&d.symbol))
+                                    .map(|d| {
+                                        let pre = d
+                                            .extra
+                                            .as_ref()
+                                            .and_then(|e| e.get("pre_market_price"))
+                                            .and_then(|v| v.as_f64());
+                                        let post = d
+                                            .extra
+                                            .as_ref()
+                                            .and_then(|e| e.get("post_market_price"))
+                                            .and_then(|v| v.as_f64());
+                                        (
+                                            d.symbol.clone(),
+                                            d.price,
+                                            d.change_percent_24h,
+                                            d.volume,
+                                            pre,
+                                            post,
+                                        )
+                                    })
+                                    .collect();
+                                db.write_price_history(&provider_id, &records);
+                            }
+                        }
+                        Ok(_) => {}
+                        Err(broadcast::error::RecvError::Lagged(n)) => {
+                            eprintln!("[PriceRecorder] Lagged behind by {} events", n);
+                        }
+                        Err(broadcast::error::RecvError::Closed) => break,
+                    }
+                }
+            });
+        }
     }
 }

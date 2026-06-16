@@ -52,10 +52,10 @@ function run(cmd, opts = {}) {
 
 // ─── Step 1: Build frontend ────────────────────────────────────────────────────
 console.log('\n\x1b[1m[1/2] Building frontend...\x1b[0m\n');
-if (!existsSync(DIST_DIR) || !shouldRun) {
+if (!existsSync(DIST_DIR) || !shouldRun || isDev) {
   run('npm run build', { cwd: ROOT });
 } else {
-  console.log('  dist/ exists, skipping frontend build (use without --run to force)');
+  console.log('  dist/ exists, skipping frontend build (use --dev or without --run to force)');
 }
 
 // ─── Step 2: Build server binary ───────────────────────────────────────────────

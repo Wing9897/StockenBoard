@@ -124,7 +124,7 @@ pub fn to_icon_name(symbol: &str) -> String {
 pub fn to_query_symbol(symbol: &str, asset_type: &str) -> String {
     match asset_type {
         "crypto" => {
-            let (base, _quote) = crate::providers::traits::parse_crypto_symbol(symbol);
+            let (base, _quote) = crate::providers::types::parse_crypto_symbol(symbol);
             base
         }
         // stock / forex / others: use raw symbol uppercased

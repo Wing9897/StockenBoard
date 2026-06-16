@@ -4,7 +4,7 @@
 
 **实时股票与加密货币看板**
 
-支持 33 个数据源 | 多页面管理 | HTTP API | 历史数据记录
+支持 33 个数据源 | AI 通知 | 桌面版 & Web 服务器 | Docker | 历史图表
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Release](https://github.com/Wing9897/stockenboard/actions/workflows/release.yml/badge.svg)](https://github.com/Wing9897/stockenboard/actions/workflows/release.yml)
@@ -103,11 +103,17 @@
 # 安装依赖
 npm install
 
-# 启动开发模式
-npm run tauri dev
+# 启动桌面开发模式
+npm run dev:desktop
 
-# 构建
-npm run tauri build
+# 启动 Web Server 开发模式
+npm run dev:server
+
+# 构建桌面版
+npm run build:desktop
+
+# 构建 Web Server
+npm run build:server
 ```
 
 ---
@@ -154,9 +160,12 @@ history = requests.get("http://localhost:8080/api/history", params={
 |------|------|
 | **前端** | React 19 + TypeScript 5.8 + Vite 7 |
 | **后端** | Tauri 2 + Rust 1.93 |
-| **数据库** | SQLite (tauri-plugin-sql) |
+| **数据库** | SQLite (rusqlite) |
 | **API** | Axum 0.7 + Tower |
 | **图表** | lightweight-charts 5.1 |
+| **AI** | OpenAI 兼容 API (Ollama, OpenAI, OpenRouter) |
+| **主题** | Catppuccin Mocha |
+| **部署** | 桌面 (Tauri) / Web 服务器 / Docker |
 | **主题** | Catppuccin Mocha |
 
 ---
@@ -165,20 +174,24 @@ history = requests.get("http://localhost:8080/api/history", params={
 
 ```
 StockenBoard/
-├── src/                    # 前端代码
+├── src/                    # 前端 (React + TypeScript)
 │   ├── components/         # React 组件
 │   ├── hooks/              # 自定义 Hooks
-│   ├── lib/                # 工具函数和 i18n
+│   ├── lib/                # 工具函数、i18n、传输层
 │   └── types/              # TypeScript 类型定义
-├── src-tauri/              # 后端代码
+├── src-tauri/              # 后端 (Rust)
 │   └── src/
+│       ├── api/            # HTTP REST API (Axum 路由)
+│       ├── commands/       # Tauri IPC 命令
+│       ├── db/             # SQLite 数据库层
+│       ├── notifications/  # AI 评估器、引擎、调度器、Telegram/Webhook
 │       ├── providers/      # 33 个数据源实现
-│       ├── api_server.rs   # HTTP API Server
+│       ├── bin/server.rs   # 独立 Web 服务器入口
 │       ├── polling.rs      # 统一 Polling 管理
-│       ├── commands.rs     # Tauri Commands
-│       └── db.rs           # 数据库 Schema
-├── test_api.py             # API 测试脚本
-└── example_ai_usage.py     # AI 使用示例
+│       └── core_state.rs   # 共享应用状态
+├── scripts/                # 构建和工具脚本
+├── data/                   # 运行时数据 (DB、图标)
+└── .github/workflows/      # CI/CD (跨平台构建)
 ```
 
 ---

@@ -5,7 +5,7 @@ use std::str::FromStr;
 
 use crate::notifications::evaluator::{evaluate_condition, evaluate_rules, filter_matching_rules};
 use crate::notifications::models::{ConditionType, NotificationRule};
-use crate::providers::traits::AssetData;
+use crate::providers::types::AssetData;
 
 /// Helper: create an AssetData for testing
 fn make_asset(symbol: &str, provider_id: &str, price: f64, change_pct: Option<f64>) -> AssetData {

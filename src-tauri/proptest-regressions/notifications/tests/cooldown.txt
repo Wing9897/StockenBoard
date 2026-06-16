@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc a375d93bde522df22666c866db0c1b4d5f31935da3f582cd2ee9a00db63c1bed # shrinks to cooldown_secs = 1, elapsed_millis = 179060

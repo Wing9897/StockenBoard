@@ -64,14 +64,14 @@ pub struct HistoryStatsResult {
 
 pub fn router() -> Router<Arc<CoreState>> {
     Router::new()
-        .route("/prices/fetch/{provider}/{symbol}", get(fetch_single))
+        .route("/prices/fetch/:provider/:symbol", get(fetch_single))
         .route("/prices/fetch-multiple", post(fetch_multiple))
         .route("/prices/cached", get(get_cached))
         .route("/prices/poll-ticks", get(get_poll_ticks))
         .route("/history/stats", get(get_stats))
         .route("/history/cleanup", post(cleanup))
         .route("/history", delete(purge_all))
-        .route("/history/{sub_id}", get(get_history).delete(delete_history))
+        .route("/history/:sub_id", get(get_history).delete(delete_history))
 }
 
 // ─── Handlers ───────────────────────────────────────────────────────────────────
@@ -120,7 +120,8 @@ async fn get_cached(
     State(state): State<Arc<CoreState>>,
 ) -> impl IntoResponse {
     let cache = state.polling.cache.read().await;
-    ApiResponse::ok(cache.clone())
+    let data: Vec<_> = cache.values().cloned().collect();
+    ApiResponse::ok(data)
 }
 
 /// GET /prices/poll-ticks
@@ -129,7 +130,8 @@ async fn get_poll_ticks(
     State(state): State<Arc<CoreState>>,
 ) -> impl IntoResponse {
     let ticks = state.polling.ticks.read().await;
-    ApiResponse::ok(ticks.clone())
+    let data: Vec<_> = ticks.values().cloned().collect();
+    ApiResponse::ok(data)
 }
 
 /// GET /history/stats?subscription_ids=1,2,3
@@ -202,7 +204,7 @@ async fn purge_all(
     State(state): State<Arc<CoreState>>,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
     match state.db.purge_all_history() {
-        Ok(()) => Ok(ApiResponse::ok(serde_json::json!({ "success": true }))),
+        Ok(n) => Ok(ApiResponse::ok(serde_json::json!({ "success": true, "deleted": n }))),
         Err(e) => Err(ApiError::internal(e)),
     }
 }

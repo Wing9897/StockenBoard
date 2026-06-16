@@ -1,7 +1,16 @@
 import { useState, useCallback, useRef } from 'react';
 
-interface ConfirmState {
+export interface ConfirmState {
   message: string;
+  title?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+}
+
+export interface ConfirmOptions {
+  title?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
 }
 
 /**
@@ -12,10 +21,10 @@ export function useConfirm() {
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
   const resolveRef = useRef<((value: boolean) => void) | null>(null);
 
-  const requestConfirm = useCallback((message: string): Promise<boolean> => {
+  const requestConfirm = useCallback((message: string, options?: ConfirmOptions): Promise<boolean> => {
     return new Promise(resolve => {
       resolveRef.current = resolve;
-      setConfirmState({ message });
+      setConfirmState({ message, ...options });
     });
   }, []);
 

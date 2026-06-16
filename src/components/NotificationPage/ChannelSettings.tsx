@@ -104,7 +104,12 @@ export function ChannelSettings() {
             <div key={ch.id} className="rule-item">
               <div className="rule-info">
                 <span className="rule-name">{ch.name}</span>
-                <span className="rule-condition">{ch.channel_type === 'telegram' ? '📱 Telegram' : '🔗 Webhook'}</span>
+                <span className="rule-condition">
+                  {ch.channel_type === 'telegram' ? '📱 Telegram'
+                   : ch.channel_type === 'webhook' ? '🔗 Webhook'
+                   : ch.channel_type === 'system' ? t.notifications.systemChannel
+                   : t.notifications.localChannel}
+                </span>
               </div>
               <div className="rule-actions">
                 <button className="btn-test" onClick={() => handleTest(ch.id)} disabled={testing === ch.id}>
@@ -115,7 +120,9 @@ export function ChannelSettings() {
                     {testResult.msg}
                   </span>
                 )}
-                <button className="btn-delete-rule" onClick={() => handleDelete(ch.id)} title={t.common.delete}>🗑</button>
+                {ch.channel_type !== 'local' && ch.channel_type !== 'system' && (
+                  <button className="btn-delete-rule" onClick={() => handleDelete(ch.id)} title={t.common.delete}>🗑</button>
+                )}
               </div>
             </div>
           ))}

@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use axum::{
     body::Bytes,
-    extract::{Json, Path, State},
+    extract::{Json, Path, Query, State},
     routing::{get, post},
     Router,
 };
@@ -35,12 +35,31 @@ use crate::providers::create_dex_lookup;
 struct SystemConfig {
     api_port: u16,
     unattended_polling: bool,
+    api_enabled: bool,
 }
 
 #[derive(Debug, Deserialize)]
 struct SetSystemConfig {
     api_port: Option<u16>,
     unattended_polling: Option<bool>,
+    api_enabled: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SetVisibleSubscriptionsRequest {
+    ids: Vec<i64>,
+    scope: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ReadFileQuery {
+    path: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct DesktopOnlyBody {
+    command: Option<String>,
+    error: Option<String>,
 }
 
 // ─── Router ─────────────────────────────────────────────────────────────────────
@@ -51,12 +70,17 @@ pub fn router() -> Router<Arc<CoreState>> {
         .route("/system/reload-polling", post(reload_polling))
         .route("/system/reset", post(reset_all))
         .route("/system/data-dir", get(get_data_dir))
+        .route("/system/visible-subscriptions", axum::routing::put(set_visible_subscriptions))
+        .route("/system/theme-bg/:theme_id", get(get_theme_bg).delete(remove_theme_bg))
+        .route("/system/read-file", get(read_file_base64))
+        .route("/system/desktop-only", post(desktop_only_noop))
         .route("/icons", get(list_icons))
+        .route("/icons/dir", get(get_icons_dir_path))
         .route("/icons/download-logos", post(download_logos))
-        .route("/icons/{symbol}", post(set_icon).delete(remove_icon))
+        .route("/icons/:symbol", post(set_icon).delete(remove_icon))
         .route("/data/export", get(export_data))
         .route("/data/import", post(import_data))
-        .route("/dex/pool/{provider}/{address}", get(lookup_dex_pool))
+        .route("/dex/pool/:provider/:address", get(lookup_dex_pool))
 }
 
 // ─── System Handlers ────────────────────────────────────────────────────────────
@@ -77,9 +101,18 @@ async fn get_config(
 
     let unattended_polling = state.polling.is_unattended().await;
 
+    let api_enabled = state
+        .db
+        .get_setting("api_enabled")
+        .ok()
+        .flatten()
+        .map(|v| v == "1")
+        .unwrap_or(false);
+
     Ok(ApiResponse::ok(SystemConfig {
         api_port,
         unattended_polling,
+        api_enabled,
     })
     .into_response())
 }
@@ -103,6 +136,13 @@ async fn set_config(
 
     if let Some(enabled) = body.unattended_polling {
         state.polling.set_unattended(enabled).await;
+    }
+
+    if let Some(enabled) = body.api_enabled {
+        state
+            .db
+            .set_setting("api_enabled", if enabled { "1" } else { "0" })
+            .map_err(|e| ApiError::internal(e).into_response())?;
     }
 
     Ok(ApiResponse::ok(serde_json::json!({ "success": true })).into_response())
@@ -192,6 +232,15 @@ async fn remove_icon(
     Ok(ApiResponse::ok(serde_json::json!({ "success": true })).into_response())
 }
 
+/// GET /icons/dir — return the icons directory absolute path
+async fn get_icons_dir_path(
+    State(state): State<Arc<CoreState>>,
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    let dir = state.data_dir.join("icons");
+    ApiResponse::ok(dir.to_string_lossy().to_string()).into_response()
+}
+
 /// GET /icons — list all available icon filenames
 async fn list_icons(
     State(state): State<Arc<CoreState>>,
@@ -225,7 +274,20 @@ async fn download_logos(
     use axum::response::IntoResponse;
 
     let icons_dir = state.data_dir.join("icons");
-    let result = crate::icons::download_all_logos(&state.db, &icons_dir, None)
+
+    // Create a broadcast channel for progress reporting
+    let (progress_tx, mut progress_rx) =
+        tokio::sync::broadcast::channel::<crate::icons::DownloadProgress>(64);
+
+    // Spawn a task that forwards progress events through the event bus
+    let event_bus = state.event_bus.clone();
+    tokio::spawn(async move {
+        while let Ok(progress) = progress_rx.recv().await {
+            let _ = event_bus.send(crate::events::AppEvent::LogoDownloadProgress(progress));
+        }
+    });
+
+    let result = crate::icons::download_all_logos(&state.db, &icons_dir, Some(progress_tx))
         .await
         .map_err(|e| ApiError::internal(e).into_response())?;
 
@@ -233,6 +295,115 @@ async fn download_logos(
 }
 
 // ─── Data Handlers ──────────────────────────────────────────────────────────────
+
+/// PUT /system/visible-subscriptions
+/// Set visible subscription IDs for polling priority.
+async fn set_visible_subscriptions(
+    State(state): State<Arc<CoreState>>,
+    Json(body): Json<SetVisibleSubscriptionsRequest>,
+) -> Result<axum::response::Response, axum::response::Response> {
+    use axum::response::IntoResponse;
+
+    let window_id = body.scope.unwrap_or_else(|| "web".to_string());
+    let id_set: std::collections::HashSet<i64> = body.ids.into_iter().collect();
+    state.polling.set_visible(window_id, id_set).await;
+    Ok(ApiResponse::ok(serde_json::json!({ "success": true })).into_response())
+}
+
+/// GET /system/theme-bg/:theme_id
+/// Get the theme background file as a base64 data URL (or null if not set).
+async fn get_theme_bg(
+    State(state): State<Arc<CoreState>>,
+    Path(theme_id): Path<String>,
+) -> Result<axum::response::Response, axum::response::Response> {
+    use axum::response::IntoResponse;
+
+    let dir = state.data_dir.join("theme_bg");
+    for ext in &["png", "jpg", "jpeg", "webp", "img"] {
+        let path = dir.join(format!("{}.{}", theme_id, ext));
+        if path.exists() {
+            match tokio::fs::read(&path).await {
+                Ok(bytes) => {
+                    use base64::Engine;
+                    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+                    let mime = match *ext {
+                        "png" => "image/png",
+                        "jpg" | "jpeg" => "image/jpeg",
+                        "webp" => "image/webp",
+                        _ => "application/octet-stream",
+                    };
+                    let data_url = format!("data:{};base64,{}", mime, b64);
+                    return Ok(ApiResponse::ok(serde_json::json!({ "path": path.to_string_lossy(), "data_url": data_url })).into_response());
+                }
+                Err(e) => return Err(ApiError::internal(format!("Failed to read theme bg: {}", e)).into_response()),
+            }
+        }
+    }
+    Ok(ApiResponse::ok(serde_json::Value::Null).into_response())
+}
+
+/// DELETE /system/theme-bg/:theme_id
+/// Remove the theme background file.
+async fn remove_theme_bg(
+    State(state): State<Arc<CoreState>>,
+    Path(theme_id): Path<String>,
+) -> Result<axum::response::Response, axum::response::Response> {
+    use axum::response::IntoResponse;
+
+    let dir = state.data_dir.join("theme_bg");
+    for ext in &["png", "jpg", "jpeg", "webp", "img"] {
+        let path = dir.join(format!("{}.{}", theme_id, ext));
+        let _ = tokio::fs::remove_file(&path).await;
+    }
+    Ok(ApiResponse::ok(serde_json::json!({ "success": true })).into_response())
+}
+
+/// GET /system/read-file?path=...
+/// Read a local file and return its content as a base64 data URL.
+async fn read_file_base64(
+    Query(query): Query<ReadFileQuery>,
+) -> Result<axum::response::Response, axum::response::Response> {
+    use axum::response::IntoResponse;
+
+    let path = &query.path;
+    let bytes = tokio::fs::read(path)
+        .await
+        .map_err(|e| ApiError::not_found(format!("Failed to read file: {}", e)).into_response())?;
+
+    use base64::Engine;
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    let mime = if path.ends_with(".png") {
+        "image/png"
+    } else if path.ends_with(".jpg") || path.ends_with(".jpeg") {
+        "image/jpeg"
+    } else if path.ends_with(".webp") {
+        "image/webp"
+    } else if path.ends_with(".svg") {
+        "image/svg+xml"
+    } else if path.ends_with(".gif") {
+        "image/gif"
+    } else {
+        "application/octet-stream"
+    };
+    let data_url = format!("data:{};base64,{}", mime, b64);
+    Ok(ApiResponse::ok(data_url).into_response())
+}
+
+/// POST /system/desktop-only
+/// Returns a structured error for commands that require desktop (file dialogs, etc.).
+async fn desktop_only_noop(
+    Json(body): Json<DesktopOnlyBody>,
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+
+    let command = body.command.unwrap_or_else(|| "unknown".to_string());
+    let message = body.error.unwrap_or_else(|| {
+        format!("'{}' requires desktop mode (native file dialog)", command)
+    });
+    ApiError::bad_request(message).into_response()
+}
+
+// ─── Data Export/Import Handlers ────────────────────────────────────────────────
 
 /// GET /data/export
 async fn export_data(

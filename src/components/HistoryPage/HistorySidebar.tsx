@@ -22,6 +22,7 @@ interface HistorySidebarProps {
   onCollapse: () => void;
   onSaveRecordHours: (id: number, from: number | null, to: number | null) => void;
   tzLabel: string;
+  isUnattended: boolean;
 }
 
 const noop = () => { };
@@ -31,6 +32,7 @@ export function HistorySidebar({
   onSelectId, onSetFilter, onSetSearch,
   onToggle, onBatchToggle, onCollapse,
   onSaveRecordHours, tzLabel,
+  isUnattended,
 }: HistorySidebarProps) {
   const filtered = useMemo(() => {
     let list = subs;
@@ -56,6 +58,13 @@ export function HistorySidebar({
         <span className="history-sidebar-title">{t.history.title}</span>
         {recCount > 0 && <span className="history-recording-badge">● {recCount}</span>}
         <button className="history-collapse-btn" onClick={onCollapse} title={t.asset.collapse}>◀</button>
+      </div>
+
+      <div className="history-unattended-status">
+        <span className={`history-status-dot ${isUnattended ? 'active' : ''}`} />
+        <span className="history-unattended-label">
+          {isUnattended ? t.history.unattendedActive : t.history.unattendedInactive}
+        </span>
       </div>
 
       <div className="hseg equal">

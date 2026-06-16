@@ -2,8 +2,34 @@ use crate::core_state::CoreState;
 use std::sync::Arc;
 use tauri::Manager;
 
+/// Opens the icons directory in the native file explorer.
+/// Creates the directory if it does not exist.
 #[tauri::command]
-pub async fn set_icon(app: tauri::AppHandle, symbol: String) -> Result<String, String> {
+pub async fn open_icons_folder(
+    state: tauri::State<'_, Arc<CoreState>>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    let icons_dir = state.data_dir.join("icons");
+
+    // Ensure directory exists
+    tokio::fs::create_dir_all(&icons_dir)
+        .await
+        .map_err(|e| format!("Failed to create icons directory: {}", e))?;
+
+    // Use tauri-plugin-opener to open the directory in the file manager
+    use tauri_plugin_opener::OpenerExt;
+    app.opener()
+        .open_path(icons_dir.to_string_lossy().as_ref(), None::<&str>)
+        .map_err(|e| format!("Failed to open folder: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn set_icon(
+    state: tauri::State<'_, Arc<CoreState>>,
+    symbol: String,
+) -> Result<String, String> {
     let file = rfd::AsyncFileDialog::new()
         .add_filter("Images", &["png", "jpg", "jpeg", "webp", "svg"])
         .set_title("Select Icon")
@@ -11,11 +37,7 @@ pub async fn set_icon(app: tauri::AppHandle, symbol: String) -> Result<String, S
         .await
         .ok_or_else(|| "Cancelled".to_string())?;
     let icon_name = symbol.to_lowercase();
-    let icons_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app directory: {}", e))?
-        .join("icons");
+    let icons_dir = state.data_dir.join("icons");
     tokio::fs::create_dir_all(&icons_dir)
         .await
         .map_err(|e| format!("Failed to create icons directory: {}", e))?;
@@ -27,14 +49,12 @@ pub async fn set_icon(app: tauri::AppHandle, symbol: String) -> Result<String, S
 }
 
 #[tauri::command]
-pub async fn remove_icon(app: tauri::AppHandle, symbol: String) -> Result<(), String> {
+pub async fn remove_icon(
+    state: tauri::State<'_, Arc<CoreState>>,
+    symbol: String,
+) -> Result<(), String> {
     let icon_name = symbol.to_lowercase();
-    let dest = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app directory: {}", e))?
-        .join("icons")
-        .join(format!("{}.png", icon_name));
+    let dest = state.data_dir.join("icons").join(format!("{}.png", icon_name));
     if dest.exists() {
         tokio::fs::remove_file(&dest)
             .await
@@ -44,12 +64,10 @@ pub async fn remove_icon(app: tauri::AppHandle, symbol: String) -> Result<(), St
 }
 
 #[tauri::command]
-pub async fn get_icons_dir(app: tauri::AppHandle) -> Result<String, String> {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app directory: {}", e))?
-        .join("icons");
+pub async fn get_icons_dir(
+    state: tauri::State<'_, Arc<CoreState>>,
+) -> Result<String, String> {
+    let dir = state.data_dir.join("icons");
     Ok(dir.to_string_lossy().to_string())
 }
 
@@ -65,11 +83,7 @@ pub async fn download_logos(
 ) -> Result<LogoDownloadResult, String> {
     use tauri::Emitter;
 
-    let icons_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app directory: {}", e))?
-        .join("icons");
+    let icons_dir = state.data_dir.join("icons");
 
     // Set up a progress channel to forward events to the Tauri frontend
     let (progress_tx, mut progress_rx) =

@@ -1,7 +1,7 @@
 use crate::db::DbPool;
 use crate::events::AppEvent;
 use crate::providers::registry::ProviderRegistry;
-use crate::providers::traits::PROVIDER_INFO_MAP;
+use crate::providers::types::PROVIDER_INFO_MAP;
 use crate::providers::AssetData;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};

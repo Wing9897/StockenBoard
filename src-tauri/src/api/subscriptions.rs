@@ -73,11 +73,28 @@ pub struct BatchAddResult {
 
 // ─── Router ─────────────────────────────────────────────────────────────────────
 
+// ─── Toggle Record / Record Hours Types ─────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct ToggleRecordRequest {
+    pub enabled: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SetRecordHoursRequest {
+    pub from_hour: Option<i64>,
+    pub to_hour: Option<i64>,
+}
+
+// ─── Router ─────────────────────────────────────────────────────────────────────
+
 pub fn router() -> Router<Arc<CoreState>> {
     Router::new()
         .route("/subscriptions", get(list_subscriptions).post(add_subscription))
         .route("/subscriptions/batch", post(add_batch).delete(remove_batch))
-        .route("/subscriptions/{id}", put(update_subscription).delete(remove_subscription))
+        .route("/subscriptions/:id", put(update_subscription).delete(remove_subscription))
+        .route("/subscriptions/:id/toggle-record", post(toggle_record))
+        .route("/subscriptions/:id/record-hours", axum::routing::put(set_record_hours))
 }
 
 // ─── Handlers ───────────────────────────────────────────────────────────────────
@@ -231,6 +248,39 @@ async fn remove_batch(
             state.polling.reload();
             Ok(ApiResponse::ok(serde_json::json!({ "success": true })).into_response())
         }
+        Err(e) => Err(ApiError::internal(e).into_response()),
+    }
+}
+
+/// POST /subscriptions/:id/toggle-record
+/// Enable or disable price recording for a subscription.
+async fn toggle_record(
+    State(state): State<Arc<CoreState>>,
+    Path(id): Path<i64>,
+    Json(body): Json<ToggleRecordRequest>,
+) -> Result<axum::response::Response, axum::response::Response> {
+    use axum::response::IntoResponse;
+
+    match state.db.toggle_record(id, body.enabled) {
+        Ok(()) => {
+            state.polling.reload();
+            Ok(ApiResponse::ok(serde_json::json!({ "success": true })).into_response())
+        }
+        Err(e) => Err(ApiError::internal(e).into_response()),
+    }
+}
+
+/// PUT /subscriptions/:id/record-hours
+/// Set recording hours for a subscription.
+async fn set_record_hours(
+    State(state): State<Arc<CoreState>>,
+    Path(id): Path<i64>,
+    Json(body): Json<SetRecordHoursRequest>,
+) -> Result<axum::response::Response, axum::response::Response> {
+    use axum::response::IntoResponse;
+
+    match state.db.set_record_hours(id, body.from_hour, body.to_hour) {
+        Ok(()) => Ok(ApiResponse::ok(serde_json::json!({ "success": true })).into_response()),
         Err(e) => Err(ApiError::internal(e).into_response()),
     }
 }

@@ -1,5 +1,6 @@
 /// AppEvent — 統一的應用程式事件類型
 /// 用於 Event Bus 解耦 Polling、DB 寫入、前端通知
+use crate::icons::DownloadProgress;
 use crate::providers::AssetData;
 use serde::Serialize;
 
@@ -26,6 +27,13 @@ pub enum AppEvent {
     },
     /// 通知規則觸發（閾值或 AI）— 供前端側欄即時顯示
     NotificationTriggered(NotificationTriggeredPayload),
+    /// System notification request — dispatched when a rule with a system channel fires
+    SystemNotification {
+        title: String,
+        body: String,
+    },
+    /// Logo download progress — forwarded from download_all_logos broadcast channel
+    LogoDownloadProgress(DownloadProgress),
 }
 
 /// 前端事件用的通知觸發 payload（規則觸發即時推送到 UI）

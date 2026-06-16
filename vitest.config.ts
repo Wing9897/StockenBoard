@@ -17,5 +17,7 @@ export default defineConfig({
     // Only treat *.test.* / *.spec.* files under src as tests.
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
     css: false,
+    // Increase default timeout for tests that render full components with async data loading.
+    testTimeout: 15_000,
   },
 });

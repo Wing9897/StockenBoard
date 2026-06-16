@@ -25,16 +25,16 @@ pub fn router() -> Router<Arc<CoreState>> {
     Router::new()
         .route("/notifications/rules", get(list_rules).post(create_rule))
         .route(
-            "/notifications/rules/{id}",
+            "/notifications/rules/:id",
             put(update_rule).delete(delete_rule),
         )
-        .route("/notifications/rules/{id}/toggle", post(toggle_rule))
+        .route("/notifications/rules/:id/toggle", post(toggle_rule))
         .route(
             "/notifications/channels",
             get(list_channels).post(save_channel),
         )
-        .route("/notifications/channels/{id}", delete(delete_channel))
-        .route("/notifications/channels/{id}/test", post(test_channel))
+        .route("/notifications/channels/:id", delete(delete_channel))
+        .route("/notifications/channels/:id/test", post(test_channel))
         .route("/notifications/history", get(get_history))
         .route(
             "/notifications/cooldown",
@@ -429,11 +429,11 @@ async fn get_history(
 async fn get_cooldown(
     State(state): State<Arc<CoreState>>,
 ) -> Result<
-    (axum::http::StatusCode, Json<ApiResponse<serde_json::Value>>),
+    (axum::http::StatusCode, Json<ApiResponse<u64>>),
     (axum::http::StatusCode, Json<ApiError>),
 > {
     let secs = state.global_cooldown.get_cooldown();
-    Ok(ApiResponse::ok(serde_json::json!({ "seconds": secs })))
+    Ok(ApiResponse::ok(secs))
 }
 
 async fn set_cooldown(

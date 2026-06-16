@@ -1,24 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getTransport } from '../../lib/transport';
 import { t } from '../../lib/i18n';
+import { formatConditionLabel } from '../../lib/format';
 import { silentLog } from '../../lib/errorLog';
 import { useConfirm } from '../../hooks/useConfirm';
 import { ConfirmDialog } from '../ConfirmDialog/ConfirmDialog';
+import { GlobalCooldownInline } from './GlobalCooldownInline';
 import type { NotificationRuleRow } from '../../types';
 
 interface RuleListProps {
   onAddRule?: () => void;
   onEditRule?: (rule: NotificationRuleRow) => void;
-}
-
-function formatCondition(conditionType: string, threshold: number): string {
-  switch (conditionType) {
-    case 'price_above': return t.notifications.condPriceAbove(threshold.toLocaleString());
-    case 'price_below': return t.notifications.condPriceBelow(threshold.toLocaleString());
-    case 'change_pct_above': return t.notifications.condChangeUp(String(threshold));
-    case 'change_pct_below': return t.notifications.condChangeDown(String(threshold));
-    default: return conditionType;
-  }
 }
 
 function getAiPromptSummary(aiConfig: string | null): string {
@@ -80,6 +72,7 @@ export function RuleList({ onAddRule, onEditRule }: RuleListProps) {
     <div className="rule-list">
       <div className="rule-list-header">
         <h3>{t.notifications.rules}</h3>
+        <GlobalCooldownInline />
         {onAddRule && <button className="btn-add-rule" onClick={onAddRule}>+ {t.notifications.addRule}</button>}
       </div>
       {rules.length === 0 ? (
@@ -96,7 +89,7 @@ export function RuleList({ onAddRule, onEditRule }: RuleListProps) {
                 <span className="rule-condition">
                   {rule.condition_type === 'ai'
                     ? getAiPromptSummary(rule.ai_config)
-                    : formatCondition(rule.condition_type, rule.threshold)}
+                    : formatConditionLabel(rule.condition_type, rule.threshold)}
                 </span>
               </div>
               <div className="rule-actions">

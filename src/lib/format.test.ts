@@ -114,12 +114,13 @@ describe('parsePairFromName', () => {
 });
 
 describe('summarizeError', () => {
-  it('extracts the detail from a deduped batch-failure message', () => {
-    expect(summarizeError('批量查詢全部失敗 (3個): rate limited')).toBe('rate limited');
+  it('extracts the core from a batch failure message', () => {
+    expect(summarizeError('Binance batch connection failed: rate limited')).toBe('rate limited');
   });
 
-  it('extracts the detail from a non-deduped batch-failure message, stopping before ": error"', () => {
-    expect(summarizeError('批量查詢全部失敗: binance: rate limited: error')).toBe('rate limited');
+  it('handles batch parse failure messages', () => {
+    // The batch regex strips the "Provider batch type failed: " prefix
+    expect(summarizeError('CMC batch parse failed: possibly invalid symbol')).toBe('possibly invalid symbol');
   });
 
   it('maps a connection error to the i18n connectionFailed string', () => {

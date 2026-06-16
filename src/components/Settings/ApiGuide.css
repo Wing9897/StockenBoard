@@ -1,0 +1,347 @@
+/* ApiGuide component styles — extracted from inline style objects */
+
+/* Outer wrapper (the card container) */
+.api-guide-container {
+  padding: 20px;
+  background: var(--surface0);
+  border-radius: 12px;
+  border: 1px solid var(--surface1);
+}
+
+/* Enable/disable toggle row */
+.api-guide-toggle-row {
+  margin-bottom: 20px;
+  padding: 14px;
+  background: var(--mantle);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Toggle label text */
+.api-guide-toggle-label {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+/* Toggle description text */
+.api-guide-toggle-desc {
+  font-size: 13px;
+  color: var(--subtext0);
+}
+
+/* Switch wrapper (the <label>) */
+.api-guide-switch {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 26px;
+  cursor: pointer;
+}
+
+/* Hidden checkbox input */
+.api-guide-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+/* Switch track (background) */
+.api-guide-switch-track {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--surface2);
+  border-radius: 13px;
+  transition: background 0.2s;
+}
+
+.api-guide-switch-track.active {
+  background: var(--green);
+}
+
+/* Switch thumb (the circle) */
+.api-guide-switch-thumb {
+  position: absolute;
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  bottom: 3px;
+  background: white;
+  border-radius: 50%;
+  transition: left 0.2s;
+}
+
+.api-guide-switch-track.active .api-guide-switch-thumb {
+  left: 25px;
+}
+
+/* Description paragraph */
+.api-guide-desc {
+  margin: 0 0 16px 0;
+  color: var(--text);
+  line-height: 1.6;
+  opacity: 1;
+}
+
+.api-guide-desc.disabled {
+  opacity: 0.5;
+}
+
+/* API address bar section */
+.api-guide-address-bar {
+  margin-bottom: 24px;
+  padding: 12px;
+  background: var(--mantle);
+  border-radius: 8px;
+}
+
+.api-guide-address-bar-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.api-guide-address-label {
+  color: var(--subtext0);
+  font-size: 14px;
+}
+
+.api-guide-address-code {
+  padding: 4px 8px;
+  background: var(--base);
+  border-radius: 4px;
+  color: var(--blue);
+  font-size: 14px;
+}
+
+/* Port editing controls */
+.api-guide-port-btn {
+  padding: 4px 12px;
+  background: var(--surface1);
+  border: 1px solid var(--surface2);
+  border-radius: 4px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.api-guide-port-edit-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.api-guide-port-input {
+  width: 80px;
+  padding: 4px 8px;
+  background: var(--base);
+  border: 1px solid var(--surface2);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.api-guide-port-save-btn {
+  padding: 4px 12px;
+  background: var(--green);
+  border: none;
+  border-radius: 4px;
+  color: var(--base);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.api-guide-port-cancel-btn {
+  padding: 4px 12px;
+  background: var(--surface1);
+  border: 1px solid var(--surface2);
+  border-radius: 4px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+/* Endpoints section */
+.api-guide-endpoints-section {
+  margin-bottom: 24px;
+}
+
+.api-guide-endpoints-title {
+  margin: 0 0 12px 0;
+  font-size: 15px;
+  color: var(--text);
+}
+
+/* Endpoints table */
+.api-guide-endpoints-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.api-guide-endpoints-table thead tr {
+  border-bottom: 1px solid var(--surface1);
+}
+
+.api-guide-endpoints-table th {
+  padding: 8px;
+  text-align: left;
+  color: var(--subtext1);
+}
+
+.api-guide-endpoints-table tbody tr {
+  border-bottom: 1px solid var(--surface0);
+}
+
+.api-guide-endpoints-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.api-guide-endpoint-cell {
+  padding: 8px;
+  color: var(--text);
+}
+
+.api-guide-endpoint-cell.mono {
+  font-family: monospace;
+  color: var(--blue);
+  font-size: 12px;
+}
+
+/* Example row (Python, History, Curl) */
+.api-guide-example-row {
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--mantle);
+  border-radius: 8px;
+}
+
+.api-guide-example-row:last-of-type {
+  margin-bottom: 24px;
+}
+
+.api-guide-example-row-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.api-guide-example-row-icon {
+  font-size: 16px;
+}
+
+.api-guide-example-row-text {
+  font-size: 14px;
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* "View example" button */
+.api-guide-example-btn {
+  padding: 6px 14px;
+  background: var(--blue);
+  color: var(--base);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* Notes / warnings section */
+.api-guide-notes {
+  padding: 14px;
+  background: var(--yellow-bg);
+  border-radius: 8px;
+  border: 1px solid var(--yellow);
+}
+
+.api-guide-notes h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: var(--yellow);
+}
+
+.api-guide-notes ul {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* ===== Modal styles (used by renderModal / ApiExampleModal) ===== */
+
+.api-guide-modal-backdrop {
+  z-index: 1000;
+}
+
+.api-guide-modal-container {
+  max-width: 700px;
+  width: 90%;
+}
+
+.api-guide-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.api-guide-modal-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.api-guide-modal-section-title {
+  font-size: 14px;
+  font-weight: bold;
+  color: var(--text);
+}
+
+.api-guide-modal-copy-btn {
+  padding: 4px 10px;
+  background: var(--surface0);
+  border: 1px solid var(--surface1);
+  border-radius: 4px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.api-guide-modal-code {
+  margin: 0;
+  padding: 14px;
+  background: var(--mantle);
+  border-radius: 6px;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.api-guide-modal-response {
+  margin: 0;
+  padding: 14px;
+  background: var(--base);
+  border: 1px solid var(--surface1);
+  border-radius: 6px;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--green);
+}

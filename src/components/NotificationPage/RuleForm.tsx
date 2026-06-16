@@ -45,7 +45,7 @@ export function RuleForm({ onClose, onSaved, editRule }: RuleFormProps) {
   const [selectedChannels, setSelectedChannels] = useState<number[]>(
     editRule ? JSON.parse(editRule.channel_ids || '[]') : []
   );
-  const [cooldownSecs, setCooldownSecs] = useState(editRule ? String(editRule.cooldown_secs) : '300');
+  const [cooldownSecs, setCooldownSecs] = useState(editRule ? (editRule.cooldown_secs ? String(editRule.cooldown_secs) : '') : '');
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [channels, setChannels] = useState<ChannelRow[]>([]);
   const [saving, setSaving] = useState(false);
@@ -106,7 +106,7 @@ export function RuleForm({ onClose, onSaved, editRule }: RuleFormProps) {
             condition_type: ruleMode === 'ai' ? 'ai' : conditionType,
             threshold: ruleMode === 'ai' ? null : Number(threshold),
             channel_ids: selectedChannels,
-            cooldown_secs: Number(cooldownSecs) || 300,
+            cooldown_secs: cooldownSecs.trim() ? Number(cooldownSecs) : null,
             ai_config: ruleMode === 'ai' ? {
               prompt,
               history_window: historyWindow,
@@ -122,7 +122,7 @@ export function RuleForm({ onClose, onSaved, editRule }: RuleFormProps) {
             condition_type: 'ai',
             threshold: 0.0,
             channel_ids: selectedChannels,
-            cooldown_secs: Number(cooldownSecs) || 300,
+            cooldown_secs: cooldownSecs.trim() ? Number(cooldownSecs) : null,
             ai_config: {
               prompt,
               history_window: historyWindow,
@@ -138,7 +138,7 @@ export function RuleForm({ onClose, onSaved, editRule }: RuleFormProps) {
             condition_type: conditionType,
             threshold: Number(threshold),
             channel_ids: selectedChannels,
-            cooldown_secs: Number(cooldownSecs) || 300,
+            cooldown_secs: cooldownSecs.trim() ? Number(cooldownSecs) : null,
           }
         });
       }
@@ -288,7 +288,8 @@ export function RuleForm({ onClose, onSaved, editRule }: RuleFormProps) {
 
           <label className="form-field">
             <span>{t.notifications.cooldown}</span>
-            <input type="number" value={cooldownSecs} onChange={e => setCooldownSecs(e.target.value)} min="0" />
+            <input type="number" value={cooldownSecs} onChange={e => setCooldownSecs(e.target.value)} min="0" placeholder={t.notifications.cooldownPlaceholder} />
+            <p className="form-hint">{t.notifications.cooldownHint}</p>
           </label>
 
           <div className="rule-form-actions">

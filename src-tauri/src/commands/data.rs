@@ -50,15 +50,42 @@ pub async fn reset_all_data(state: tauri::State<'_, Arc<CoreState>>) -> Result<(
 
 // ── Price History ────────────────────────────────────────────────
 
+#[derive(serde::Serialize)]
+pub struct ToggleRecordResponse {
+    pub success: bool,
+    pub needs_confirm: bool,
+}
+
 #[tauri::command]
 pub async fn toggle_record(
     state: tauri::State<'_, Arc<CoreState>>,
     subscription_id: i64,
     enabled: bool,
-) -> Result<(), String> {
-    state.db.toggle_record(subscription_id, enabled)?;
+    confirmed: Option<bool>,
+) -> Result<ToggleRecordResponse, String> {
+    if enabled {
+        let active_count = state.db.count_active_recordings()?;
+        if active_count == 0 && confirmed != Some(true) {
+            // First recording: require confirmation
+            return Ok(ToggleRecordResponse { success: false, needs_confirm: true });
+        }
+        // Enable recording
+        state.db.toggle_record(subscription_id, true)?;
+        // Enable unattended if transitioning from 0
+        if active_count == 0 {
+            state.polling.set_unattended(true).await;
+        }
+    } else {
+        // Disable recording
+        state.db.toggle_record(subscription_id, false)?;
+        // Check if this was the last active recording
+        let remaining = state.db.count_active_recordings()?;
+        if remaining == 0 {
+            state.polling.set_unattended(false).await;
+        }
+    }
     state.polling.reload();
-    Ok(())
+    Ok(ToggleRecordResponse { success: true, needs_confirm: false })
 }
 
 #[tauri::command]
@@ -73,6 +100,7 @@ pub async fn set_record_hours(
         .set_record_hours(subscription_id, from_hour, to_hour)
 }
 
+/// Retained for external HTTP API consumers — not invoked by frontend UI
 #[tauri::command]
 pub async fn set_provider_record_hours(
     state: tauri::State<'_, Arc<CoreState>>,
@@ -138,7 +166,7 @@ pub async fn cleanup_history(
 }
 
 #[tauri::command]
-pub async fn purge_all_history(state: tauri::State<'_, Arc<CoreState>>) -> Result<(), String> {
+pub async fn purge_all_history(state: tauri::State<'_, Arc<CoreState>>) -> Result<i64, String> {
     state.db.purge_all_history()
 }
 

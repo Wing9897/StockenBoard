@@ -1,26 +1,14 @@
 /**
  * TransportProvider — React context that initializes a Transport instance
- * and exposes it to all child components via the useTransport() hook.
+ * and exposes it to all child components.
  *
- * Wrapping the app in <TransportProvider> ensures every component can call
- * transport.invoke() and transport.listen() without importing Tauri directly.
+ * Wrapping the app in <TransportProvider> ensures a single transport instance
+ * is created for the lifetime of the application.
  */
-import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { createContext, useMemo, type ReactNode } from 'react';
 import { createTransport, type Transport } from './transport';
 
 const TransportContext = createContext<Transport | null>(null);
-
-/**
- * Hook for consuming the transport instance from any component.
- * Must be called within a <TransportProvider> tree.
- */
-export function useTransport(): Transport {
-  const transport = useContext(TransportContext);
-  if (!transport) {
-    throw new Error('useTransport must be used within a <TransportProvider>');
-  }
-  return transport;
-}
 
 interface TransportProviderProps {
   children: ReactNode;

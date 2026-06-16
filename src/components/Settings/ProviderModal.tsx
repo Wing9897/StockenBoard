@@ -4,6 +4,7 @@
 import type { ProviderInfo } from '../../types';
 import { TYPE_COLORS, getTypeLabels } from './providerConstants';
 import { t } from '../../lib/i18n';
+import { TZ_LABEL } from '../../lib/format';
 
 interface ProviderRow {
   id: string; name: string; provider_type: string;
@@ -32,13 +33,6 @@ interface ProviderModalProps {
   onSave: () => void;
   onClose: () => void;
 }
-
-const TZ_LABEL = (() => {
-  const o = -new Date().getTimezoneOffset();
-  const h = Math.floor(Math.abs(o) / 60);
-  const m = Math.abs(o) % 60;
-  return `UTC${o >= 0 ? '+' : '-'}${h}${m ? ':' + String(m).padStart(2, '0') : ''}`;
-})();
 
 export function ProviderModal({
   provider, info, formData, useKeyMode, getDesc,

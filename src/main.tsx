@@ -1,6 +1,5 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { createTransport } from './lib/transport';
 import { TransportProvider } from './lib/transportProvider';
 import { ANIME_IDS, loadBgForTheme } from './lib/themeData';
 import { STORAGE_KEYS } from './lib/storageKeys';
@@ -14,12 +13,6 @@ document.documentElement.setAttribute('data-theme', savedTheme);
 // Apply background image for anime themes (async — reuse ThemePicker logic)
 if (ANIME_IDS.has(savedTheme)) {
   loadBgForTheme(savedTheme).catch(() => { });
-}
-
-// Restore unattended polling state from localStorage to Rust backend
-if (localStorage.getItem(STORAGE_KEYS.UNATTENDED) === '1') {
-  const transport = createTransport();
-  transport.invoke('set_unattended_polling', { enabled: true }).catch(() => { });
 }
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(

@@ -1,5 +1,3 @@
-import { useState, useEffect } from 'react';
-import { getTransport } from '../../lib/transport';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { t } from '../../lib/i18n';
 import './BatchActions.css';
@@ -16,25 +14,6 @@ interface BatchActionsProps {
 
 export function BatchActions({ mode, expandAll, showPrePost, onToggleExpandAll, onTogglePrePost, onClose }: BatchActionsProps) {
   useEscapeKey(onClose);
-  const [unattended, setUnattended] = useState(() => localStorage.getItem('sb_unattended') === '1');
-
-  // 啟動時將 localStorage 的狀態同步到後端
-  useEffect(() => {
-    const saved = localStorage.getItem('sb_unattended') === '1';
-    if (saved) getTransport().invoke('set_unattended_polling', { enabled: true }).catch(() => {});
-  }, []);
-
-  const toggleUnattended = async () => {
-    const next = !unattended;
-    setUnattended(next);
-    localStorage.setItem('sb_unattended', next ? '1' : '0');
-    try {
-      await getTransport().invoke('set_unattended_polling', { enabled: next });
-    } catch {
-      setUnattended(!next); // rollback
-      localStorage.setItem('sb_unattended', !next ? '1' : '0');
-    }
-  };
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -70,17 +49,6 @@ export function BatchActions({ mode, expandAll, showPrePost, onToggleExpandAll, 
               </button>
             </label>
           )}
-          <label className="ba-row">
-            <span className="ba-label">{t.dashboard.unattendedPolling}</span>
-            <button
-              role="switch"
-              aria-checked={unattended}
-              className={`ba-switch ${unattended ? 'on' : ''}`}
-              onClick={toggleUnattended}
-            >
-              <span className="ba-switch-thumb" />
-            </button>
-          </label>
           {/* 預留空間：未來可在此加入更多操作 */}
         </div>
       </div>

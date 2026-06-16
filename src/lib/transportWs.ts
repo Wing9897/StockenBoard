@@ -4,6 +4,7 @@
  */
 
 import { mapCommandToHttp } from './transportRoutes';
+import { webModeHandlers } from './webFileOps';
 import type { Transport } from './transport';
 
 /**
@@ -18,7 +19,13 @@ export class HttpTransport implements Transport {
   private intentionallyClosed = false;
 
   async invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
-    const { method, path, body } = mapCommandToHttp(command, args);
+    // Web mode interception for file operations
+    const webHandler = webModeHandlers[command];
+    if (webHandler) {
+      return webHandler(args) as Promise<T>;
+    }
+
+    const { method, path, body, extractField } = mapCommandToHttp(command, args);
 
     const headers: Record<string, string> = {};
     if (body) {
@@ -58,7 +65,14 @@ export class HttpTransport implements Transport {
       throw new Error(envelope.error.message || envelope.error.code || 'Unknown error');
     }
 
-    return envelope.data as T;
+    const data = envelope.data as T;
+
+    // Extract a specific field if the route mapper requested it
+    if (extractField && data && typeof data === 'object') {
+      return (data as Record<string, unknown>)[extractField] as T;
+    }
+
+    return data;
   }
 
   listen(event: string, handler: (payload: unknown) => void): () => void {

@@ -10,9 +10,6 @@
 
 import { HttpTransport } from './transportWs';
 
-// Re-export mapCommandToHttp so existing consumers that import from './transport' still work.
-export { mapCommandToHttp } from './transportRoutes';
-
 /**
  * Unified transport interface for communicating with the backend.
  * Both Tauri IPC and HTTP REST share this contract, allowing the React SPA

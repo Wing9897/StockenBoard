@@ -1,5 +1,6 @@
 pub mod registry;
 pub mod traits;
+pub mod types;
 
 // Crypto exchanges
 pub mod binance;
@@ -49,10 +50,8 @@ pub mod polymarket;
 // WebSocket
 pub mod ws_binance;
 
-pub use traits::{
-    get_all_provider_info, normalize_symbol, AssetData, DataProvider, DexPoolInfo, DexPoolLookup,
-    ProviderInfo, WebSocketProvider, WsTickerUpdate,
-};
+pub use traits::{DataProvider, DexPoolLookup, WebSocketProvider};
+pub use types::*;
 
 use std::sync::Arc;
 

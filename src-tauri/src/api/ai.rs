@@ -26,6 +26,7 @@ pub struct SaveConfigRequest {
     pub base_url: String,
     pub model: String,
     pub api_key: Option<String>,
+    pub disable_thinking: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -60,7 +61,7 @@ async fn save_config(
 ) -> axum::response::Response {
     match state
         .db
-        .save_ai_provider_config(&body.base_url, &body.model, body.api_key.as_deref())
+        .save_ai_provider_config(&body.base_url, &body.model, body.api_key.as_deref(), body.disable_thinking.unwrap_or(true))
     {
         Ok(()) => ApiResponse::ok(serde_json::json!({ "success": true })).into_response(),
         Err(e) => ApiError::bad_request(e).into_response(),
@@ -76,6 +77,7 @@ async fn get_config(State(state): State<Arc<CoreState>>) -> axum::response::Resp
                 "base_url": config.base_url,
                 "model": config.model,
                 "has_api_key": config.api_key.is_some(),
+                "disable_thinking": config.disable_thinking,
             });
             ApiResponse::ok(response).into_response()
         }
@@ -85,7 +87,7 @@ async fn get_config(State(state): State<Arc<CoreState>>) -> axum::response::Resp
 }
 
 /// POST /ai/test
-/// Test AI connection using the saved config (or override with request body values).
+/// Test AI connection and JSON output capability using the saved config (or override with request body values).
 async fn test_connection(
     State(state): State<Arc<CoreState>>,
     Json(body): Json<TestConnectionRequest>,
@@ -94,7 +96,6 @@ async fn test_connection(
     let config = match state.db.load_ai_provider_config() {
         Ok(Some(c)) => c,
         Ok(None) => {
-            // If no saved config, the request body must provide base_url and model
             let base_url = match &body.base_url {
                 Some(u) if !u.is_empty() => u.clone(),
                 _ => {
@@ -117,6 +118,7 @@ async fn test_connection(
                 base_url,
                 model,
                 api_key: body.api_key.clone(),
+                disable_thinking: true,
             }
         }
         Err(e) => return ApiError::internal(e).into_response(),
@@ -137,16 +139,27 @@ async fn test_connection(
         .clone();
     let api_key = body.api_key.clone().or(config.api_key);
 
-    // Build the test request
+    // Build a test prompt that validates JSON output capability
     let url = format!("{}/chat/completions", base_url.trim_end_matches('/'));
     let request_body = serde_json::json!({
         "model": model,
-        "messages": [{"role": "user", "content": "Hello"}],
-        "max_tokens": 5
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are a JSON output validator. Respond ONLY with valid JSON."
+            },
+            {
+                "role": "user",
+                "content": "Respond with exactly this JSON: {\"trigger\": false, \"reason\": \"test\"}"
+            }
+        ],
+        "max_tokens": 50,
+        "response_format": {"type": "json_object"},
+        "reasoning_effort": "none"
     });
 
     let client = match reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(15))
         .build()
     {
         Ok(c) => c,
@@ -178,7 +191,6 @@ async fn test_connection(
         .into_response();
     }
 
-    // Parse response to extract model name
     let resp_json: serde_json::Value = match response.json().await {
         Ok(j) => j,
         Err(e) => {
@@ -191,11 +203,52 @@ async fn test_connection(
         .and_then(|v| v.as_str())
         .unwrap_or(&model);
 
+    // Extract the AI's message content (support thinking models)
+    let content = resp_json
+        .get("choices")
+        .and_then(|c| c.get(0))
+        .and_then(|choice| {
+            choice.get("message").and_then(|m| {
+                m.get("content")
+                    .and_then(|c| c.as_str())
+                    .filter(|s| !s.is_empty())
+                    .or_else(|| m.get("reasoning").and_then(|r| r.as_str()))
+            })
+        })
+        .unwrap_or("");
+
+    // Validate JSON output capability
+    let trimmed = content.trim();
+    let json_ok = if trimmed.is_empty() {
+        false
+    } else {
+        serde_json::from_str::<serde_json::Value>(trimmed).is_ok()
+            || extract_json_block_api(trimmed)
+                .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+                .is_some()
+    };
+
+    let message = if json_ok {
+        format!("✓ {} — JSON output OK", model_name)
+    } else {
+        format!("⚠ {} — connected but JSON output may be unreliable", model_name)
+    };
+
     ApiResponse::ok(serde_json::json!({
-        "message": format!("Connection successful! Model: {}", model_name),
+        "message": message,
         "model": model_name,
+        "json_capable": json_ok,
     }))
     .into_response()
+}
+
+/// Extract JSON content from markdown code blocks
+fn extract_json_block_api(text: &str) -> Option<String> {
+    let start_marker = if text.contains("```json") { "```json" } else if text.contains("```") { "```" } else { return None };
+    let start = text.find(start_marker)? + start_marker.len();
+    let rest = &text[start..];
+    let end = rest.find("```")?;
+    Some(rest[..end].trim().to_string())
 }
 
 /// GET /ai/models?base_url=&api_key=

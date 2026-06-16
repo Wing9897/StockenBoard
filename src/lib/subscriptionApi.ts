@@ -27,7 +27,7 @@ export async function reloadPolling(): Promise<void> {
 }
 
 /** 判斷 provider 是否為 DEX 類型 */
-export function isDexProvider(providers: ProviderInfo[], providerId: string): boolean {
+function isDexProvider(providers: ProviderInfo[], providerId: string): boolean {
   return providers.find(p => p.id === providerId)?.provider_type === 'dex';
 }
 

@@ -38,6 +38,7 @@ pub fn get_all_providers() -> Vec<ProviderInfo> {
     get_all_provider_info()
 }
 
+/// Retained for external HTTP API consumers — not invoked by frontend UI
 #[tauri::command]
 pub async fn enable_provider(
     state: tauri::State<'_, Arc<CoreState>>,

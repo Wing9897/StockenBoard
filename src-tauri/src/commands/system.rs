@@ -93,6 +93,7 @@ pub async fn set_unattended_polling(
     Ok(())
 }
 
+/// Retained for external HTTP API consumers — not invoked by frontend UI
 #[tauri::command]
 pub async fn get_unattended_polling(state: tauri::State<'_, Arc<CoreState>>) -> Result<bool, String> {
     Ok(state.polling.is_unattended().await)

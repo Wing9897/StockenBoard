@@ -103,11 +103,17 @@
 # 依存関係のインストール
 npm install
 
-# 開発モード起動
-npm run tauri dev
+# デスクトップ開発モード起動
+npm run dev:desktop
 
-# ビルド
-npm run tauri build
+# Web Server 開発モード起動
+npm run dev:server
+
+# デスクトップビルド
+npm run build:desktop
+
+# Web Server ビルド
+npm run build:server
 ```
 
 ---
@@ -154,9 +160,12 @@ history = requests.get("http://localhost:8080/api/history", params={
 |---------|------|
 | **フロントエンド** | React 19 + TypeScript 5.8 + Vite 7 |
 | **バックエンド** | Tauri 2 + Rust 1.93 |
-| **データベース** | SQLite (tauri-plugin-sql) |
+| **データベース** | SQLite (rusqlite) |
 | **API** | Axum 0.7 + Tower |
 | **チャート** | lightweight-charts 5.1 |
+| **AI** | OpenAI 互換 API (Ollama, OpenAI, OpenRouter) |
+| **テーマ** | Catppuccin Mocha |
+| **デプロイ** | デスクトップ (Tauri) / Web サーバー / Docker |
 | **テーマ** | Catppuccin Mocha |
 
 ---
@@ -165,20 +174,24 @@ history = requests.get("http://localhost:8080/api/history", params={
 
 ```
 StockenBoard/
-├── src/                    # フロントエンドコード
+├── src/                    # フロントエンド (React + TypeScript)
 │   ├── components/         # React コンポーネント
 │   ├── hooks/              # カスタムフック
-│   ├── lib/                # ユーティリティと i18n
+│   ├── lib/                # ユーティリティ、i18n、トランスポート層
 │   └── types/              # TypeScript 型定義
-├── src-tauri/              # バックエンドコード
+├── src-tauri/              # バックエンド (Rust)
 │   └── src/
+│       ├── api/            # HTTP REST API (Axum ルーティング)
+│       ├── commands/       # Tauri IPC コマンド
+│       ├── db/             # SQLite データベース層
+│       ├── notifications/  # AI 評価、エンジン、スケジューラー、Telegram/Webhook
 │       ├── providers/      # 33 データソース実装
-│       ├── api_server.rs   # HTTP API サーバー
+│       ├── bin/server.rs   # スタンドアロン Web サーバー
 │       ├── polling.rs      # 統一ポーリングマネージャー
-│       ├── commands.rs     # Tauri コマンド
-│       └── db.rs           # データベーススキーマ
-├── test_api.py             # API テストスクリプト
-└── example_ai_usage.py     # AI 使用例
+│       └── core_state.rs   # 共有アプリケーション状態
+├── scripts/                # ビルド＆ユーティリティスクリプト
+├── data/                   # ランタイムデータ (DB、アイコン)
+└── .github/workflows/      # CI/CD (クロスプラットフォームビルド)
 ```
 
 ---

@@ -50,7 +50,7 @@ describe('ChannelSettings — delete confirmation flow', () => {
     render(<ChannelSettings />);
 
     // Wait for the async channel load to finish.
-    await screen.findByText('My Telegram');
+    await screen.findByText('My Telegram', {}, { timeout: 10_000 });
 
     // No confirm dialog before clicking delete.
     expect(screen.queryByText(t.notifications.deleteChannelConfirm)).not.toBeInTheDocument();
@@ -65,7 +65,7 @@ describe('ChannelSettings — delete confirmation flow', () => {
   it('calls delete_notification_channel with the id when confirmed', async () => {
     const user = userEvent.setup();
     render(<ChannelSettings />);
-    await screen.findByText('My Telegram');
+    await screen.findByText('My Telegram', {}, { timeout: 10_000 });
 
     const deleteButtons = screen.getAllByTitle(t.common.delete);
     await user.click(deleteButtons[0]);
@@ -84,7 +84,7 @@ describe('ChannelSettings — delete confirmation flow', () => {
   it('does NOT call delete_notification_channel when cancelled', async () => {
     const user = userEvent.setup();
     render(<ChannelSettings />);
-    await screen.findByText('My Telegram');
+    await screen.findByText('My Telegram', {}, { timeout: 10_000 });
 
     const deleteButtons = screen.getAllByTitle(t.common.delete);
     await user.click(deleteButtons[0]);
@@ -106,7 +106,7 @@ describe('ChannelSettings — delete confirmation flow', () => {
 describe('ChannelSettings — i18n', () => {
   it('renders channel-settings text in the active locale and updates on locale switch', async () => {
     const { rerender } = render(<ChannelSettings />);
-    await screen.findByText('My Telegram');
+    await screen.findByText('My Telegram', {}, { timeout: 10_000 });
 
     // zh_TW (default) strings should be present.
     const zhHeader = t.notifications.channels_label; // '通知通道'

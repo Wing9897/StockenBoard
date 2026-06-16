@@ -93,9 +93,9 @@ export interface ToastActions {
 /** 通知通道（對應後端 list_notification_channels 回傳） */
 export interface ChannelRow {
   id: number;
-  channel_type: string;   // 'telegram' | 'webhook'
+  channel_type: string;   // 'telegram' | 'webhook' | 'local'
   name: string;
-  config: string;         // JSON 字串
+  config: string;         // JSON string (empty '{}' for local)
   created_at: number;
 }
 

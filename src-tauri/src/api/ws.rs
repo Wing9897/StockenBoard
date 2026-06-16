@@ -49,29 +49,28 @@ impl WsMessage {
     fn from_app_event(event: &AppEvent) -> Self {
         match event {
             AppEvent::PriceUpdate {
-                provider_id,
+                provider_id: _,
                 data,
-                record_symbols,
+                record_symbols: _,
             } => WsMessage::new(
                 "price-update",
-                serde_json::json!({
-                    "provider_id": provider_id,
-                    "data": data,
-                    "record_symbols": record_symbols,
-                }),
+                serde_json::to_value(data).unwrap_or_default(),
             ),
             AppEvent::PriceError {
                 provider_id,
                 symbols,
                 error,
-            } => WsMessage::new(
-                "price-error",
-                serde_json::json!({
-                    "provider_id": provider_id,
-                    "symbols": symbols,
-                    "error": error,
-                }),
-            ),
+            } => {
+                // Match Tauri emit format: { "provider:symbol": "error msg", ... }
+                let map: std::collections::HashMap<String, String> = symbols
+                    .iter()
+                    .map(|s| (format!("{}:{}", provider_id, s), error.clone()))
+                    .collect();
+                WsMessage::new(
+                    "price-error",
+                    serde_json::to_value(&map).unwrap_or_default(),
+                )
+            }
             AppEvent::PollTick {
                 provider_id,
                 fetched_at,
@@ -87,6 +86,14 @@ impl WsMessage {
             AppEvent::NotificationTriggered(payload) => WsMessage::new(
                 "notification-triggered",
                 serde_json::to_value(payload).unwrap_or_default(),
+            ),
+            AppEvent::SystemNotification { title, body } => WsMessage::new(
+                "system-notification",
+                serde_json::json!({ "title": title, "body": body }),
+            ),
+            AppEvent::LogoDownloadProgress(progress) => WsMessage::new(
+                "logo-download-progress",
+                serde_json::to_value(progress).unwrap_or_default(),
             ),
         }
     }
@@ -114,7 +121,10 @@ struct WsCommand {
 // ─── Router ─────────────────────────────────────────────────────────────────────
 
 pub fn router() -> Router<Arc<CoreState>> {
-    Router::new().route("/ws", get(ws_handler))
+    Router::new()
+        .route("/ws", get(ws_handler))
+        .route("/ws/stream/start", axum::routing::post(start_ws_stream))
+        .route("/ws/stream/stop", axum::routing::post(stop_ws_stream))
 }
 
 // ─── Handler ────────────────────────────────────────────────────────────────────
@@ -271,4 +281,65 @@ async fn handle_command(
         }
         _ => {}
     }
+}
+
+// ─── REST Handlers for WS Stream Control ────────────────────────────────────────
+
+/// Request body for `POST /ws/stream/start` and `POST /ws/stream/stop`.
+#[derive(Debug, Deserialize)]
+struct WsStreamRequest {
+    provider_id: String,
+    #[serde(default)]
+    symbols: Option<Vec<String>>,
+}
+
+/// POST /ws/stream/start — start a WebSocket stream for a provider.
+///
+/// In server mode, WebSocket streams are managed per-connection via the `/api/ws` endpoint.
+/// This REST endpoint is provided for API compatibility. It returns success to acknowledge
+/// the request — the actual streaming happens through the WebSocket connection.
+async fn start_ws_stream(
+    State(_state): State<Arc<CoreState>>,
+    axum::extract::Json(body): axum::extract::Json<WsStreamRequest>,
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    use crate::api::{ApiError, ApiResponse};
+
+    let symbols = body.symbols.unwrap_or_default();
+    if symbols.is_empty() {
+        return ApiError::bad_request("symbols must not be empty").into_response();
+    }
+
+    // Validate provider supports WS
+    if create_ws_provider(&body.provider_id).is_none() {
+        return ApiError::bad_request(format!(
+            "Provider '{}' does not support WebSocket streaming",
+            body.provider_id
+        ))
+        .into_response();
+    }
+
+    // In server mode, WS streams are managed per WebSocket connection.
+    // Return success — the client should send start_ws_stream via the WS connection.
+    ApiResponse::ok(serde_json::json!({
+        "success": true,
+        "message": "Send start_ws_stream command via WebSocket connection for real-time data"
+    })).into_response()
+}
+
+/// POST /ws/stream/stop — stop a WebSocket stream for a provider.
+async fn stop_ws_stream(
+    State(_state): State<Arc<CoreState>>,
+    axum::extract::Json(body): axum::extract::Json<WsStreamRequest>,
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    use crate::api::ApiResponse;
+
+    // In server mode, WS streams are managed per WebSocket connection.
+    // Return success — the client should send stop_ws_stream via the WS connection.
+    let _ = &body.provider_id;
+    ApiResponse::ok(serde_json::json!({
+        "success": true,
+        "message": "Send stop_ws_stream command via WebSocket connection"
+    })).into_response()
 }

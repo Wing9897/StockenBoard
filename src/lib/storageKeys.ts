@@ -8,7 +8,6 @@ export const STORAGE_KEYS = {
     EXPAND_ALL: 'sb_expand_all',
     HIDE_PREPOST: 'sb_hide_prepost',
     THEME: 'sb_theme',
-    UNATTENDED: 'sb_unattended',
 
     // Views — Asset
     ACTIVE_VIEW_ID: 'sb_active_view_id',

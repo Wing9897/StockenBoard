@@ -157,6 +157,16 @@ impl DbPool {
         Ok(())
     }
 
+    pub fn count_active_recordings(&self) -> Result<i64, String> {
+        let conn = self.conn.lock().unwrap();
+        conn.query_row(
+            "SELECT COUNT(*) FROM subscriptions WHERE record_enabled = 1",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())
+    }
+
     pub fn set_record_hours(
         &self,
         id: i64,

@@ -1,4 +1,5 @@
 use super::traits::*;
+use super::types::*;
 
 pub struct CoinMarketCapProvider {
     client: reqwest::Client,

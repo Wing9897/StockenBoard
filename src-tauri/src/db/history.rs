@@ -162,11 +162,11 @@ impl DbPool {
         Ok(deleted as i64)
     }
 
-    pub fn purge_all_history(&self) -> Result<(), String> {
+    pub fn purge_all_history(&self) -> Result<i64, String> {
         let conn = self.conn.lock().unwrap();
         conn.execute("DELETE FROM price_history", [])
             .map_err(|e| e.to_string())?;
-        Ok(())
+        Ok(conn.changes() as i64)
     }
 
     pub fn delete_history_for_subscription(&self, subscription_id: i64) -> Result<i64, String> {

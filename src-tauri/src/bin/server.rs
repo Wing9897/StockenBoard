@@ -42,6 +42,12 @@ async fn main() {
     // Start background tasks (Notification Engine + AI Scheduler)
     state.start_background_tasks().await;
 
+    // Auto-set unattended based on active recordings at startup
+    let active_count = state.db.count_active_recordings().unwrap_or(0);
+    if active_count > 0 {
+        state.polling.set_unattended(true).await;
+    }
+
     // Start polling
     state.polling.start(
         state.db.clone(),

@@ -1,4 +1,5 @@
 use super::traits::*;
+use super::types::*;
 use std::collections::HashMap;
 
 pub struct AlpacaProvider {

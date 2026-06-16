@@ -1,74 +1,13 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { getTransport } from '../../lib/transport';
+import { useState, useCallback } from 'react';
 import { RuleList } from './RuleList';
 import { RuleForm } from './RuleForm';
 import { ChannelSettings } from './ChannelSettings';
-import { NotificationHistory } from './NotificationHistory';
 import { AiSettings } from './AiSettings';
 import { t } from '../../lib/i18n';
-import { silentLog } from '../../lib/errorLog';
 import type { EditRuleData } from '../../types';
 import './NotificationPage.css';
 
-type NotificationTab = 'rules' | 'channels' | 'history' | 'ai-settings';
-
-/** Global Cooldown settings block shown above the rule list */
-function GlobalCooldownSettings() {
-  const [cooldown, setCooldown] = useState(30);
-  const [loading, setLoading] = useState(true);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    getTransport().invoke<number>('get_notification_global_cooldown')
-      .then(val => setCooldown(val))
-      .catch(e => silentLog('GlobalCooldown.load', e))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const handleChange = useCallback((value: number) => {
-    setCooldown(value);
-    // Debounce backend writes to avoid spamming while dragging the slider
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      getTransport().invoke('set_notification_global_cooldown', { secs: value })
-        .catch(e => silentLog('GlobalCooldown.save', e));
-    }, 300);
-  }, []);
-
-  if (loading) return null;
-
-  return (
-    <div className="global-cooldown-section">
-      <div className="form-field">
-        <span className="global-cooldown-label">{t.notifications.globalCooldown}</span>
-        <p className="form-hint">{t.notifications.globalCooldownDesc}</p>
-        <div className="ai-slider-row">
-          <input
-            type="range"
-            className="ai-slider"
-            min={0}
-            max={3600}
-            step={1}
-            value={cooldown}
-            onChange={e => handleChange(Number(e.target.value))}
-          />
-          <input
-            type="number"
-            className="ai-slider-value"
-            min={0}
-            max={3600}
-            value={cooldown}
-            onChange={e => {
-              const v = Math.max(0, Math.min(3600, Number(e.target.value) || 0));
-              handleChange(v);
-            }}
-          />
-          <span className="global-cooldown-unit">{t.notifications.globalCooldownUnit}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
+type NotificationTab = 'rules' | 'channels' | 'ai-settings';
 
 export function NotificationPage() {
   const [activeTab, setActiveTab] = useState<NotificationTab>('rules');
@@ -111,12 +50,6 @@ export function NotificationPage() {
           {t.notifications.channels}
         </button>
         <button
-          className={`notification-tab ${activeTab === 'history' ? 'active' : ''}`}
-          onClick={() => setActiveTab('history')}
-        >
-          {t.notifications.history}
-        </button>
-        <button
           className={`notification-tab ${activeTab === 'ai-settings' ? 'active' : ''}`}
           onClick={() => setActiveTab('ai-settings')}
         >
@@ -126,16 +59,10 @@ export function NotificationPage() {
 
       <div className="notification-content">
         {activeTab === 'rules' && (
-          <>
-            <GlobalCooldownSettings />
-            <RuleList key={ruleListKey} onAddRule={handleAddRule} onEditRule={handleEditRule} />
-          </>
+          <RuleList key={ruleListKey} onAddRule={handleAddRule} onEditRule={handleEditRule} />
         )}
         {activeTab === 'channels' && (
           <ChannelSettings />
-        )}
-        {activeTab === 'history' && (
-          <NotificationHistory />
         )}
         {activeTab === 'ai-settings' && (
           <AiSettings />

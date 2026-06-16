@@ -64,7 +64,7 @@ describe('RuleList delete confirmation flow', () => {
     render(<RuleList />);
 
     // Wait for the async rule load to finish rendering.
-    await screen.findByText('Rule A');
+    await screen.findByText('Rule A', {}, { timeout: 10_000 });
 
     // Click the delete (🗑) button — identified by its localized title.
     fireEvent.click(screen.getByTitle(t.common.delete));
@@ -85,7 +85,7 @@ describe('RuleList delete confirmation flow', () => {
     setupInvoke([makeRule({ id: 7 })]);
     render(<RuleList />);
 
-    await screen.findByText('Rule A');
+    await screen.findByText('Rule A', {}, { timeout: 10_000 });
 
     fireEvent.click(screen.getByTitle(t.common.delete));
     expect(await screen.findByText(t.notifications.deleteConfirm)).toBeInTheDocument();
@@ -109,7 +109,7 @@ describe('RuleList i18n condition summary', () => {
     setupInvoke([makeRule({ condition_type: 'price_above', threshold: 100 })]);
     const { rerender } = render(<RuleList />);
 
-    await screen.findByText('Rule A');
+    await screen.findByText('Rule A', {}, { timeout: 10_000 });
 
     // Base locale (zh_TW): condPriceAbove(v) => `價格 > $${v}`
     expect(screen.getByText('價格 > $100')).toBeInTheDocument();

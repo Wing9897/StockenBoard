@@ -103,11 +103,17 @@
 # 의존성 설치
 npm install
 
-# 개발 모드 시작
-npm run tauri dev
+# 데스크톱 개발 모드 시작
+npm run dev:desktop
 
-# 빌드
-npm run tauri build
+# Web Server 개발 모드 시작
+npm run dev:server
+
+# 데스크톱 빌드
+npm run build:desktop
+
+# Web Server 빌드
+npm run build:server
 ```
 
 ---
@@ -154,9 +160,12 @@ history = requests.get("http://localhost:8080/api/history", params={
 |---------|------|
 | **프론트엔드** | React 19 + TypeScript 5.8 + Vite 7 |
 | **백엔드** | Tauri 2 + Rust 1.93 |
-| **데이터베이스** | SQLite (tauri-plugin-sql) |
+| **데이터베이스** | SQLite (rusqlite) |
 | **API** | Axum 0.7 + Tower |
 | **차트** | lightweight-charts 5.1 |
+| **AI** | OpenAI 호환 API (Ollama, OpenAI, OpenRouter) |
+| **테마** | Catppuccin Mocha |
+| **배포** | 데스크톱 (Tauri) / 웹 서버 / Docker |
 | **테마** | Catppuccin Mocha |
 
 ---
@@ -165,20 +174,24 @@ history = requests.get("http://localhost:8080/api/history", params={
 
 ```
 StockenBoard/
-├── src/                    # 프론트엔드 코드
+├── src/                    # 프론트엔드 (React + TypeScript)
 │   ├── components/         # React 컴포넌트
 │   ├── hooks/              # 커스텀 훅
-│   ├── lib/                # 유틸리티 및 i18n
+│   ├── lib/                # 유틸리티, i18n, 트랜스포트 레이어
 │   └── types/              # TypeScript 타입 정의
-├── src-tauri/              # 백엔드 코드
+├── src-tauri/              # 백엔드 (Rust)
 │   └── src/
+│       ├── api/            # HTTP REST API (Axum 라우팅)
+│       ├── commands/       # Tauri IPC 커맨드
+│       ├── db/             # SQLite 데이터베이스 레이어
+│       ├── notifications/  # AI 평가기, 엔진, 스케줄러, Telegram/Webhook
 │       ├── providers/      # 33개 데이터 소스 구현
-│       ├── api_server.rs   # HTTP API 서버
+│       ├── bin/server.rs   # 독립형 웹 서버 진입점
 │       ├── polling.rs      # 통합 폴링 매니저
-│       ├── commands.rs     # Tauri 커맨드
-│       └── db.rs           # 데이터베이스 스키마
-├── test_api.py             # API 테스트 스크립트
-└── example_ai_usage.py     # AI 사용 예제
+│       └── core_state.rs   # 공유 애플리케이션 상태
+├── scripts/                # 빌드 및 유틸리티 스크립트
+├── data/                   # 런타임 데이터 (DB, 아이콘)
+└── .github/workflows/      # CI/CD (크로스 플랫폼 빌드)
 ```
 
 ---

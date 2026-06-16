@@ -7,6 +7,7 @@ interface AiProviderConfigResponse {
   base_url: string;
   model: string;
   has_api_key: boolean;
+  disable_thinking: boolean;
 }
 
 type ProviderType = 'ollama' | 'openai' | 'openrouter' | 'custom';
@@ -33,6 +34,7 @@ export function AiSettings() {
   const [baseUrl, setBaseUrl] = useState('http://localhost:11434/v1');
   const [model, setModel] = useState('');
   const [apiKey, setApiKey] = useState('');
+  const [disableThinking, setDisableThinking] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -51,6 +53,7 @@ export function AiSettings() {
       if (config) {
         setBaseUrl(config.base_url);
         setModel(config.model);
+        setDisableThinking(config.disable_thinking ?? true);
         // Detect provider type from URL
         if (config.base_url.includes('localhost:11434')) {
           setProviderType('ollama');
@@ -128,6 +131,7 @@ export function AiSettings() {
         base_url: baseUrl.trim(),
         model: model.trim(),
         api_key: apiKey.trim() || null,
+        disable_thinking: disableThinking,
       });
       setFeedback({ type: 'success', msg: t.notifications.saveSuccess });
       setApiKey('');
@@ -139,13 +143,31 @@ export function AiSettings() {
   };
 
   const handleTestConnection = async () => {
+    if (!model.trim()) {
+      setTestResult({ type: 'error', msg: t.notifications.modelRequired });
+      return;
+    }
+    if (!baseUrl.trim()) {
+      setTestResult({ type: 'error', msg: t.notifications.baseUrlRequired });
+      return;
+    }
     setTestResult(null);
     setTesting(true);
     try {
-      const result = await getTransport().invoke<string>('test_ai_connection');
-      setTestResult({ type: 'success', msg: `${t.notifications.testSuccess}: ${result}` });
+      // Pass current form values so test uses the selected model, not just what's saved in DB
+      const result = await getTransport().invoke<string>('test_ai_connection', {
+        baseUrl: baseUrl.trim(),
+        model: model.trim(),
+        apiKey: apiKey.trim() || null,
+      });
+      const msg = typeof result === 'string' ? result
+        : (result as unknown as { message?: string })?.message || String(result);
+      setTestResult({ type: 'success', msg });
     } catch (e: unknown) {
-      setTestResult({ type: 'error', msg: typeof e === 'string' ? e : t.notifications.testFailed });
+      const msg = typeof e === 'string' ? e
+        : e instanceof Error ? e.message
+        : (e as { message?: string })?.message || t.notifications.testFailed;
+      setTestResult({ type: 'error', msg });
     } finally {
       setTesting(false);
     }
@@ -246,6 +268,17 @@ export function AiSettings() {
           </label>
         )}
 
+        <div className="form-field">
+          <label className="ai-toggle-row">
+            <span>{t.notifications.disableThinking}</span>
+            <label className="toggle-switch">
+              <input type="checkbox" checked={disableThinking} onChange={e => setDisableThinking(e.target.checked)} />
+              <span className="toggle-slider"></span>
+            </label>
+          </label>
+          <p className="form-hint">{t.notifications.disableThinkingHint}</p>
+        </div>
+
         <div className="rule-form-actions">
           <button type="submit" className="btn-save" disabled={saving}>
             {saving ? t.common.saving : t.common.save}
@@ -253,7 +286,7 @@ export function AiSettings() {
           <button
             type="button"
             className="btn-test"
-            disabled={testing}
+            disabled={testing || !model.trim() || !baseUrl.trim()}
             onClick={handleTestConnection}
           >
             {testing ? t.notifications.testing : t.notifications.testConnection}

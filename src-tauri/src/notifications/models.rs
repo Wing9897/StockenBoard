@@ -92,7 +92,11 @@ pub struct AiProviderConfig {
     pub base_url: String,
     pub model: String,
     pub api_key: Option<String>, // 已解密的 API key
+    #[serde(default = "default_true")]
+    pub disable_thinking: bool,  // 禁用思考模式以確保穩定 JSON 輸出
 }
+
+fn default_true() -> bool { true }
 
 impl AiProviderConfig {
     /// 驗證 AiProviderConfig 的必要欄位
@@ -118,6 +122,7 @@ pub struct AiProviderConfigResponse {
     pub base_url: String,
     pub model: String,
     pub has_api_key: bool,
+    pub disable_thinking: bool,
 }
 
 // === 通道類型 ===
@@ -126,6 +131,8 @@ pub struct AiProviderConfigResponse {
 pub enum ChannelType {
     Telegram,
     Webhook,
+    Local,
+    System,
 }
 
 impl FromStr for ChannelType {
@@ -135,6 +142,8 @@ impl FromStr for ChannelType {
         match s {
             "telegram" => Ok(Self::Telegram),
             "webhook" => Ok(Self::Webhook),
+            "local" => Ok(Self::Local),
+            "system" => Ok(Self::System),
             _ => Err(()),
         }
     }

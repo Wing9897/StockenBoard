@@ -54,11 +54,11 @@ pub fn router() -> Router<Arc<CoreState>> {
     Router::new()
         .route("/views", get(list_views).post(create_view))
         .route("/views/sub-counts", get(get_view_sub_counts))
-        .route("/views/{id}", axum::routing::put(rename_view).delete(delete_view))
-        .route("/views/{id}/subscriptions", axum::routing::post(add_sub_to_view))
-        .route("/views/{id}/subscription-ids", get(get_view_subscription_ids))
+        .route("/views/:id", axum::routing::put(rename_view).delete(delete_view))
+        .route("/views/:id/subscriptions", axum::routing::post(add_sub_to_view))
+        .route("/views/:id/subscription-ids", get(get_view_subscription_ids))
         .route(
-            "/views/{id}/subscriptions/{sub_id}",
+            "/views/:id/subscriptions/:sub_id",
             delete(remove_sub_from_view),
         )
 }

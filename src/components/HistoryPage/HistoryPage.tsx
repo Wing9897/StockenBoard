@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { getTransport } from '../../lib/transport';
 
 import { t } from '../../lib/i18n';
+import { TZ_LABEL } from '../../lib/format';
 import { silentLog } from '../../lib/errorLog';
 import { useConfirm } from '../../hooks/useConfirm';
 import { ConfirmDialog } from '../ConfirmDialog/ConfirmDialog';
@@ -13,6 +14,11 @@ import { HistoryChart } from './HistoryChart';
 import { HistoryTable } from './HistoryTable';
 import type { Subscription, PriceHistoryRecord } from '../../types';
 import './HistoryPage.css';
+
+export interface ToggleRecordResponse {
+  success: boolean;
+  needs_confirm: boolean;
+}
 
 type ViewType = 'chart' | 'table';
 type RangePreset = '1d' | '1w' | '1m' | '1y' | 'custom';
@@ -33,13 +39,6 @@ const RANGE_LABELS: { key: RangePreset; label: () => string }[] = [
   { key: 'custom', label: () => t.history.custom },
 ];
 
-const TZ_LABEL = (() => {
-  const off = -new Date().getTimezoneOffset();
-  const h = Math.floor(Math.abs(off) / 60);
-  const m = Math.abs(off) % 60;
-  return `UTC${off >= 0 ? '+' : '-'}${h}${m ? ':' + String(m).padStart(2, '0') : ''}`;
-})();
-
 function label(s: Subscription) { return s.display_name || s.symbol; }
 
 export function HistoryPage({ onToast }: Props) {
@@ -59,6 +58,9 @@ export function HistoryPage({ onToast }: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
   const { confirmState, requestConfirm, handleConfirm, handleCancel } = useConfirm();
 
+  // ── Derived unattended state (auto from subscription recording status) ──
+  const isUnattended = useMemo(() => subs.some(s => s.record_enabled), [subs]);
+
   // ── 載入訂閱 ──
   const loadSubs = useCallback(async () => {
     try {
@@ -73,9 +75,21 @@ export function HistoryPage({ onToast }: Props) {
 
   // ── 切換紀錄 ──
   const toggle = useCallback(async (id: number, on: boolean) => {
-    await getTransport().invoke('toggle_record', { subscriptionId: id, enabled: on });
+    const resp = await getTransport().invoke<ToggleRecordResponse>('toggle_record', {
+      subscriptionId: id, enabled: on
+    });
+    if (resp.needs_confirm) {
+      if (!await requestConfirm(t.history.unattendedConfirm, {
+        title: t.history.confirmRecordTitle,
+        confirmLabel: t.history.confirmRecordEnable,
+        cancelLabel: t.history.confirmRecordCancel,
+      })) return;
+      await getTransport().invoke<ToggleRecordResponse>('toggle_record', {
+        subscriptionId: id, enabled: on, confirmed: true
+      });
+    }
     setSubs(p => p.map(s => s.id === id ? { ...s, record_enabled: on ? 1 : 0 } : s));
-  }, []);
+  }, [requestConfirm]);
 
   const batchToggle = useCallback(async (on: boolean) => {
     // 篩選當前可見的訂閱
@@ -86,11 +100,31 @@ export function HistoryPage({ onToast }: Props) {
     if (kw.length) list = list.filter(s => kw.some(q => `${s.display_name || ''} ${s.symbol} ${s.selected_provider_id}`.toLowerCase().includes(q)));
     const targets = list.filter(s => on ? !s.record_enabled : s.record_enabled);
     if (!targets.length) return;
-    for (const s of targets) await getTransport().invoke('toggle_record', { subscriptionId: s.id, enabled: on });
+
+    // 0→N confirmation: if enabling and no recordings currently active, show confirm
+    if (on && !subs.some(s => s.record_enabled)) {
+      if (!await requestConfirm(t.history.unattendedConfirm, {
+        title: t.history.confirmRecordTitle,
+        confirmLabel: t.history.confirmRecordEnable,
+        cancelLabel: t.history.confirmRecordCancel,
+      })) return;
+      // First call with confirmed: true to trigger unattended enable
+      await getTransport().invoke<ToggleRecordResponse>('toggle_record', { subscriptionId: targets[0].id, enabled: true, confirmed: true });
+      // Remaining calls invoke normally (count > 0 after first)
+      for (const s of targets.slice(1)) {
+        await getTransport().invoke<ToggleRecordResponse>('toggle_record', { subscriptionId: s.id, enabled: true });
+      }
+    } else {
+      // Batch disable or batch enable when already recording — invoke normally
+      for (const s of targets) {
+        await getTransport().invoke<ToggleRecordResponse>('toggle_record', { subscriptionId: s.id, enabled: on });
+      }
+    }
+
     const ids = new Set(targets.map(s => s.id));
     setSubs(p => p.map(s => ids.has(s.id) ? { ...s, record_enabled: on ? 1 : 0 } : s));
     onToast.success(t.history.batchDone(targets.length, on));
-  }, [subs, filter, search, onToast]);
+  }, [subs, filter, search, onToast, requestConfirm]);
 
   // ── 紀錄時段 ──
   const saveRecordHours = useCallback(async (id: number, from: number | null, to: number | null) => {
@@ -132,7 +166,7 @@ export function HistoryPage({ onToast }: Props) {
     if (!await requestConfirm(t.history.cleanupCurrentConfirm)) return;
     try {
       const n = await getTransport().invoke<number>('delete_subscription_history', { subscriptionId: selectedId });
-      onToast.success(t.history.purgeAllDone(n));
+      onToast.success(t.history.cleanupDone(n));
       setRecords([]);
     } catch (e) { onToast.error(String(e)); }
   }, [selectedId, onToast, requestConfirm]);
@@ -203,6 +237,7 @@ export function HistoryPage({ onToast }: Props) {
           onCollapse={() => setCollapsed(true)}
           onSaveRecordHours={saveRecordHours}
           tzLabel={TZ_LABEL}
+          isUnattended={isUnattended}
         />
       )}
 
@@ -294,7 +329,14 @@ export function HistoryPage({ onToast }: Props) {
       </div>
 
       {confirmState && (
-        <ConfirmDialog message={confirmState.message} onConfirm={handleConfirm} onCancel={handleCancel} />
+        <ConfirmDialog
+          message={confirmState.message}
+          title={confirmState.title}
+          confirmLabel={confirmState.confirmLabel}
+          cancelLabel={confirmState.cancelLabel}
+          onConfirm={handleConfirm}
+          onCancel={handleCancel}
+        />
       )}
     </div>
   );

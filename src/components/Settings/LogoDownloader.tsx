@@ -2,7 +2,7 @@
  * LogoDownloader — 一鍵下載所有缺少 icon 的訂閱 logo（含進度條）
  */
 import { useState, useEffect } from 'react';
-import { getTransport } from '../../lib/transport';
+import { getTransport, isTauri } from '../../lib/transport';
 import { t } from '../../lib/i18n';
 import { clearAllIcons } from '../AssetCard/AssetIcon';
 
@@ -26,6 +26,7 @@ interface Props {
 export function LogoDownloader({ onToast }: Props) {
   const [downloading, setDownloading] = useState(false);
   const [progress, setProgress] = useState<ProgressPayload | null>(null);
+  const [iconsPath, setIconsPath] = useState<string | null>(null);
 
   useEffect(() => {
     const unlisten = getTransport().listen('logo-download-progress', (payload) => {
@@ -50,11 +51,29 @@ export function LogoDownloader({ onToast }: Props) {
     }
   };
 
+  const handleOpenFolder = async () => {
+    if (isTauri()) {
+      try {
+        await getTransport().invoke('open_icons_folder');
+      } catch (e) {
+        onToast?.('error', t.settings.logoManagement, typeof e === 'string' ? e : String(e));
+      }
+    } else {
+      // Web mode: fetch and display the path
+      try {
+        const dir = await getTransport().invoke<string>('get_icons_dir');
+        setIconsPath(dir);
+      } catch (e) {
+        onToast?.('error', t.settings.logoManagement, typeof e === 'string' ? e : String(e));
+      }
+    }
+  };
+
   const pct = progress ? Math.round((progress.current / progress.total) * 100) : 0;
 
   return (
     <div className="settings-section">
-      <h3>🖼️ {t.settings.downloadLogos}</h3>
+      <h3>🖼️ {t.settings.logoManagement}</h3>
       <p style={{ fontSize: '12px', color: 'var(--subtext0)', margin: '8px 0' }}>
         {t.settings.downloadLogosDesc}
       </p>
@@ -75,6 +94,14 @@ export function LogoDownloader({ onToast }: Props) {
             <div style={{ width: `${pct}%`, height: '100%', background: 'var(--blue)', borderRadius: '2px', transition: 'width 0.2s ease' }} />
           </div>
         </div>
+      )}
+      <button className="dm-btn export" onClick={handleOpenFolder}>
+        {t.settings.openFolder}
+      </button>
+      {iconsPath && (
+        <p style={{ fontSize: '11px', color: 'var(--subtext0)', margin: '6px 0 0', wordBreak: 'break-all' }}>
+          📁 {iconsPath}
+        </p>
       )}
     </div>
   );

@@ -1,6 +1,6 @@
-use crate::providers::traits::{
-    provider_info_or_panic, shared_client, AssetData, AssetDataBuilder, DataProvider, DexPoolInfo,
-    DexPoolLookup, ProviderInfo,
+use crate::providers::traits::{DataProvider, DexPoolLookup};
+use crate::providers::types::{
+    provider_info_or_panic, shared_client, AssetData, AssetDataBuilder, DexPoolInfo, ProviderInfo,
 };
 use serde::Deserialize;
 

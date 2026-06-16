@@ -34,17 +34,39 @@ fn subscription_strategy() -> impl Strategy<Value = (String, String, Option<Stri
         Just("alphavantage".to_string()),
     ];
 
-    // Generate symbols that are already in normalized form to make round-trip comparison easy:
-    // - crypto: uppercase base (e.g., "BTC", "ETH")
-    // - stock/forex: uppercase (e.g., "AAPL", "EURUSD")
-    let symbol = "[A-Z]{3,5}";
+    // For crypto, use known base symbols to avoid the symbol normalizer splitting
+    // them incorrectly (e.g. "AGBP" -> "A-GBP" because GBP is a known quote suffix).
+    // For stock/forex, any uppercase alpha string works since normalize just uppercases.
+    let crypto_symbol = prop_oneof![
+        Just("BTC".to_string()),
+        Just("ETH".to_string()),
+        Just("SOL".to_string()),
+        Just("ADA".to_string()),
+        Just("DOT".to_string()),
+        Just("AVAX".to_string()),
+        Just("LINK".to_string()),
+        Just("ATOM".to_string()),
+        Just("XRP".to_string()),
+        Just("DOGE".to_string()),
+    ];
+    let non_crypto_symbol = "[A-Z]{3,5}".prop_map(|s| s.to_string());
 
     let display_name = prop_oneof![
         Just(None),
         "[A-Za-z ]{3,15}".prop_map(|s| Some(s)),
     ];
 
-    (Just("asset".to_string()), symbol.prop_map(|s| s.to_string()), display_name, provider_id, asset_type)
+    // Pair the asset_type with an appropriate symbol strategy
+    asset_type.prop_flat_map(move |at| {
+        let sym = if at == "crypto" {
+            crypto_symbol.clone().boxed()
+        } else {
+            non_crypto_symbol.clone().boxed()
+        };
+        let display_name = display_name.clone();
+        let provider_id = provider_id.clone();
+        (Just("asset".to_string()), sym, display_name, provider_id, Just(at))
+    })
 }
 
 /// Strategy for generating valid view data.

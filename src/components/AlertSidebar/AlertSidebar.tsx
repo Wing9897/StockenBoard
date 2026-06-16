@@ -8,10 +8,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { getTransport } from '../../lib/transport';
 import { t } from '../../lib/i18n';
+import { formatConditionLabel, formatTimestamp } from '../../lib/format';
 import type { NotificationTriggeredEvent } from '../../types';
 import './AlertSidebar.css';
 
-interface AlertItem {
+export interface AlertItem {
   id: number;
   rule_name: string;
   symbol: string;
@@ -24,6 +25,76 @@ interface AlertItem {
   ai_reason: string | null;
 }
 
+/**
+ * Pure filter function for AlertSidebar items.
+ * Applies text search (case-insensitive on rule_name, symbol, ai_reason)
+ * and condition type filter as an intersection.
+ */
+export function filterAlerts(
+  items: AlertItem[],
+  searchText: string,
+  conditionType: string
+): AlertItem[] {
+  return items.filter(item => {
+    // Text search: case-insensitive match on rule_name, symbol, ai_reason
+    if (searchText) {
+      const lower = searchText.toLowerCase();
+      const matchesText =
+        item.rule_name.toLowerCase().includes(lower) ||
+        item.symbol.toLowerCase().includes(lower) ||
+        (item.ai_reason?.toLowerCase().includes(lower) ?? false);
+      if (!matchesText) return false;
+    }
+    // Condition type filter
+    if (conditionType !== 'all' && item.condition_type !== conditionType) {
+      return false;
+    }
+    return true;
+  });
+}
+
+/* ── FilterBar ── */
+interface FilterBarProps {
+  searchText: string;
+  onSearchChange: (text: string) => void;
+  conditionFilter: string;
+  onConditionChange: (type: string) => void;
+  onClear: () => void;
+}
+
+function FilterBar({ searchText, onSearchChange, conditionFilter, onConditionChange, onClear }: FilterBarProps) {
+  const isActive = searchText !== '' || conditionFilter !== 'all';
+
+  return (
+    <div className="alert-filter-bar">
+      <input
+        type="text"
+        className="alert-filter-search"
+        placeholder="Search alerts..."
+        value={searchText}
+        onChange={e => onSearchChange(e.target.value)}
+      />
+      <select
+        className="alert-filter-select"
+        value={conditionFilter}
+        onChange={e => onConditionChange(e.target.value)}
+      >
+        <option value="all">All</option>
+        <option value="price_above">Price Above</option>
+        <option value="price_below">Price Below</option>
+        <option value="change_pct_above">Change % Up</option>
+        <option value="change_pct_below">Change % Down</option>
+        <option value="ai">AI</option>
+      </select>
+      {isActive && (
+        <button className="alert-filter-clear" onClick={onClear} aria-label="Clear filters">
+          ✕
+        </button>
+      )}
+    </div>
+  );
+}
+
 interface Props {
   panelOpen: boolean;
   onClose: () => void;
@@ -31,26 +102,32 @@ interface Props {
 
 let nextId = 1;
 
-function formatConditionLabel(conditionType: string, threshold: number): string {
-  switch (conditionType) {
-    case 'price_above': return t.notifications.condPriceAbove(threshold.toLocaleString());
-    case 'price_below': return t.notifications.condPriceBelow(threshold.toLocaleString());
-    case 'change_pct_above': return t.notifications.condChangeUp(String(threshold));
-    case 'change_pct_below': return t.notifications.condChangeDown(String(threshold));
-    case 'ai': return t.notifications.aiRule;
-    default: return conditionType;
-  }
-}
-
-function formatTime(unix: number): string {
-  return new Date(unix * 1000).toLocaleString();
-}
-
 export function AlertSidebar({ panelOpen, onClose }: Props) {
   const [items, setItems] = useState<AlertItem[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [popups, setPopups] = useState<AlertItem[]>([]);
   const listRef = useRef<HTMLDivElement>(null);
+
+  // Filter state
+  const [searchText, setSearchText] = useState('');
+  const [conditionFilter, setConditionFilter] = useState<string>('all');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // 200ms debounce for search text
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchText);
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [searchText]);
+
+  // Compute visible items by applying active filters
+  const visibleItems = filterAlerts(items, debouncedSearch, conditionFilter);
+
+  const handleClearFilters = useCallback(() => {
+    setSearchText('');
+    setConditionFilter('all');
+  }, []);
 
   // Load recent history on first panel open
   useEffect(() => {
@@ -145,11 +222,20 @@ export function AlertSidebar({ panelOpen, onClose }: Props) {
               <h3>{t.nav.notifications}</h3>
               <button className="alert-panel-close" onClick={onClose} aria-label={t.common.close}>✕</button>
             </div>
+            <FilterBar
+              searchText={searchText}
+              onSearchChange={setSearchText}
+              conditionFilter={conditionFilter}
+              onConditionChange={setConditionFilter}
+              onClear={handleClearFilters}
+            />
             <div className="alert-panel-list" ref={listRef}>
               {items.length === 0 ? (
                 <div className="alert-panel-empty">{t.notifications.noHistory}</div>
+              ) : visibleItems.length === 0 ? (
+                <div className="alert-panel-empty">{t.notifications.noFilterResults}</div>
               ) : (
-                items.map(item => (
+                visibleItems.map(item => (
                   <div key={item.id} className="alert-card">
                     <div className="alert-card-header">
                       <span className="alert-card-rule">{item.rule_name}</span>
@@ -170,7 +256,7 @@ export function AlertSidebar({ panelOpen, onClose }: Props) {
                     {item.is_ai && item.ai_reason && (
                       <div className="alert-card-reason">{item.ai_reason}</div>
                     )}
-                    <div className="alert-card-time">{formatTime(item.triggered_at)}</div>
+                    <div className="alert-card-time">{formatTimestamp(item.triggered_at)}</div>
                   </div>
                 ))
               )}

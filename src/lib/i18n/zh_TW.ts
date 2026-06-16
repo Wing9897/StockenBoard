@@ -221,7 +221,6 @@ const zh_TW = {
     batchActions: '批量操作',
     expandAll: '統一展開詳情',
     showPrePost: '顯示盤前/盤後',
-    unattendedPolling: '後台監聽全部',
   },
   providers: {
     title: '數據源',
@@ -290,6 +289,8 @@ const zh_TW = {
     cardGap: '卡片間距',
     cardColumns: '卡片欄數（0=自動）',
     resetDefaults: '重置預設',
+    logoManagement: 'Logo 管理',
+    openFolder: '開啟資料夾',
     downloadLogos: '下載 Logo',
     downloadLogosDesc: '自動從網路下載已訂閱資產的 Logo（僅下載尚未設定的）',
     downloadLogosRunning: '下載中...',
@@ -428,10 +429,14 @@ const zh_TW = {
     recordHoursTo: '至',
     recordHoursOverride: '訂閱 > 數據源 > 全天',
     recordHoursSaved: '紀錄時段已更新',
-    recordHoursClear: '清除（使用數據源設定）',
-    recordHoursProviderDefault: '數據源預設',
     recordHoursPriority: '優先順序：訂閱 > 數據源 > 全天',
     recordHoursProviderHint: '數據源預設，訂閱可覆蓋',
+    confirmRecordTitle: '啟用後台監聽',
+    confirmRecordEnable: '啟用監聽',
+    confirmRecordCancel: '取消',
+    unattendedConfirm: '啟用後台監聽將在背景持續輪詢所有訂閱的價格，無論您目前在哪個頁面。確定要啟用嗎？',
+    unattendedActive: '後台監聽中',
+    unattendedInactive: '後台監聽已停止',
   },
   providerDesc: {
     binance: '免費無限制 (1200 weight/min)',
@@ -471,13 +476,13 @@ const zh_TW = {
   notifications: {
     rules: '規則列表',
     channels: '通道設定',
-    history: '歷史紀錄',
     aiSettings: 'AI 設定',
     addRule: '新增規則',
     addChannel: '新增通道',
     noRules: '尚無通知規則',
     noChannels: '尚無通知通道',
     noHistory: '尚無通知紀錄',
+    noFilterResults: '無符合條件的通知',
     testSuccess: '測試成功',
     testFailed: '測試失敗',
     deleteConfirm: '確定要刪除？',
@@ -492,6 +497,8 @@ const zh_TW = {
     channels_label: '通知通道',
     noChannelsHint: '尚無通道，請先至「通道設定」新增',
     cooldown: '冷卻期（秒）',
+    cooldownPlaceholder: '留空使用全局設定',
+    cooldownHint: '可選。設定後會覆蓋此規則的全局冷卻期。',
     promptLabel: '觸發條件描述',
     promptPlaceholder: '例：當價格在短時間內大幅上升超過 5% 時提醒我',
     historyWindow: '歷史窗口（筆數）',
@@ -504,14 +511,14 @@ const zh_TW = {
     baseUrl: 'API Base URL',
     model: '模型名稱',
     apiKey: 'API Key（可選）',
-    apiKeyHint: '本地 Ollama 無需填寫。留空表示不更新已儲存的 Key。',
+
     testConnection: '測試連線',
     testing: '測試中...',
     saveSuccess: '儲存成功',
     saveFailed: '儲存失敗',
     nameRequired: '請輸入規則名稱',
     subscriptionRequired: '請選擇訂閱',
-    channelRequired: '請至少選擇一個通道',
+
     thresholdRequired: '請輸入有效閾值',
     promptRequired: '請輸入觸發條件描述',
     promptTooLong: '觸發條件描述不可超過 2000 字',
@@ -548,12 +555,7 @@ const zh_TW = {
     deleteChannelConfirm: '確定要刪除此通道？',
     test: '測試',
     testOk: '測試成功！',
-    // 通知紀錄（NotificationHistory）
-    filterFrom: '從',
-    filterTo: '至',
-    filterApply: '篩選',
-    statusSuccess: '✓ 成功',
-    statusFailed: '✗ 失敗',
+
     // AI 設定（AiSettings）
     providerType: '服務類型',
     providerOllama: 'Ollama (本地)',
@@ -571,15 +573,21 @@ const zh_TW = {
     openrouterModelHint: '推薦：meta-llama/llama-3.1-8b-instruct:free、google/gemma-2-9b-it:free（免費模型）',
     apiKeyOptionalSuffix: '（可選）',
     apiKeyBlankHint: '留空表示不更新已儲存的 Key。',
+    disableThinking: '禁用思考模式',
+    disableThinkingHint: '禁用思考/推理模式以確保穩定的 JSON 輸出。關閉此選項可讓模型在回答前進行推理（可能導致 JSON 解析問題）。',
     // 規則表單（RuleForm）placeholder 與錯誤 fallback
     ruleNamePlaceholder: '例：BTC 突破 65K',
     thresholdPctPlaceholder: '例：5.0 (%)',
     thresholdPricePlaceholder: '例：65000',
     createRuleFailed: '建立規則失敗',
     updateRuleFailed: '更新規則失敗',
+    // --- 本機通知頻道（logo-management-and-local-notifications / 任務 4.1）---
+    localChannel: '🔔 Toast',
+
+    systemChannel: '🖥️ 系統通知',
     // --- 全局冷卻期（global-cooldown / 任務 5.1）---
     globalCooldown: '全局冷卻期',
-    globalCooldownDesc: '所有規則共用的最小觸發間隔',
+
     globalCooldownUnit: '秒',
   },
 };

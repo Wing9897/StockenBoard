@@ -1,4 +1,5 @@
 use super::traits::*;
+use super::types::*;
 use futures::{SinkExt, StreamExt};
 use std::sync::Arc;
 use tokio_tungstenite::{connect_async, tungstenite::Message};

@@ -10,7 +10,7 @@ default-run = "stockenboard"
 
 [features]
 default = ["desktop"]
-desktop = ["tauri", "tauri-plugin-opener", "tauri-plugin-shell", "rfd", "tauri-build"]
+desktop = ["tauri", "tauri-plugin-opener", "tauri-plugin-shell", "tauri-plugin-notification", "rfd", "tauri-build"]
 server = []
 
 [lib]
@@ -30,6 +30,7 @@ tauri-build = { version = "2", features = [], optional = true }
 [dependencies]
 tauri = { version = "2", features = [], optional = true }
 tauri-plugin-opener = { version = "2", optional = true }
+tauri-plugin-notification = { version = "2", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1.49.0", features = ["rt-multi-thread", "macros", "sync", "fs", "time", "net", "signal"] }
