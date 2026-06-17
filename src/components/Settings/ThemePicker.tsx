@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getTransport } from '../../lib/transport';
 import { t } from '../../lib/i18n';
-import { THEMES, ANIME_IDS, applyBgImage, loadBgForTheme } from '../../lib/themeData';
+import { THEMES, applyBgImage, loadBgForTheme } from '../../lib/themeData';
 import { STORAGE_KEYS } from '../../lib/storageKeys';
 import './Settings.css';
 
@@ -9,8 +9,6 @@ export function ThemePicker() {
   const [current, setCurrent] = useState(() => localStorage.getItem(STORAGE_KEYS.THEME) || 'mocha');
   const [bgUrl, setBgUrl] = useState<string | null>(null);
   const [bgOpacity, setBgOpacity] = useState(0.3);
-
-  const isAnime = ANIME_IDS.has(current);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,29 +86,27 @@ export function ThemePicker() {
         ))}
       </div>
 
-      {isAnime && (
-        <div className="theme-bg-section">
-          <h4>{t.settings.bgImage}</h4>
-          <div className="theme-bg-controls">
-            <button className="theme-bg-btn choose" onClick={handleChooseBg} aria-label={t.settings.chooseBg}>{t.settings.chooseBg}</button>
-            {bgUrl && (
-              <button className="theme-bg-btn remove" onClick={handleRemoveBg} aria-label={t.settings.removeBg}>{t.settings.removeBg}</button>
-            )}
-          </div>
+      <div className="theme-bg-section">
+        <h4>{t.settings.bgImage}</h4>
+        <div className="theme-bg-controls">
+          <button className="theme-bg-btn choose" onClick={handleChooseBg} aria-label={t.settings.chooseBg}>{t.settings.chooseBg}</button>
           {bgUrl && (
-            <>
-              <div className="theme-bg-preview-wrap">
-                <img src={bgUrl} alt="bg" className="theme-bg-preview" />
-              </div>
-              <div className="theme-bg-opacity">
-                <label>{t.settings.bgOpacity}</label>
-                <input type="range" min="0.05" max="0.6" step="0.05" value={bgOpacity} onChange={e => handleOpacityChange(parseFloat(e.target.value))} />
-                <span>{Math.round(bgOpacity * 100)}%</span>
-              </div>
-            </>
+            <button className="theme-bg-btn remove" onClick={handleRemoveBg} aria-label={t.settings.removeBg}>{t.settings.removeBg}</button>
           )}
         </div>
-      )}
+        {bgUrl && (
+          <>
+            <div className="theme-bg-preview-wrap">
+              <img src={bgUrl} alt="bg" className="theme-bg-preview" />
+            </div>
+            <div className="theme-bg-opacity">
+              <label>{t.settings.bgOpacity}</label>
+              <input type="range" min="0.05" max="0.6" step="0.05" value={bgOpacity} onChange={e => handleOpacityChange(parseFloat(e.target.value))} />
+              <span>{Math.round(bgOpacity * 100)}%</span>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

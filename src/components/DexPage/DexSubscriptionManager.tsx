@@ -27,6 +27,7 @@ interface DexSubscriptionManagerProps {
 export function DexSubscriptionManager({ onAdd, existingKeys, onToast, onClose }: DexSubscriptionManagerProps) {
   const [provider, setProvider] = useState('jupiter');
   const [protocol, setProtocol] = useState('uniswap_v3');
+  const [chain, setChain] = useState('ethereum');
   const [poolAddress, setPoolAddress] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -63,7 +64,7 @@ export function DexSubscriptionManager({ onAdd, existingKeys, onToast, onClose }
     setManualMode(false);
     try {
       let lookupAddr = pool;
-      if (provider === 'subgraph') lookupAddr = `${protocol}:${pool}`;
+      if (provider === 'subgraph') lookupAddr = `${protocol}:${chain}:${pool}`;
       const info = await getTransport().invoke<DexPoolInfo>('lookup_dex_pool', { providerId: provider, poolAddress: lookupAddr });
       setPoolInfo(info);
       if (!displayName) setDisplayName(`${info.token0_symbol}/${info.token1_symbol}`);
@@ -99,7 +100,7 @@ export function DexSubscriptionManager({ onAdd, existingKeys, onToast, onClose }
     if (isJupiter) {
       finalPool = 'auto';
     } else if (provider === 'subgraph') {
-      finalPool = `${protocol}:${poolAddress.trim()}`;
+      finalPool = `${protocol}:${chain}:${poolAddress.trim()}`;
     } else {
       finalPool = poolAddress.trim();
     }
@@ -191,12 +192,26 @@ export function DexSubscriptionManager({ onAdd, existingKeys, onToast, onClose }
             </div>
 
             {provider === 'subgraph' && (
-              <div className="dex-form-row">
-                <label>{t.dex.protocol}</label>
-                <select value={protocol} onChange={e => { setProtocol(e.target.value); setPoolInfo(null); setManualMode(false); }} disabled={busy}>
-                  {PROTOCOLS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </div>
+              <>
+                <div className="dex-form-row">
+                  <label>{t.dex.protocol}</label>
+                  <select value={protocol} onChange={e => { setProtocol(e.target.value); setPoolInfo(null); setManualMode(false); }} disabled={busy}>
+                    {PROTOCOLS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+                <div className="dex-form-row">
+                  <label>{t.dex.chain}</label>
+                  <select value={chain} onChange={e => { setChain(e.target.value); setPoolInfo(null); }} disabled={busy}>
+                    <option value="ethereum">Ethereum</option>
+                    <option value="base">Base</option>
+                    <option value="arbitrum">Arbitrum</option>
+                    <option value="polygon">Polygon</option>
+                    <option value="optimism">Optimism</option>
+                    <option value="bsc">BSC</option>
+                    <option value="celo">Celo</option>
+                  </select>
+                </div>
+              </>
             )}
 
             <div className="dex-form-row">

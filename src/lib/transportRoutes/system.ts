@@ -52,6 +52,21 @@ export const systemRoutes: Record<string, RouteMapper> = {
     path: '/icons/download-logos',
     body: JSON.stringify(a),
   }),
+  clear_all_icons: () => ({ method: 'DELETE', path: '/icons/clear-all', extractField: 'deleted' }),
+  download_single_icon: (a) => ({
+    method: 'POST',
+    path: `/icons/${encodeURIComponent(String(a.saveAs ?? a.save_as))}/download`,
+    body: JSON.stringify({ symbol: a.symbol }),
+  }),
+  search_icons: (a) => ({
+    method: 'GET',
+    path: `/icons/search?symbol=${encodeURIComponent(String(a.symbol))}`,
+  }),
+  save_icon_from_data: (a) => ({
+    method: 'POST',
+    path: `/icons/${encodeURIComponent(String(a.saveAs ?? a.save_as))}/save`,
+    body: JSON.stringify({ data_url: a.dataUrl ?? a.data_url }),
+  }),
 
   // --- Polling Visibility ---
   set_visible_subscriptions: (a) => ({

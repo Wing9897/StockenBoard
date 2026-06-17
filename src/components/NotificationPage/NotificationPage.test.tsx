@@ -34,6 +34,10 @@ beforeEach(() => {
 });
 
 describe('NotificationPage tab structure', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
   it('renders exactly 3 tabs in correct order: rules, channels, ai-settings', () => {
     render(<NotificationPage />);
 

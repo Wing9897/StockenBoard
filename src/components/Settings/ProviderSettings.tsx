@@ -93,8 +93,16 @@ export function ProviderSettings({ onSaved }: { onSaved?: () => void }) {
     <div className="ps-section">
       <div className="ps-toolbar">
         <div className="ps-toolbar-left">
-          <h3 className="ps-title">{t.providers.title}</h3>
-          <span className="ps-count">{filtered.length}/{providers.length}</span>
+          <div className="ps-chips">
+            {TYPE_FILTERS.map(f => (
+              <button key={f.key} className={`ps-chip ${filter === f.key ? 'active' : ''}`} onClick={() => setFilter(f.key)}
+                style={filter === f.key && f.key !== 'all' ? { background: TYPE_BG[f.key], color: TYPE_COLORS[f.key], borderColor: TYPE_COLORS[f.key] } : undefined}
+              >
+                {f.label}
+                {counts[f.key] != null && <span className="ps-chip-count">{counts[f.key]}</span>}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="ps-toolbar-right">
           <div className="ps-search-wrap">
@@ -111,16 +119,6 @@ export function ProviderSettings({ onSaved }: { onSaved?: () => void }) {
             </button>
           </div>
         </div>
-      </div>
-      <div className="ps-chips">
-        {TYPE_FILTERS.map(f => (
-          <button key={f.key} className={`ps-chip ${filter === f.key ? 'active' : ''}`} onClick={() => setFilter(f.key)}
-            style={filter === f.key && f.key !== 'all' ? { background: TYPE_BG[f.key], color: TYPE_COLORS[f.key], borderColor: TYPE_COLORS[f.key] } : undefined}
-          >
-            {f.label}
-            {counts[f.key] != null && <span className="ps-chip-count">{counts[f.key]}</span>}
-          </button>
-        ))}
       </div>
 
       {filtered.length === 0 ? (

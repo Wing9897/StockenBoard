@@ -8,13 +8,15 @@ interface AiProviderConfigResponse {
   model: string;
   has_api_key: boolean;
   disable_thinking: boolean;
+  max_context_tokens?: number | null;
 }
 
-type ProviderType = 'ollama' | 'openai' | 'openrouter' | 'custom';
+type ProviderType = 'ollama' | 'openai' | 'gemini' | 'openrouter' | 'custom';
 
 const PROVIDER_PRESETS: Record<ProviderType, { baseUrl: string; needsKey: boolean }> = {
   ollama: { baseUrl: 'http://localhost:11434/v1', needsKey: false },
   openai: { baseUrl: 'https://api.openai.com/v1', needsKey: true },
+  gemini: { baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', needsKey: true },
   openrouter: { baseUrl: 'https://openrouter.ai/api/v1', needsKey: true },
   custom: { baseUrl: '', needsKey: false },
 };
@@ -24,6 +26,7 @@ function providerLabel(type: ProviderType): string {
   switch (type) {
     case 'ollama': return t.notifications.providerOllama;
     case 'openai': return t.notifications.providerOpenai;
+    case 'gemini': return t.notifications.providerGemini;
     case 'openrouter': return t.notifications.providerOpenrouter;
     case 'custom': return t.notifications.providerCustom;
   }
@@ -35,6 +38,8 @@ export function AiSettings() {
   const [model, setModel] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [disableThinking, setDisableThinking] = useState(true);
+  const [maxContextTokens, setMaxContextTokens] = useState<string>('');
+  const [maxContextTokensError, setMaxContextTokensError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -45,6 +50,19 @@ export function AiSettings() {
   const [modelList, setModelList] = useState<string[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
 
+  // Validation: if set, must be >= 500
+  const validateMaxTokens = (value: string): string | null => {
+    if (!value.trim()) return null; // Empty is valid (unconfigured)
+    const num = Number(value);
+    if (isNaN(num) || num < 500) return t.notifications.minContextTokensError;
+    return null;
+  };
+
+  const handleMaxContextTokensChange = (value: string) => {
+    setMaxContextTokens(value);
+    setMaxContextTokensError(validateMaxTokens(value));
+  };
+
   useEffect(() => { loadConfig(); }, []);
 
   const loadConfig = async () => {
@@ -54,11 +72,14 @@ export function AiSettings() {
         setBaseUrl(config.base_url);
         setModel(config.model);
         setDisableThinking(config.disable_thinking ?? true);
+        setMaxContextTokens(config.max_context_tokens ? String(config.max_context_tokens) : '');
         // Detect provider type from URL
         if (config.base_url.includes('localhost:11434')) {
           setProviderType('ollama');
         } else if (config.base_url.includes('api.openai.com')) {
           setProviderType('openai');
+        } else if (config.base_url.includes('generativelanguage.googleapis.com')) {
+          setProviderType('gemini');
         } else if (config.base_url.includes('openrouter.ai')) {
           setProviderType('openrouter');
         } else {
@@ -124,6 +145,12 @@ export function AiSettings() {
       setFeedback({ type: 'error', msg: t.notifications.modelRequired });
       return;
     }
+    const tokensError = validateMaxTokens(maxContextTokens);
+    if (tokensError) {
+      setMaxContextTokensError(tokensError);
+      setFeedback({ type: 'error', msg: tokensError });
+      return;
+    }
 
     setSaving(true);
     try {
@@ -132,6 +159,7 @@ export function AiSettings() {
         model: model.trim(),
         api_key: apiKey.trim() || null,
         disable_thinking: disableThinking,
+        max_context_tokens: maxContextTokens.trim() ? Number(maxContextTokens) : null,
       });
       setFeedback({ type: 'success', msg: t.notifications.saveSuccess });
       setApiKey('');
@@ -211,13 +239,16 @@ export function AiSettings() {
             value={baseUrl}
             onChange={e => setBaseUrl(e.target.value)}
             placeholder="http://localhost:11434/v1"
-            disabled={providerType !== 'custom'}
+            disabled={providerType === 'openai' || providerType === 'openrouter' || providerType === 'gemini'}
           />
           {providerType === 'ollama' && (
             <p className="form-hint">{t.notifications.ollamaBaseUrlHint}</p>
           )}
           {providerType === 'openai' && (
             <p className="form-hint">{t.notifications.openaiBaseUrlHint}</p>
+          )}
+          {providerType === 'gemini' && (
+            <p className="form-hint">{t.notifications.geminiBaseUrlHint}</p>
           )}
           {providerType === 'openrouter' && (
             <p className="form-hint">{t.notifications.openrouterBaseUrlHint}</p>
@@ -255,7 +286,7 @@ export function AiSettings() {
           )}
         </div>
 
-        {(providerType === 'openai' || providerType === 'openrouter' || providerType === 'custom') && (
+        {(providerType === 'openai' || providerType === 'gemini' || providerType === 'openrouter' || providerType === 'custom') && (
           <label className="form-field">
             <span>API Key{providerType === 'custom' ? t.notifications.apiKeyOptionalSuffix : ''}</span>
             <input
@@ -278,6 +309,23 @@ export function AiSettings() {
           </label>
           <p className="form-hint">{t.notifications.disableThinkingHint}</p>
         </div>
+
+        <label className="form-field">
+          <span>{t.notifications.maxContextTokensLabel}</span>
+          <input
+            type="number"
+            value={maxContextTokens}
+            onChange={e => handleMaxContextTokensChange(e.target.value)}
+            placeholder="e.g. 4096"
+            min={500}
+          />
+          {maxContextTokensError && (
+            <p className="form-hint" style={{ color: 'var(--color-error, #e53935)' }}>{maxContextTokensError}</p>
+          )}
+          {!maxContextTokensError && (
+            <p className="form-hint">{t.notifications.maxContextTokensHint}</p>
+          )}
+        </label>
 
         <div className="rule-form-actions">
           <button type="submit" className="btn-save" disabled={saving}>

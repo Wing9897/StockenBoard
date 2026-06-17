@@ -4,31 +4,32 @@
 
 .notification-tabs {
   display: flex;
-  gap: 0.5rem;
+  gap: 6px;
   margin-bottom: 1rem;
-  border-bottom: 1px solid var(--surface0);
-  padding-bottom: 0.5rem;
+  align-items: center;
 }
 
 .notification-tab {
-  padding: 0.5rem 1rem;
+  padding: 5px 14px;
   border: none;
-  background: none;
+  background: var(--surface0);
   color: var(--overlay0);
   cursor: pointer;
-  border-radius: 4px 4px 0 0;
-  font-size: 0.9rem;
-  transition: color 0.2s, background 0.2s;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  transition: all var(--transition-normal);
+  white-space: nowrap;
+  user-select: none;
 }
 
 .notification-tab:hover {
+  background: var(--surface1);
   color: var(--text);
-  background: var(--surface0);
 }
 
 .notification-tab.active {
-  color: var(--blue);
-  border-bottom: 2px solid var(--blue);
+  background: var(--text);
+  color: var(--base);
   font-weight: 500;
 }
 
@@ -50,7 +51,7 @@
   white-space: nowrap;
 }
 
-/* Global Cooldown Inline (in RuleList header) */
+/* Global Cooldown Inline (in tabs row) */
 .global-cooldown-inline {
   display: flex;
   align-items: center;
@@ -296,6 +297,25 @@
 }
 
 .channel-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.subscription-checkboxes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid var(--surface0);
+  border-radius: 4px;
+  padding: 0.5rem;
+}
+
+.subscription-checkbox {
   display: flex;
   align-items: center;
   gap: 0.5rem;

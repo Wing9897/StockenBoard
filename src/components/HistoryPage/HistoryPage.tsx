@@ -3,7 +3,7 @@
  */
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { getTransport } from '../../lib/transport';
-
+import { STORAGE_KEYS } from '../../lib/storageKeys';
 import { t } from '../../lib/i18n';
 import { TZ_LABEL } from '../../lib/format';
 import { silentLog } from '../../lib/errorLog';
@@ -21,7 +21,7 @@ export interface ToggleRecordResponse {
 }
 
 type ViewType = 'chart' | 'table';
-type RangePreset = '1d' | '1w' | '1m' | '1y' | 'custom';
+type RangePreset = '1h' | '4h' | '6h' | '12h' | '1d' | '1w' | '1m' | '1y' | 'custom';
 type SubFilter = 'all' | 'asset' | 'dex';
 type SessionFilter = 'regular' | 'pre' | 'post';
 
@@ -29,9 +29,17 @@ interface Props {
   onToast: { success: (title: string, msg?: string) => void; error: (title: string, msg?: string) => void; info: (title: string, msg?: string) => void };
 }
 
+const HOUR = 3600;
 const DAY = 86400;
-const RANGE_MAP: Record<Exclude<RangePreset, 'custom'>, number> = { '1d': DAY, '1w': 7 * DAY, '1m': 30 * DAY, '1y': 365 * DAY };
+const RANGE_MAP: Record<Exclude<RangePreset, 'custom'>, number> = {
+  '1h': HOUR, '4h': 4 * HOUR, '6h': 6 * HOUR, '12h': 12 * HOUR,
+  '1d': DAY, '1w': 7 * DAY, '1m': 30 * DAY, '1y': 365 * DAY,
+};
 const RANGE_LABELS: { key: RangePreset; label: () => string }[] = [
+  { key: '1h', label: () => t.history.hour1 },
+  { key: '4h', label: () => t.history.hour4 },
+  { key: '6h', label: () => t.history.hour6 },
+  { key: '12h', label: () => t.history.hour12 },
   { key: '1d', label: () => t.history.day1 },
   { key: '1w', label: () => t.history.week1 },
   { key: '1m', label: () => t.history.month1 },
@@ -43,9 +51,12 @@ function label(s: Subscription) { return s.display_name || s.symbol; }
 
 export function HistoryPage({ onToast }: Props) {
   const [subs, setSubs] = useState<Subscription[]>([]);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [view, setView] = useState<ViewType>('chart');
-  const [range, setRange] = useState<RangePreset>('1d');
+  const [selectedId, setSelectedId] = useState<number | null>(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.HISTORY_SELECTED_ID);
+    return saved ? Number(saved) : null;
+  });
+  const [view, setView] = useState<ViewType>(() => (localStorage.getItem(STORAGE_KEYS.HISTORY_VIEW) as ViewType) || 'chart');
+  const [range, setRange] = useState<RangePreset>(() => (localStorage.getItem(STORAGE_KEYS.HISTORY_RANGE) as RangePreset) || '1d');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [records, setRecords] = useState<PriceHistoryRecord[]>([]);
@@ -53,10 +64,19 @@ export function HistoryPage({ onToast }: Props) {
   const [filter, setFilter] = useState<SubFilter>('all');
   const [search, setSearch] = useState('');
   const [session, setSession] = useState<SessionFilter>('regular');
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem(STORAGE_KEYS.HISTORY_COLLAPSED) === '1');
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const { confirmState, requestConfirm, handleConfirm, handleCancel } = useConfirm();
+
+  // ── Persist UI preferences ──
+  useEffect(() => { localStorage.setItem(STORAGE_KEYS.HISTORY_VIEW, view); }, [view]);
+  useEffect(() => { localStorage.setItem(STORAGE_KEYS.HISTORY_RANGE, range); }, [range]);
+  useEffect(() => {
+    if (selectedId != null) localStorage.setItem(STORAGE_KEYS.HISTORY_SELECTED_ID, String(selectedId));
+    else localStorage.removeItem(STORAGE_KEYS.HISTORY_SELECTED_ID);
+  }, [selectedId]);
+  useEffect(() => { localStorage.setItem(STORAGE_KEYS.HISTORY_COLLAPSED, collapsed ? '1' : '0'); }, [collapsed]);
 
   // ── Derived unattended state (auto from subscription recording status) ──
   const isUnattended = useMemo(() => subs.some(s => s.record_enabled), [subs]);

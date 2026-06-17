@@ -18,6 +18,15 @@ export const STORAGE_KEYS = {
     DEX_VIEW_MODE: 'sb_dex_view_mode',
     DEX_PINNED_VIEWS: 'sb_dex_pinned_views',
 
+    // History Page
+    HISTORY_VIEW: 'sb_history_view',
+    HISTORY_RANGE: 'sb_history_range',
+    HISTORY_SELECTED_ID: 'sb_history_selected_id',
+    HISTORY_COLLAPSED: 'sb_history_collapsed',
+
+    // Notification Page
+    NOTIFICATION_TAB: 'sb_notification_tab',
+
     /** 動態 key：主題背景透明度 */
     themeBgOpacity: (themeId: string) => `sb_theme_bg_opacity_${themeId}`,
 } as const;

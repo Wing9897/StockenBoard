@@ -5,11 +5,9 @@ import { formatConditionLabel } from '../../lib/format';
 import { silentLog } from '../../lib/errorLog';
 import { useConfirm } from '../../hooks/useConfirm';
 import { ConfirmDialog } from '../ConfirmDialog/ConfirmDialog';
-import { GlobalCooldownInline } from './GlobalCooldownInline';
 import type { NotificationRuleRow } from '../../types';
 
 interface RuleListProps {
-  onAddRule?: () => void;
   onEditRule?: (rule: NotificationRuleRow) => void;
 }
 
@@ -28,7 +26,7 @@ function getAiPromptSummary(aiConfig: string | null): string {
 }
 
 
-export function RuleList({ onAddRule, onEditRule }: RuleListProps) {
+export function RuleList({ onEditRule }: RuleListProps) {
   const [rules, setRules] = useState<NotificationRuleRow[]>([]);
   const [loading, setLoading] = useState(true);
   const { confirmState, requestConfirm, handleConfirm, handleCancel } = useConfirm();
@@ -70,11 +68,6 @@ export function RuleList({ onAddRule, onEditRule }: RuleListProps) {
 
   return (
     <div className="rule-list">
-      <div className="rule-list-header">
-        <h3>{t.notifications.rules}</h3>
-        <GlobalCooldownInline />
-        {onAddRule && <button className="btn-add-rule" onClick={onAddRule}>+ {t.notifications.addRule}</button>}
-      </div>
       {rules.length === 0 ? (
         <div className="notification-placeholder"><p>{t.notifications.noRules}</p></div>
       ) : (

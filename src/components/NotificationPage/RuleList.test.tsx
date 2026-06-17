@@ -24,6 +24,7 @@ function makeRule(overrides: Partial<NotificationRuleRow> = {}): NotificationRul
     id: 1,
     name: 'Rule A',
     subscription_id: 10,
+    subscription_ids: null,
     condition_type: 'price_above',
     threshold: 100,
     channel_ids: '[]',

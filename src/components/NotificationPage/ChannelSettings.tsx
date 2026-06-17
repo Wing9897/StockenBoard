@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getTransport } from '../../lib/transport';
+import { getTransport, isTauri } from '../../lib/transport';
 import { t } from '../../lib/i18n';
 import { silentLog } from '../../lib/errorLog';
 import { useConfirm } from '../../hooks/useConfirm';
@@ -112,7 +112,12 @@ export function ChannelSettings() {
                 </span>
               </div>
               <div className="rule-actions">
-                <button className="btn-test" onClick={() => handleTest(ch.id)} disabled={testing === ch.id}>
+                <button
+                  className="btn-test"
+                  onClick={() => handleTest(ch.id)}
+                  disabled={testing === ch.id || (ch.channel_type === 'system' && !isTauri())}
+                  title={ch.channel_type === 'system' && !isTauri() ? t.notifications.systemDesktopOnly : undefined}
+                >
                   {testing === ch.id ? t.notifications.testing : t.notifications.test}
                 </button>
                 {testResult?.id === ch.id && (

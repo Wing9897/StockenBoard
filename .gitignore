@@ -51,6 +51,7 @@ src-tauri/*.json.tmp
 *.db
 *.db-shm
 *.db-wal
+data/.schema_v
 
 # Test data
 src-tauri/test_data/

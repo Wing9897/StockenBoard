@@ -3,6 +3,7 @@ import { getTransport } from '../../lib/transport';
 import { t } from '../../lib/i18n';
 import { silentLog } from '../../lib/errorLog';
 import { loadAllSubscriptions } from '../../lib/subscriptionApi';
+import { estimateTokens } from '../../lib/tokenEstimator';
 import type { Subscription, ChannelRow, EditRuleData } from '../../types';
 
 interface RuleFormProps {
@@ -38,6 +39,13 @@ export function RuleForm({ onClose, onSaved, editRule }: RuleFormProps) {
   );
   const [name, setName] = useState(editRule?.name || '');
   const [subscriptionId, setSubscriptionId] = useState<number | ''>(editRule?.subscription_id || '');
+  const [selectedSubscriptionIds, setSelectedSubscriptionIds] = useState<number[]>(
+    editRule?.subscription_ids
+      ? JSON.parse(editRule.subscription_ids)
+      : editRule?.subscription_id
+        ? [editRule.subscription_id]
+        : []
+  );
   const [conditionType, setConditionType] = useState(
     editRule?.condition_type === 'ai' ? 'ai' : (editRule?.condition_type || 'price_above')
   );
@@ -83,7 +91,8 @@ export function RuleForm({ onClose, onSaved, editRule }: RuleFormProps) {
     e.preventDefault();
     setError('');
     if (!name.trim()) { setError(t.notifications.nameRequired); return; }
-    if (subscriptionId === '') { setError(t.notifications.subscriptionRequired); return; }
+    if (ruleMode === 'threshold' && subscriptionId === '') { setError(t.notifications.subscriptionRequired); return; }
+    if (ruleMode === 'ai' && selectedSubscriptionIds.length === 0) { setError(t.notifications.subscriptionRequired); return; }
 
     if (ruleMode === 'threshold') {
       if (!threshold.trim() || isNaN(Number(threshold))) { setError(t.notifications.thresholdRequired); return; }
@@ -103,6 +112,8 @@ export function RuleForm({ onClose, onSaved, editRule }: RuleFormProps) {
           id: editRule!.id,
           rule: {
             name: name.trim(),
+            subscription_id: ruleMode === 'ai' ? selectedSubscriptionIds[0] : subscriptionId,
+            subscription_ids: ruleMode === 'ai' ? selectedSubscriptionIds : undefined,
             condition_type: ruleMode === 'ai' ? 'ai' : conditionType,
             threshold: ruleMode === 'ai' ? null : Number(threshold),
             channel_ids: selectedChannels,
@@ -118,7 +129,8 @@ export function RuleForm({ onClose, onSaved, editRule }: RuleFormProps) {
         await getTransport().invoke('create_notification_rule', {
           rule: {
             name: name.trim(),
-            subscription_id: subscriptionId,
+            subscription_id: selectedSubscriptionIds[0],
+            subscription_ids: selectedSubscriptionIds,
             condition_type: 'ai',
             threshold: 0.0,
             channel_ids: selectedChannels,
@@ -192,15 +204,45 @@ export function RuleForm({ onClose, onSaved, editRule }: RuleFormProps) {
             <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder={t.notifications.ruleNamePlaceholder} />
           </label>
 
-          <label className="form-field">
-            <span>{t.notifications.subscription}</span>
-            <select value={subscriptionId} onChange={e => setSubscriptionId(Number(e.target.value) || '')}>
-              <option value="">{t.notifications.selectSubscription}</option>
-              {subscriptions.map(s => (
-                <option key={s.id} value={s.id}>{s.symbol} ({s.selected_provider_id})</option>
-              ))}
-            </select>
-          </label>
+          {ruleMode === 'threshold' ? (
+            <label className="form-field">
+              <span>{t.notifications.subscription}</span>
+              <select value={subscriptionId} onChange={e => setSubscriptionId(Number(e.target.value) || '')}>
+                <option value="">{t.notifications.selectSubscription}</option>
+                {subscriptions.map(s => (
+                  <option key={s.id} value={s.id}>{s.symbol} ({s.selected_provider_id})</option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <div className="form-field">
+              <span>{t.notifications.selectSubscriptions}</span>
+              <div className="subscription-checkboxes">
+                {subscriptions.map(s => (
+                  <label key={s.id} className="subscription-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={selectedSubscriptionIds.includes(s.id)}
+                      onChange={() => {
+                        setSelectedSubscriptionIds(prev =>
+                          prev.includes(s.id)
+                            ? prev.filter(id => id !== s.id)
+                            : [...prev, s.id]
+                        );
+                      }}
+                    />
+                    <span>{s.symbol} ({s.selected_provider_id})</span>
+                  </label>
+                ))}
+              </div>
+              {selectedSubscriptionIds.length > 0 && (
+                <span className="form-hint">{t.notifications.subscriptionsSelected(selectedSubscriptionIds.length)}</span>
+              )}
+              {selectedSubscriptionIds.length > 0 && (
+                <span className="form-hint">{t.notifications.estimatedTokens(estimateTokens(selectedSubscriptionIds.length, historyWindow))}</span>
+              )}
+            </div>
+          )}
 
           {ruleMode === 'threshold' ? (
             <>

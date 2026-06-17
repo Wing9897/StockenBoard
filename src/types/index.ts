@@ -104,6 +104,7 @@ export interface NotificationRuleRow {
   id: number;
   name: string;
   subscription_id: number;
+  subscription_ids: string | null;  // JSON array string for AI rules, null for threshold rules
   condition_type: string;
   threshold: number;
   channel_ids: string;    // JSON 陣列字串
@@ -117,7 +118,7 @@ export interface NotificationRuleRow {
 /** 編輯規則表單所需的資料（NotificationRuleRow 的子集） */
 export type EditRuleData = Pick<
   NotificationRuleRow,
-  'id' | 'name' | 'subscription_id' | 'condition_type'
+  'id' | 'name' | 'subscription_id' | 'subscription_ids' | 'condition_type'
   | 'threshold' | 'channel_ids' | 'cooldown_secs' | 'ai_config'
 >;
 

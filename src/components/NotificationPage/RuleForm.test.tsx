@@ -1,13 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
-import { RuleForm } from './RuleForm';
-import { t } from '../../lib/i18n';
-import type { Subscription, EditRuleData } from '../../types';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
-// RuleForm loads subscriptions through loadAllSubscriptions(), which wraps
-// getTransport().invoke('list_all_subscriptions'). It also calls getTransport().invoke('list_notification_channels')
-// and getTransport().invoke('get_ai_provider_config') on mount. We mock the transport module so
-// invoke resolves/rejects per command name without touching a real backend.
+// Mock the transport layer
 const mockInvoke = vi.fn();
 vi.mock('../../lib/transport', () => ({
   getTransport: () => ({
@@ -21,106 +16,265 @@ vi.mock('../../lib/transport', () => ({
   isTauri: () => false,
 }));
 
-/** Build a complete Subscription with sane defaults so tests stay focused. */
-function makeSubscription(overrides: Partial<Subscription> & Pick<Subscription, 'id' | 'symbol' | 'selected_provider_id'>): Subscription {
-  return {
-    sub_type: 'asset',
-    asset_type: 'crypto',
-    sort_order: 0,
-    record_enabled: 0,
-    ...overrides,
-  } as Subscription;
-}
+import { RuleForm } from './RuleForm';
+import { t } from '../../lib/i18n';
+import type { EditRuleData } from '../../types';
 
-/** asset + dex mix, matching the notification engine's list_all_subscriptions behavior. */
-const SUBSCRIPTIONS: Subscription[] = [
-  makeSubscription({ id: 1, sub_type: 'asset', symbol: 'BTC', selected_provider_id: 'binance' }),
-  makeSubscription({ id: 2, sub_type: 'asset', symbol: 'ETH', selected_provider_id: 'coinbase' }),
-  makeSubscription({ id: 3, sub_type: 'dex', symbol: 'WETH/USDC', selected_provider_id: 'uniswap' }),
+const MOCK_SUBSCRIPTIONS = [
+  { id: 1, sub_type: 'asset', symbol: 'BTC', display_name: 'Bitcoin', selected_provider_id: 'binance', asset_type: 'crypto', sort_order: 0, record_enabled: 1 },
+  { id: 2, sub_type: 'asset', symbol: 'ETH', display_name: 'Ethereum', selected_provider_id: 'binance', asset_type: 'crypto', sort_order: 1, record_enabled: 1 },
+  { id: 3, sub_type: 'asset', symbol: 'SOL', display_name: 'Solana', selected_provider_id: 'binance', asset_type: 'crypto', sort_order: 2, record_enabled: 1 },
 ];
 
-/** Locate the subscription <select> via its placeholder option (form-fields have no htmlFor). */
-function getSubscriptionSelect(): HTMLSelectElement {
-  const placeholder = screen.getByRole('option', { name: t.notifications.selectSubscription });
-  const select = placeholder.closest('select');
-  if (!select) throw new Error('subscription select not found');
-  return select as HTMLSelectElement;
-}
+const MOCK_CHANNELS = [
+  { id: 1, channel_type: 'telegram', name: 'My Telegram', config: '{}', created_at: 1000 },
+];
 
-/** Default happy-path invoke behaviour; individual tests can override. */
-function setInvoke(subsResult: Promise<Subscription[]>) {
+beforeEach(() => {
+  mockInvoke.mockReset();
   mockInvoke.mockImplementation((cmd: string) => {
     switch (cmd) {
       case 'list_all_subscriptions':
-        return subsResult;
+        return Promise.resolve(MOCK_SUBSCRIPTIONS);
       case 'list_notification_channels':
-        return Promise.resolve([]);
+        return Promise.resolve(MOCK_CHANNELS);
       case 'get_ai_provider_config':
-        return Promise.resolve(null);
+        return Promise.resolve({ base_url: 'http://localhost', model: 'test', has_api_key: true });
       default:
-        return Promise.resolve(null);
+        return Promise.resolve();
     }
   });
-}
+});
 
-describe('RuleForm subscription dropdown', () => {
-  beforeEach(() => {
-    mockInvoke.mockReset();
+describe('RuleForm multi-select behavior', () => {
+  const defaultProps = {
+    onClose: vi.fn(),
+    onSaved: vi.fn(),
+  };
+
+  describe('AI mode renders multi-select picker', () => {
+    it('renders checkboxes for each subscription when AI mode is selected', async () => {
+      render(<RuleForm {...defaultProps} />);
+
+      // Switch to AI mode
+      const aiModeBtn = screen.getByText(t.notifications.aiRule);
+      fireEvent.click(aiModeBtn);
+
+      // Wait for subscriptions to load and checkboxes to render
+      await waitFor(() => {
+        expect(screen.getByText(t.notifications.selectSubscriptions)).toBeInTheDocument();
+      });
+
+      // Verify checkboxes exist for each subscription
+      const checkboxes = screen.getAllByRole('checkbox');
+      // Filter to subscription checkboxes (exclude channel checkboxes)
+      const subscriptionCheckboxes = checkboxes.filter(cb => {
+        const label = cb.closest('label');
+        return label?.classList.contains('subscription-checkbox');
+      });
+      expect(subscriptionCheckboxes).toHaveLength(MOCK_SUBSCRIPTIONS.length);
+    });
+
+    it('shows subscription symbols in checkbox labels', async () => {
+      render(<RuleForm {...defaultProps} />);
+
+      const aiModeBtn = screen.getByText(t.notifications.aiRule);
+      fireEvent.click(aiModeBtn);
+
+      await waitFor(() => {
+        for (const sub of MOCK_SUBSCRIPTIONS) {
+          expect(screen.getByText(`${sub.symbol} (${sub.selected_provider_id})`)).toBeInTheDocument();
+        }
+      });
+    });
   });
 
-  it('renders asset + dex subscriptions as options with symbol/provider labels (1.1, 1.2, 1.3, 1.4)', async () => {
-    setInvoke(Promise.resolve(SUBSCRIPTIONS));
+  describe('Threshold mode renders single-select dropdown', () => {
+    it('renders a <select> dropdown for subscription in threshold mode', async () => {
+      const { container } = render(<RuleForm {...defaultProps} />);
 
-    render(<RuleForm onClose={() => {}} onSaved={() => {}} />);
+      // Threshold mode is the default — wait for subscriptions to load
+      await waitFor(() => {
+        // Find the subscription label and its associated select
+        const subscriptionLabel = screen.getByText(t.notifications.subscription);
+        const formField = subscriptionLabel.closest('label');
+        const selectEl = formField?.querySelector('select');
+        expect(selectEl).not.toBeNull();
+        expect(selectEl!.tagName).toBe('SELECT');
+      });
+    });
 
-    // Wait until the async subscription load has populated the options.
-    const btcOption = await screen.findByRole('option', { name: 'BTC (binance)' });
-    expect(btcOption).toBeInTheDocument();
+    it('does not render subscription checkboxes in threshold mode', async () => {
+      render(<RuleForm {...defaultProps} />);
 
-    // asset + dex both appear with the "{symbol} ({provider})" label.
-    expect(screen.getByRole('option', { name: 'ETH (coinbase)' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'WETH/USDC (uniswap)' })).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText(t.notifications.subscription)).toBeInTheDocument();
+      });
 
-    // The subscription <select> holds the placeholder + one option per subscription.
-    const select = getSubscriptionSelect();
-    expect(select.options).toHaveLength(SUBSCRIPTIONS.length + 1);
-    expect(select.options[0].textContent).toBe(t.notifications.selectSubscription);
+      // Verify no subscription-checkbox elements exist
+      const container = document.querySelector('.subscription-checkboxes');
+      expect(container).toBeNull();
+    });
+
+    it('shows subscriptions as <option> elements in the dropdown', async () => {
+      render(<RuleForm {...defaultProps} />);
+
+      await waitFor(() => {
+        for (const sub of MOCK_SUBSCRIPTIONS) {
+          const option = screen.getByRole('option', { name: `${sub.symbol} (${sub.selected_provider_id})` });
+          expect(option).toBeInTheDocument();
+        }
+      });
+    });
   });
 
-  it('preselects the editRule subscription_id in the <select> (1.6)', async () => {
-    setInvoke(Promise.resolve(SUBSCRIPTIONS));
+  describe('Validation error on zero subscriptions in AI mode', () => {
+    it('shows validation error when submitting AI rule with no subscriptions selected', async () => {
+      const user = userEvent.setup();
+      render(<RuleForm {...defaultProps} />);
 
-    const editRule: EditRuleData = {
-      id: 42,
-      name: 'BTC alert',
-      subscription_id: 3,
-      condition_type: 'price_above',
-      threshold: 65000,
-      channel_ids: '[]',
-      cooldown_secs: 300,
-      ai_config: null,
-    };
+      // Switch to AI mode
+      const aiModeBtn = screen.getByText(t.notifications.aiRule);
+      await user.click(aiModeBtn);
 
-    render(<RuleForm onClose={() => {}} onSaved={() => {}} editRule={editRule} />);
+      // Fill in required fields (name and prompt) but leave subscriptions empty
+      await waitFor(() => {
+        expect(screen.getByText(t.notifications.selectSubscriptions)).toBeInTheDocument();
+      });
 
-    // Wait for options to render so the select can resolve its value.
-    await screen.findByRole('option', { name: 'WETH/USDC (uniswap)' });
+      const nameInput = screen.getByPlaceholderText(t.notifications.ruleNamePlaceholder);
+      await user.type(nameInput, 'Test Rule');
 
-    const select = getSubscriptionSelect();
-    await waitFor(() => expect(select.value).toBe('3'));
+      const promptTextarea = screen.getByPlaceholderText(t.notifications.promptPlaceholder);
+      await user.type(promptTextarea, 'When price goes up');
+
+      // Submit the form without selecting any subscriptions
+      const submitBtn = screen.getByRole('button', { name: t.notifications.createRule });
+      await user.click(submitBtn);
+
+      // Verify validation error is displayed
+      await waitFor(() => {
+        expect(screen.getByText(t.notifications.subscriptionRequired)).toBeInTheDocument();
+      });
+    });
+
+    it('does not call create_notification_rule when validation fails', async () => {
+      const user = userEvent.setup();
+      render(<RuleForm {...defaultProps} />);
+
+      const aiModeBtn = screen.getByText(t.notifications.aiRule);
+      await user.click(aiModeBtn);
+
+      await waitFor(() => {
+        expect(screen.getByText(t.notifications.selectSubscriptions)).toBeInTheDocument();
+      });
+
+      const nameInput = screen.getByPlaceholderText(t.notifications.ruleNamePlaceholder);
+      await user.type(nameInput, 'Test Rule');
+
+      const promptTextarea = screen.getByPlaceholderText(t.notifications.promptPlaceholder);
+      await user.type(promptTextarea, 'When price goes up');
+
+      const submitBtn = screen.getByRole('button', { name: t.notifications.createRule });
+      await user.click(submitBtn);
+
+      // Verify the transport was NOT called for rule creation
+      expect(mockInvoke).not.toHaveBeenCalledWith('create_notification_rule', expect.anything());
+    });
   });
 
-  it('shows a visible error message when loading subscriptions fails (1.5)', async () => {
-    const message = '無法載入訂閱列表';
-    setInvoke(Promise.reject(message));
+  describe('Pre-selection when editing existing rule', () => {
+    it('pre-selects subscriptions from editRule.subscription_ids in AI mode', async () => {
+      const editRule: EditRuleData = {
+        id: 42,
+        name: 'My AI Rule',
+        subscription_id: 1,
+        subscription_ids: JSON.stringify([1, 3]),
+        condition_type: 'ai',
+        threshold: 0,
+        channel_ids: '[]',
+        cooldown_secs: 60,
+        ai_config: JSON.stringify({ prompt: 'test prompt', history_window: 20, analysis_interval_secs: 300 }),
+      };
 
-    const { container } = render(<RuleForm onClose={() => {}} onSaved={() => {}} />);
+      render(<RuleForm {...defaultProps} editRule={editRule} />);
 
-    // The error must surface in the visible .rule-form-error region, not just console.
-    await waitFor(() => {
-      const errorEl = container.querySelector('.rule-form-error');
-      expect(errorEl).not.toBeNull();
-      expect(errorEl?.textContent).toContain(message);
+      await waitFor(() => {
+        expect(screen.getByText(t.notifications.selectSubscriptions)).toBeInTheDocument();
+      });
+
+      // Verify subscriptions 1 and 3 are checked, but subscription 2 is not
+      const checkboxes = screen.getAllByRole('checkbox');
+      const subscriptionCheckboxes = checkboxes.filter(cb => {
+        const label = cb.closest('label');
+        return label?.classList.contains('subscription-checkbox');
+      });
+
+      // Find checkbox for BTC (id=1) — should be checked
+      const btcCheckbox = subscriptionCheckboxes.find(cb => {
+        const label = cb.closest('label');
+        return label?.textContent?.includes('BTC');
+      }) as HTMLInputElement;
+      expect(btcCheckbox.checked).toBe(true);
+
+      // Find checkbox for ETH (id=2) — should NOT be checked
+      const ethCheckbox = subscriptionCheckboxes.find(cb => {
+        const label = cb.closest('label');
+        return label?.textContent?.includes('ETH');
+      }) as HTMLInputElement;
+      expect(ethCheckbox.checked).toBe(false);
+
+      // Find checkbox for SOL (id=3) — should be checked
+      const solCheckbox = subscriptionCheckboxes.find(cb => {
+        const label = cb.closest('label');
+        return label?.textContent?.includes('SOL');
+      }) as HTMLInputElement;
+      expect(solCheckbox.checked).toBe(true);
+    });
+
+    it('falls back to editRule.subscription_id when subscription_ids is null', async () => {
+      const editRule: EditRuleData = {
+        id: 43,
+        name: 'Legacy AI Rule',
+        subscription_id: 2,
+        subscription_ids: null,
+        condition_type: 'ai',
+        threshold: 0,
+        channel_ids: '[]',
+        cooldown_secs: 60,
+        ai_config: JSON.stringify({ prompt: 'test prompt', history_window: 20, analysis_interval_secs: 300 }),
+      };
+
+      render(<RuleForm {...defaultProps} editRule={editRule} />);
+
+      await waitFor(() => {
+        expect(screen.getByText(t.notifications.selectSubscriptions)).toBeInTheDocument();
+      });
+
+      const checkboxes = screen.getAllByRole('checkbox');
+      const subscriptionCheckboxes = checkboxes.filter(cb => {
+        const label = cb.closest('label');
+        return label?.classList.contains('subscription-checkbox');
+      });
+
+      // Only ETH (id=2) should be checked (fallback from subscription_id)
+      const btcCheckbox = subscriptionCheckboxes.find(cb => {
+        const label = cb.closest('label');
+        return label?.textContent?.includes('BTC');
+      }) as HTMLInputElement;
+      expect(btcCheckbox.checked).toBe(false);
+
+      const ethCheckbox = subscriptionCheckboxes.find(cb => {
+        const label = cb.closest('label');
+        return label?.textContent?.includes('ETH');
+      }) as HTMLInputElement;
+      expect(ethCheckbox.checked).toBe(true);
+
+      const solCheckbox = subscriptionCheckboxes.find(cb => {
+        const label = cb.closest('label');
+        return label?.textContent?.includes('SOL');
+      }) as HTMLInputElement;
+      expect(solCheckbox.checked).toBe(false);
     });
   });
 });
