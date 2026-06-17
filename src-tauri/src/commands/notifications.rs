@@ -93,6 +93,7 @@ pub async fn create_notification_rule(
         subscription_ids_json.as_deref(),
     )?;
     state.notification_engine.reload_rules().await;
+    state.sync_polling_for_rules().await;
     // Notify AI scheduler to pick up the new rule if it's an AI rule
     if rule.condition_type == "ai" {
         state.ai_scheduler.upsert_rule(id).await;
@@ -195,6 +196,7 @@ pub async fn update_notification_rule(
         subscription_id_param,
     )?;
     state.notification_engine.reload_rules().await;
+    state.sync_polling_for_rules().await;
 
     // Notify AI scheduler about the update
     // If switching to AI or updating AI config, upsert the rule
@@ -229,6 +231,7 @@ pub async fn delete_notification_rule(
 ) -> Result<(), String> {
     state.db.delete_notification_rule(id)?;
     state.notification_engine.reload_rules().await;
+    state.sync_polling_for_rules().await;
     // Notify AI scheduler to stop any running task for this rule
     state.ai_scheduler.remove_rule(id).await;
     Ok(())
@@ -242,6 +245,7 @@ pub async fn toggle_notification_rule(
 ) -> Result<(), String> {
     state.db.toggle_notification_rule(id, enabled)?;
     state.notification_engine.reload_rules().await;
+    state.sync_polling_for_rules().await;
     // Notify AI scheduler about the toggle
     if enabled {
         // Re-enable: upsert will start the task if it's an AI rule

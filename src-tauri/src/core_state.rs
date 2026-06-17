@@ -161,6 +161,9 @@ impl CoreState {
             scheduler.start().await;
         });
 
+        // 自動開啟後台 polling（如果有啟用的通知規則）
+        self.sync_polling_for_rules().await;
+
         // 啟動 Price History Recorder（監聽 PriceUpdate 事件並寫入紀錄）
         // 在 desktop 模式下，此工作由 lib.rs 中的 event forwarder 負責。
         // 在 server 模式下，由此處負責。
@@ -215,6 +218,21 @@ impl CoreState {
                     }
                 }
             });
+        }
+    }
+
+    /// 當有啟用的通知規則時，自動啟動後台 polling。
+    /// 當沒有啟用的規則時，恢復為前端驅動模式（除非有手動開啟的紀錄）。
+    pub async fn sync_polling_for_rules(&self) {
+        let has_enabled_rules = self.db.list_notification_rules()
+            .map(|rules| rules.iter().any(|r| r.enabled))
+            .unwrap_or(false);
+        let has_active_recordings = self.db.count_active_recordings().unwrap_or(0) > 0;
+
+        if (has_enabled_rules || has_active_recordings) && !self.polling.is_unattended().await {
+            self.polling.set_unattended(true).await;
+            self.polling.reload();
+            eprintln!("[CoreState] Auto-enabled background polling (active rules/recordings exist)");
         }
     }
 }
