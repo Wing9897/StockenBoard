@@ -10,6 +10,7 @@ fn test_ai_config_valid() {
         prompt: "當價格大幅上升時提醒我".to_string(),
         history_window: 20,
         analysis_interval_secs: 300,
+        sample_step: 1,
     };
     assert!(config.validate().is_ok());
 }
@@ -20,6 +21,7 @@ fn test_ai_config_empty_prompt() {
         prompt: "".to_string(),
         history_window: 20,
         analysis_interval_secs: 300,
+        sample_step: 1,
     };
     let err = config.validate().unwrap_err();
     assert!(err.contains("prompt must not be empty"));
@@ -31,6 +33,7 @@ fn test_ai_config_prompt_too_long() {
         prompt: "a".repeat(2001),
         history_window: 20,
         analysis_interval_secs: 300,
+        sample_step: 1,
     };
     let err = config.validate().unwrap_err();
     assert!(err.contains("prompt must not exceed 2000 characters"));
@@ -42,6 +45,7 @@ fn test_ai_config_prompt_at_max_length() {
         prompt: "a".repeat(2000),
         history_window: 20,
         analysis_interval_secs: 300,
+        sample_step: 1,
     };
     assert!(config.validate().is_ok());
 }
@@ -52,6 +56,7 @@ fn test_ai_config_history_window_zero() {
         prompt: "test".to_string(),
         history_window: 0,
         analysis_interval_secs: 300,
+        sample_step: 1,
     };
     let err = config.validate().unwrap_err();
     assert!(err.contains("history_window must be between 1 and 100"));
@@ -63,6 +68,7 @@ fn test_ai_config_history_window_too_large() {
         prompt: "test".to_string(),
         history_window: 101,
         analysis_interval_secs: 300,
+        sample_step: 1,
     };
     let err = config.validate().unwrap_err();
     assert!(err.contains("history_window must be between 1 and 100"));
@@ -75,6 +81,7 @@ fn test_ai_config_history_window_boundaries() {
         prompt: "test".to_string(),
         history_window: 1,
         analysis_interval_secs: 30,
+        sample_step: 1,
     };
     assert!(config.validate().is_ok());
 
@@ -83,6 +90,7 @@ fn test_ai_config_history_window_boundaries() {
         prompt: "test".to_string(),
         history_window: 100,
         analysis_interval_secs: 30,
+        sample_step: 1,
     };
     assert!(config.validate().is_ok());
 }
@@ -93,6 +101,7 @@ fn test_ai_config_interval_too_small() {
         prompt: "test".to_string(),
         history_window: 20,
         analysis_interval_secs: 29,
+        sample_step: 1,
     };
     let err = config.validate().unwrap_err();
     assert!(err.contains("analysis_interval_secs must be at least 30"));
@@ -104,6 +113,63 @@ fn test_ai_config_interval_at_minimum() {
         prompt: "test".to_string(),
         history_window: 20,
         analysis_interval_secs: 30,
+        sample_step: 1,
+    };
+    assert!(config.validate().is_ok());
+}
+
+#[test]
+fn test_ai_config_sample_step_valid() {
+    let config = AiConfig {
+        prompt: "test".to_string(),
+        history_window: 20,
+        analysis_interval_secs: 300,
+        sample_step: 4,
+    };
+    assert!(config.validate().is_ok());
+}
+
+#[test]
+fn test_ai_config_sample_step_zero() {
+    let config = AiConfig {
+        prompt: "test".to_string(),
+        history_window: 20,
+        analysis_interval_secs: 300,
+        sample_step: 0,
+    };
+    let err = config.validate().unwrap_err();
+    assert!(err.contains("sample_step must be between 1 and 1000"));
+}
+
+#[test]
+fn test_ai_config_sample_step_too_large() {
+    let config = AiConfig {
+        prompt: "test".to_string(),
+        history_window: 20,
+        analysis_interval_secs: 300,
+        sample_step: 1001,
+    };
+    let err = config.validate().unwrap_err();
+    assert!(err.contains("sample_step must be between 1 and 1000"));
+}
+
+#[test]
+fn test_ai_config_sample_step_boundaries() {
+    // sample_step = 1 (min valid)
+    let config = AiConfig {
+        prompt: "test".to_string(),
+        history_window: 20,
+        analysis_interval_secs: 30,
+        sample_step: 1,
+    };
+    assert!(config.validate().is_ok());
+
+    // sample_step = 1000 (max valid)
+    let config = AiConfig {
+        prompt: "test".to_string(),
+        history_window: 20,
+        analysis_interval_secs: 30,
+        sample_step: 1000,
     };
     assert!(config.validate().is_ok());
 }
@@ -114,6 +180,7 @@ fn test_ai_config_serialization_roundtrip() {
         prompt: "當價格在短時間內大幅上升超過 5% 時提醒我".to_string(),
         history_window: 20,
         analysis_interval_secs: 300,
+        sample_step: 4,
     };
     let json = serde_json::to_string(&config).unwrap();
     let parsed: AiConfig = serde_json::from_str(&json).unwrap();
@@ -127,6 +194,18 @@ fn test_ai_config_json_format() {
     assert_eq!(config.prompt, "test prompt");
     assert_eq!(config.history_window, 20);
     assert_eq!(config.analysis_interval_secs, 300);
+    // sample_step should default to 1 when not present (backward compatibility)
+    assert_eq!(config.sample_step, 1);
+}
+
+#[test]
+fn test_ai_config_json_with_sample_step() {
+    let json = r#"{"prompt": "test prompt", "history_window": 20, "analysis_interval_secs": 300, "sample_step": 8}"#;
+    let config: AiConfig = serde_json::from_str(json).unwrap();
+    assert_eq!(config.prompt, "test prompt");
+    assert_eq!(config.history_window, 20);
+    assert_eq!(config.analysis_interval_secs, 300);
+    assert_eq!(config.sample_step, 8);
 }
 
 // === AiProviderConfig 驗證測試 ===

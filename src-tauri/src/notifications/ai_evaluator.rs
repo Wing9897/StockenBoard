@@ -532,9 +532,10 @@ pub async fn evaluate_ai_rule_multi(
             }
         };
 
-        // Fetch price history with trimmed window
+        // Fetch price history with trimmed window (multiply by sample_step to have enough to sample from)
+        let fetch_count = (trimmed_window as i64) * (ai_config.sample_step as i64);
         let history_rows = db
-            .get_price_history(sub_id, None, None, trimmed_window as i64)
+            .get_price_history(sub_id, None, None, fetch_count)
             .map_err(|e| {
                 eprintln!(
                     "[AiEvaluator] rule_id={} sub_id={} failed to get price history: {}",
@@ -551,7 +552,13 @@ pub async fn evaluate_ai_rule_multi(
             continue;
         }
 
-        let price_records: Vec<PriceRecord> = history_rows
+        // Sample: take every sample_step-th record
+        let sampled_rows: Vec<_> = history_rows.iter()
+            .step_by(ai_config.sample_step as usize)
+            .take(trimmed_window as usize)
+            .collect();
+
+        let price_records: Vec<PriceRecord> = sampled_rows
             .iter()
             .map(|row| PriceRecord {
                 price: row.price,

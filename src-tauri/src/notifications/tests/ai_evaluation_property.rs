@@ -229,6 +229,7 @@ mod ai_data_model_property_tests {
                     prompt,
                     history_window,
                     analysis_interval_secs,
+                    sample_step: 1,
                 },
             )
     }
@@ -317,6 +318,7 @@ mod ai_data_model_property_tests {
                 prompt,
                 history_window,
                 analysis_interval_secs,
+                sample_step: 1,
             };
             prop_assert!(config.validate().is_err(),
                 "Expected validation error for history_window={}", history_window);
@@ -334,6 +336,7 @@ mod ai_data_model_property_tests {
                 prompt,
                 history_window,
                 analysis_interval_secs,
+                sample_step: 1,
             };
             prop_assert!(config.validate().is_err(),
                 "Expected validation error for analysis_interval_secs={}", analysis_interval_secs);
@@ -350,6 +353,7 @@ mod ai_data_model_property_tests {
                 prompt: String::new(),
                 history_window,
                 analysis_interval_secs,
+                sample_step: 1,
             };
             prop_assert!(config.validate().is_err(),
                 "Expected validation error for empty prompt");

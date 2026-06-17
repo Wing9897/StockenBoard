@@ -45,13 +45,18 @@ impl ConditionType {
 }
 
 // === AI 設定 ===
-/// AI 規則的設定結構，包含 prompt、歷史窗口大小、分析間隔
+/// AI 規則的設定結構，包含 prompt、歷史窗口大小、分析間隔、採樣步長
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AiConfig {
     pub prompt: String,
     pub history_window: u32,
     pub analysis_interval_secs: u64,
+    /// 採樣步長：1 = 每筆都取，4 = 每 4 筆取 1 筆（跳過中間紀錄以覆蓋更長時間範圍）
+    #[serde(default = "default_sample_step")]
+    pub sample_step: u32,
 }
+
+fn default_sample_step() -> u32 { 1 }
 
 impl AiConfig {
     /// 驗證 AiConfig 的所有欄位是否符合規範
@@ -79,6 +84,12 @@ impl AiConfig {
             return Err(format!(
                 "analysis_interval_secs must be at least 30, got {}",
                 self.analysis_interval_secs
+            ));
+        }
+        if self.sample_step < 1 || self.sample_step > 1000 {
+            return Err(format!(
+                "sample_step must be between 1 and 1000, got {}",
+                self.sample_step
             ));
         }
         Ok(())

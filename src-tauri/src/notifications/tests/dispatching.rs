@@ -371,6 +371,7 @@ mod ai_e2e_integration_tests {
             prompt: "當價格在短時間內大幅上升超過 5% 時提醒我".to_string(),
             history_window: 5,
             analysis_interval_secs: 60,
+            sample_step: 1,
         };
 
         let provider_config = AiProviderConfig {
@@ -419,6 +420,7 @@ mod ai_e2e_integration_tests {
             prompt: "當價格在短時間內大幅上升超過 5% 時提醒我".to_string(),
             history_window: 5,
             analysis_interval_secs: 60,
+            sample_step: 1,
         };
 
         let provider_config = AiProviderConfig {
@@ -510,6 +512,7 @@ mod ai_e2e_integration_tests {
             prompt: "test prompt".to_string(),
             history_window: 5,
             analysis_interval_secs: 60,
+            sample_step: 1,
         };
 
         let provider_config = AiProviderConfig {
@@ -558,6 +561,7 @@ mod ai_e2e_integration_tests {
             prompt: "test".to_string(),
             history_window: 10,
             analysis_interval_secs: 60,
+            sample_step: 1,
         };
 
         let provider_config = AiProviderConfig {
