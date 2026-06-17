@@ -104,6 +104,93 @@ pub async fn download_logos(
     crate::icons::download_all_logos(&state.db, &icons_dir, Some(progress_tx)).await
 }
 
+#[tauri::command]
+pub async fn clear_all_icons(
+    state: tauri::State<'_, Arc<CoreState>>,
+) -> Result<i64, String> {
+    let icons_dir = state.data_dir.join("icons");
+    if !icons_dir.exists() {
+        return Ok(0);
+    }
+    let mut count: i64 = 0;
+    let mut entries = tokio::fs::read_dir(&icons_dir)
+        .await
+        .map_err(|e| format!("Failed to read icons directory: {}", e))?;
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        let path = entry.path();
+        if path.extension().map(|e| e == "png").unwrap_or(false) {
+            if tokio::fs::remove_file(&path).await.is_ok() {
+                count += 1;
+            }
+        }
+    }
+    Ok(count)
+}
+
+#[tauri::command]
+pub async fn download_single_icon(
+    state: tauri::State<'_, Arc<CoreState>>,
+    symbol: String,
+    save_as: String,
+) -> Result<(), String> {
+    let icons_dir = state.data_dir.join("icons");
+    tokio::fs::create_dir_all(&icons_dir)
+        .await
+        .map_err(|e| format!("Failed to create icons directory: {}", e))?;
+
+    let bytes = crate::icons::try_download_png(
+        &reqwest::Client::new(),
+        &symbol,
+        false,
+    ).await.ok_or_else(|| format!("Logo not found for symbol: {}", symbol))?;
+
+    let dest = icons_dir.join(format!("{}.png", save_as.to_lowercase()));
+    tokio::fs::write(&dest, &bytes)
+        .await
+        .map_err(|e| format!("Failed to save icon: {}", e))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn search_icons(
+    symbol: String,
+) -> Result<Vec<crate::icons::IconSearchResult>, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .user_agent("StockenBoard/1.0")
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    Ok(crate::icons::search_icons(&client, &symbol).await)
+}
+
+#[tauri::command]
+pub async fn save_icon_from_data(
+    state: tauri::State<'_, Arc<CoreState>>,
+    save_as: String,
+    data_url: String,
+) -> Result<(), String> {
+    use base64::Engine;
+    let icons_dir = state.data_dir.join("icons");
+    tokio::fs::create_dir_all(&icons_dir)
+        .await
+        .map_err(|e| format!("Failed to create icons directory: {}", e))?;
+
+    // Parse data URL: "data:image/png;base64,{base64}"
+    let b64_part = data_url
+        .split(",")
+        .nth(1)
+        .ok_or_else(|| "Invalid data URL format".to_string())?;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(b64_part)
+        .map_err(|e| format!("Failed to decode base64: {}", e))?;
+
+    let dest = icons_dir.join(format!("{}.png", save_as.to_lowercase()));
+    tokio::fs::write(&dest, &bytes)
+        .await
+        .map_err(|e| format!("Failed to save icon: {}", e))?;
+    Ok(())
+}
+
 /// 讀取本地檔案並回傳 base64 data URL
 #[tauri::command]
 pub async fn read_local_file_base64(path: String) -> Result<String, String> {

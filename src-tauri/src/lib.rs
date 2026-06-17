@@ -14,7 +14,7 @@ pub mod providers;
 use commands::{
     add_sub_to_view, add_subscription, add_subscriptions_batch, cleanup_history,
     create_notification_rule, create_view, delete_notification_channel, delete_notification_rule,
-    delete_subscription_history, delete_view, download_logos, enable_provider, export_data,
+    delete_subscription_history, delete_view, download_logos, clear_all_icons, download_single_icon, search_icons, save_icon_from_data, enable_provider, export_data,
     export_file, fetch_asset_price, fetch_multiple_prices, get_ai_provider_config, get_all_providers,
     get_api_enabled, get_api_port, get_cached_prices, get_data_dir, get_history_stats,
     get_icons_dir, get_notification_global_cooldown, get_notification_history, get_poll_ticks, open_icons_folder,
@@ -101,6 +101,10 @@ pub fn run() {
             get_icons_dir,
             open_icons_folder,
             download_logos,
+            clear_all_icons,
+            download_single_icon,
+            search_icons,
+            save_icon_from_data,
             read_local_file_base64,
             // Theme
             save_theme_bg,

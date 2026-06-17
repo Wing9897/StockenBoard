@@ -145,6 +145,48 @@ pub async fn try_download_png(
     fetch_if_png(client, &url).await
 }
 
+/// Search multiple icon sources and return all found results with their source names.
+#[derive(serde::Serialize, Clone)]
+pub struct IconSearchResult {
+    pub source: String,
+    pub url: String,
+    #[serde(with = "base64_bytes")]
+    pub data: Vec<u8>,
+}
+
+mod base64_bytes {
+    use serde::Serializer;
+    use base64::Engine;
+    pub fn serialize<S: Serializer>(bytes: &[u8], s: S) -> Result<S::Ok, S::Error> {
+        let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
+        s.serialize_str(&format!("data:image/png;base64,{}", b64))
+    }
+}
+
+pub async fn search_icons(client: &reqwest::Client, symbol: &str) -> Vec<IconSearchResult> {
+    let upper = symbol.to_uppercase();
+    let lower = symbol.to_lowercase();
+
+    let sources: Vec<(&str, String)> = vec![
+        ("Parqet", format!("https://assets.parqet.com/logos/symbol/{}", upper)),
+        ("CryptoLogos", format!("https://cryptologos.cc/logos/{}-{}-logo.png", lower, lower)),
+        ("CoinCap", format!("https://assets.coincap.io/assets/icons/{}@2x.png", lower)),
+        ("CryptoFonts", format!("https://cryptofonts.com/img/icons/{}.svg", lower)),
+    ];
+
+    let mut results = Vec::new();
+    for (source, url) in sources {
+        if let Some(data) = fetch_if_png(client, &url).await {
+            results.push(IconSearchResult {
+                source: source.to_string(),
+                url: url.clone(),
+                data,
+            });
+        }
+    }
+    results
+}
+
 /// Fetch URL, return bytes only if response is image/png or image/jpeg and large enough.
 async fn fetch_if_png(client: &reqwest::Client, url: &str) -> Option<Vec<u8>> {
     let resp = client.get(url).send().await.ok()?;

@@ -41,11 +41,27 @@ impl SubgraphProvider {
             "Subgraph requires an API key from The Graph (thegraph.com)".to_string()
         })?;
 
-        let subgraph_id = match protocol {
-            "uniswap_v3" => "5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV",
-            "sushiswap" => "6NUtT5mGjZ1tSPHceYRnFnJFYBGMvEPLszerMRmCw4C3",
-            "pancakeswap" => "A1fvJWQLBeUAggX2WtXq31Dqkn2gHP3Jnj2bh8JqBnQo",
-            _ => return Err(format!("Unsupported DEX protocol: {}", protocol)),
+        // protocol format: "uniswap_v3" or "uniswap_v3:base" (with chain suffix)
+        let (base_protocol, chain) = if let Some((p, c)) = protocol.split_once(':') {
+            (p, c)
+        } else {
+            (protocol, "ethereum")
+        };
+
+        let subgraph_id = match (base_protocol, chain) {
+            // Uniswap V3 by chain
+            ("uniswap_v3", "ethereum") => "5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV",
+            ("uniswap_v3", "polygon") => "3hCPRGf4z88aYsZgKKE5VacLe2xvFam81D8K1pqa67xt",
+            ("uniswap_v3", "arbitrum") => "FbCGRftH4a3yZugY7TnbYgPJVEv2LvMT6oF1fxPe9aJM",
+            ("uniswap_v3", "base") => "GqzP4Xaehti8KSfQmv3ZctFSjnSUYz4fUR9GtFb2LHnC",
+            ("uniswap_v3", "bsc") => "F85MNzUGYqgSHSHRGgeVMNsdnW1KtZSVgFULumXRZTw2",
+            ("uniswap_v3", "optimism") => "Cghf4LfVqPiFw6fp6Y5X5Ubc8UpmUhSfJL82zwiBFLaj",
+            ("uniswap_v3", "celo") => "ESdrTJ3twMwWVoQ1hUE2u7PugEHX3QkenudD6aXCkDQ4",
+            // SushiSwap (Ethereum only for now)
+            ("sushiswap", _) => "6NUtT5mGjZ1tSPHceYRnFnJFYBGMvEPLszerMRmCw4C3",
+            // PancakeSwap (BSC)
+            ("pancakeswap", _) => "A1fvJWQLBeUAggX2WtXq31Dqkn2gHP3Jnj2bh8JqBnQo",
+            _ => return Err(format!("Unsupported DEX protocol/chain: {}:{}", base_protocol, chain)),
         };
 
         Ok(format!(
@@ -379,14 +395,19 @@ impl DataProvider for SubgraphProvider {
 #[async_trait::async_trait]
 impl DexPoolLookup for SubgraphProvider {
     async fn lookup_pool(&self, pool_address: &str) -> Result<DexPoolInfo, String> {
-        // pool_address = "protocol:0x..." — extract protocol prefix
-        let (protocol, addr) = pool_address.split_once(':').ok_or_else(|| {
-            format!(
-                "Subgraph lookup requires 'protocol:address' format, got '{}'",
+        // pool_address formats:
+        //   "protocol:0x..." (default chain = ethereum)
+        //   "protocol:chain:0x..." (explicit chain)
+        let parts: Vec<&str> = pool_address.splitn(3, ':').collect();
+        let (protocol_with_chain, addr) = match parts.len() {
+            2 => (parts[0].to_string(), parts[1]),  // "uniswap_v3:0x..." → protocol=uniswap_v3, chain=ethereum
+            3 => (format!("{}:{}", parts[0], parts[1]), parts[2]),  // "uniswap_v3:base:0x..." → protocol=uniswap_v3:base
+            _ => return Err(format!(
+                "Subgraph lookup requires 'protocol:address' or 'protocol:chain:address' format, got '{}'",
                 pool_address
-            )
-        })?;
-        let url = self.get_subgraph_url(protocol)?;
+            )),
+        };
+        let url = self.get_subgraph_url(&protocol_with_chain)?;
         let query = Self::build_query(addr);
         let body = serde_json::json!({ "query": query });
         let resp = self

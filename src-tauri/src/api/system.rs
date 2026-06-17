@@ -19,7 +19,7 @@ use std::sync::Arc;
 use axum::{
     body::Bytes,
     extract::{Json, Path, Query, State},
-    routing::{get, post},
+    routing::{delete, get, post},
     Router,
 };
 use serde::{Deserialize, Serialize};
@@ -77,6 +77,10 @@ pub fn router() -> Router<Arc<CoreState>> {
         .route("/icons", get(list_icons))
         .route("/icons/dir", get(get_icons_dir_path))
         .route("/icons/download-logos", post(download_logos))
+        .route("/icons/clear-all", delete(clear_all_icons_handler))
+        .route("/icons/:symbol/download", post(download_single_icon_handler))
+        .route("/icons/search", get(search_icons_handler))
+        .route("/icons/:symbol/save", post(save_icon_from_data_handler))
         .route("/icons/:symbol", post(set_icon).delete(remove_icon))
         .route("/data/export", get(export_data))
         .route("/data/import", post(import_data))
@@ -228,6 +232,112 @@ async fn remove_icon(
             .await
             .map_err(|e| ApiError::internal(format!("Failed to delete icon: {}", e)).into_response())?;
     }
+
+    Ok(ApiResponse::ok(serde_json::json!({ "success": true })).into_response())
+}
+
+/// DELETE /icons/clear-all — removes all .png files from icons directory
+async fn clear_all_icons_handler(
+    State(state): State<Arc<CoreState>>,
+) -> Result<axum::response::Response, axum::response::Response> {
+    use axum::response::IntoResponse;
+
+    let icons_dir = state.data_dir.join("icons");
+    if !icons_dir.exists() {
+        return Ok(ApiResponse::ok(serde_json::json!({ "deleted": 0 })).into_response());
+    }
+    let mut count: i64 = 0;
+    let mut entries = tokio::fs::read_dir(&icons_dir)
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to read icons directory: {}", e)).into_response())?;
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        let path = entry.path();
+        if path.extension().map(|e| e == "png").unwrap_or(false) {
+            if tokio::fs::remove_file(&path).await.is_ok() {
+                count += 1;
+            }
+        }
+    }
+    Ok(ApiResponse::ok(serde_json::json!({ "deleted": count })).into_response())
+}
+
+/// POST /icons/:symbol/download — download a single icon from Parqet and save it
+async fn download_single_icon_handler(
+    State(state): State<Arc<CoreState>>,
+    Path(save_as): Path<String>,
+    Json(body): Json<serde_json::Value>,
+) -> Result<axum::response::Response, axum::response::Response> {
+    use axum::response::IntoResponse;
+
+    let symbol = body.get("symbol").and_then(|v| v.as_str()).unwrap_or(&save_as);
+    let icons_dir = state.data_dir.join("icons");
+
+    tokio::fs::create_dir_all(&icons_dir)
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to create icons directory: {}", e)).into_response())?;
+
+    let client = reqwest::Client::new();
+    let bytes = crate::icons::try_download_png(&client, symbol, false)
+        .await
+        .ok_or_else(|| ApiError::not_found(format!("Logo not found for symbol: {}", symbol)).into_response())?;
+
+    let dest = icons_dir.join(format!("{}.png", save_as.to_lowercase()));
+    tokio::fs::write(&dest, &bytes)
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to save icon: {}", e)).into_response())?;
+
+    Ok(ApiResponse::ok(serde_json::json!({ "success": true })).into_response())
+}
+
+/// GET /icons/search?symbol=BTC — search multiple CDN sources for icon
+async fn search_icons_handler(
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+
+    let symbol = params.get("symbol").map(|s| s.as_str()).unwrap_or("");
+    if symbol.is_empty() {
+        return ApiError::bad_request("Missing 'symbol' parameter").into_response();
+    }
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .user_agent("StockenBoard/1.0")
+        .build()
+        .unwrap_or_default();
+
+    let results = crate::icons::search_icons(&client, symbol).await;
+    ApiResponse::ok(results).into_response()
+}
+
+/// POST /icons/:symbol/save — save icon from base64 data URL
+async fn save_icon_from_data_handler(
+    State(state): State<Arc<CoreState>>,
+    Path(save_as): Path<String>,
+    Json(body): Json<serde_json::Value>,
+) -> Result<axum::response::Response, axum::response::Response> {
+    use axum::response::IntoResponse;
+    use base64::Engine;
+
+    let data_url = body.get("data_url").and_then(|v| v.as_str()).unwrap_or("");
+    if data_url.is_empty() {
+        return Err(ApiError::bad_request("Missing 'data_url' field").into_response());
+    }
+
+    let icons_dir = state.data_dir.join("icons");
+    tokio::fs::create_dir_all(&icons_dir)
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to create icons directory: {}", e)).into_response())?;
+
+    let b64_part = data_url.split(',').nth(1).unwrap_or("");
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(b64_part)
+        .map_err(|e| ApiError::bad_request(format!("Invalid base64: {}", e)).into_response())?;
+
+    let dest = icons_dir.join(format!("{}.png", save_as.to_lowercase()));
+    tokio::fs::write(&dest, &bytes)
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to save icon: {}", e)).into_response())?;
 
     Ok(ApiResponse::ok(serde_json::json!({ "success": true })).into_response())
 }

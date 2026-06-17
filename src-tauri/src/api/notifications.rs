@@ -395,6 +395,28 @@ async fn test_channel(
                 .await
                 .map_err(ApiError::internal)?;
         }
+        "local" => {
+            // In server mode, emit a test event via the event bus (picked up by WebSocket clients)
+            let _ = state.event_bus.send(crate::events::AppEvent::NotificationTriggered(
+                crate::events::NotificationTriggeredPayload {
+                    rule_name: "Test Notification".to_string(),
+                    symbol: "TEST/USD".to_string(),
+                    provider: "test".to_string(),
+                    price: 0.0,
+                    condition_type: "price_above".to_string(),
+                    threshold: 0.0,
+                    triggered_at: chrono::Utc::now().timestamp(),
+                    is_ai: false,
+                    ai_reason: None,
+                },
+            ));
+        }
+        "system" => {
+            // System (OS) notifications are not available in web server mode
+            return Err(ApiError::bad_request(
+                "System notifications are only available in desktop mode",
+            ));
+        }
         _ => {
             return Err(ApiError::bad_request(format!(
                 "Unsupported channel type: {}",
