@@ -352,6 +352,7 @@ mod ai_e2e_integration_tests {
                 &channel_ids_json,
                 300,
                 Some(&ai_config.to_string()),
+                None,
             )
             .unwrap();
 
@@ -376,6 +377,8 @@ mod ai_e2e_integration_tests {
             base_url,
             model: "test-model".to_string(),
             api_key: Some("test-api-key".to_string()),
+            disable_thinking: true,
+        max_context_tokens: None,
         };
 
         let http_client = reqwest::Client::new();
@@ -422,6 +425,8 @@ mod ai_e2e_integration_tests {
             base_url,
             model: "test-model".to_string(),
             api_key: None,
+            disable_thinking: true,
+        max_context_tokens: None,
         };
 
         let http_client = reqwest::Client::new();
@@ -511,6 +516,8 @@ mod ai_e2e_integration_tests {
             base_url,
             model: "llama3".to_string(),
             api_key: None,
+            disable_thinking: true,
+        max_context_tokens: None,
         };
 
         let http_client = reqwest::Client::new();
@@ -557,6 +564,8 @@ mod ai_e2e_integration_tests {
             base_url,
             model: "test-model".to_string(),
             api_key: None,
+            disable_thinking: true,
+        max_context_tokens: None,
         };
 
         let http_client = reqwest::Client::new();

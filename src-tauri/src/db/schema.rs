@@ -96,6 +96,7 @@ pub struct NotificationRuleRow {
     pub id: i64,
     pub name: String,
     pub subscription_id: i64,
+    pub subscription_ids: Option<String>, // JSON array string for AI rules multi-subscription
     pub condition_type: String,
     pub threshold: f64,
     pub channel_ids: String, // JSON array string
@@ -147,4 +148,21 @@ pub struct ExportView {
     pub name: String,
     pub view_type: String,
     pub symbols: Vec<String>,
+}
+
+// ── Batch subscription types ────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchAddItem {
+    pub symbol: String,
+    pub display_name: Option<String>,
+    pub provider_id: String,
+    pub asset_type: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchAddResult {
+    pub succeeded: Vec<String>,
+    pub failed: Vec<String>,
+    pub duplicates: Vec<String>,
 }

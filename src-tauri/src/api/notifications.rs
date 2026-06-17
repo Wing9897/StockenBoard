@@ -95,16 +95,36 @@ async fn create_rule(
         .transpose()
         .map_err(|e| ApiError::internal(format!("Failed to serialize ai_config: {}", e)))?;
 
+    // For AI rules: use subscription_ids to set both subscription_ids column and subscription_id
+    // For threshold rules: ignore subscription_ids, use subscription_id directly
+    let (effective_subscription_id, subscription_ids_json) = if rule.condition_type == "ai" {
+        if let Some(ref ids) = rule.subscription_ids {
+            if !ids.is_empty() {
+                let first_id = ids[0];
+                let json = serde_json::to_string(ids)
+                    .map_err(|e| ApiError::internal(format!("Failed to serialize subscription_ids: {}", e)))?;
+                (first_id, Some(json))
+            } else {
+                (rule.subscription_id, None)
+            }
+        } else {
+            (rule.subscription_id, None)
+        }
+    } else {
+        (rule.subscription_id, None)
+    };
+
     let id = state
         .db
         .create_notification_rule(
             &rule.name,
-            rule.subscription_id,
+            effective_subscription_id,
             &rule.condition_type,
             threshold,
             &channel_ids_json,
             cooldown,
             ai_config_json.as_deref(),
+            subscription_ids_json.as_deref(),
         )
         .map_err(ApiError::internal)?;
 
@@ -178,6 +198,33 @@ async fn update_rule(
         rule.threshold
     };
 
+    // Handle subscription_ids for AI rules:
+    // If subscription_ids is provided and non-empty, serialize to JSON and set subscription_id to first element
+    // For threshold rules: ignore subscription_ids
+    let is_ai_rule = rule.condition_type.as_deref() == Some("ai")
+        || (rule.condition_type.is_none() && rule.ai_config.is_some() && rule.ai_config != Some(None));
+
+    let (subscription_ids_param, subscription_id_param): (Option<Option<String>>, Option<i64>) =
+        if is_ai_rule {
+            if let Some(ref ids) = rule.subscription_ids {
+                if !ids.is_empty() {
+                    let json = serde_json::to_string(ids)
+                        .map_err(|e| ApiError::internal(format!("Failed to serialize subscription_ids: {}", e)))?;
+                    // Backward compatibility: subscription_id = first element
+                    (Some(Some(json)), Some(ids[0]))
+                } else {
+                    // Empty array provided: clear subscription_ids (set to NULL)
+                    (Some(None), None)
+                }
+            } else {
+                // subscription_ids not provided in update: don't change it
+                (None, None)
+            }
+        } else {
+            // Threshold rules: ignore subscription_ids
+            (None, None)
+        };
+
     state
         .db
         .update_notification_rule(
@@ -188,6 +235,8 @@ async fn update_rule(
             channel_ids_json.as_deref(),
             rule.cooldown_secs.map(|s| s as i64),
             ai_config_json.as_ref().map(|opt| opt.as_deref()),
+            subscription_ids_param.as_ref().map(|opt| opt.as_deref()),
+            subscription_id_param,
         )
         .map_err(ApiError::internal)?;
 

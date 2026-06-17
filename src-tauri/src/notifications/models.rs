@@ -94,6 +94,8 @@ pub struct AiProviderConfig {
     pub api_key: Option<String>, // 已解密的 API key
     #[serde(default = "default_true")]
     pub disable_thinking: bool,  // 禁用思考模式以確保穩定 JSON 輸出
+    #[serde(default)]
+    pub max_context_tokens: Option<u32>, // AI 模型的上下文視窗大小限制
 }
 
 fn default_true() -> bool { true }
@@ -123,6 +125,7 @@ pub struct AiProviderConfigResponse {
     pub model: String,
     pub has_api_key: bool,
     pub disable_thinking: bool,
+    pub max_context_tokens: Option<u32>,
 }
 
 // === 通道類型 ===
@@ -187,6 +190,7 @@ pub struct CreateRuleRequest {
     pub channel_ids: Vec<i64>,
     pub cooldown_secs: Option<u64>,
     pub ai_config: Option<AiConfig>,
+    pub subscription_ids: Option<Vec<i64>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -197,6 +201,7 @@ pub struct UpdateRuleRequest {
     pub channel_ids: Option<Vec<i64>>,
     pub cooldown_secs: Option<u64>,
     pub ai_config: Option<Option<AiConfig>>,
+    pub subscription_ids: Option<Vec<i64>>,
 }
 
 #[derive(Debug, Deserialize)]

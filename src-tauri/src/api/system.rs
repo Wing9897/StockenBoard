@@ -252,10 +252,10 @@ async fn clear_all_icons_handler(
         .map_err(|e| ApiError::internal(format!("Failed to read icons directory: {}", e)).into_response())?;
     while let Ok(Some(entry)) = entries.next_entry().await {
         let path = entry.path();
-        if path.extension().map(|e| e == "png").unwrap_or(false) {
-            if tokio::fs::remove_file(&path).await.is_ok() {
-                count += 1;
-            }
+        if path.extension().map(|e| e == "png").unwrap_or(false)
+            && tokio::fs::remove_file(&path).await.is_ok()
+        {
+            count += 1;
         }
     }
     Ok(ApiResponse::ok(serde_json::json!({ "deleted": count })).into_response())

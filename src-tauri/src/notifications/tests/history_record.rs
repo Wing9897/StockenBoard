@@ -43,6 +43,7 @@ fn setup_local_channel_db() -> (Arc<DbPool>, i64, i64) {
             &channel_ids_json,
             60,
             None,
+            None,
         )
         .unwrap();
 

@@ -11,6 +11,7 @@
 //! - ai_evaluator: AI 評估器（prompt 組裝、API 呼叫、回應解析）
 //! - ai_scheduler: AI 排程器（管理 AI 規則的定期評估 task）
 //! - global_cooldown: 全局冷卻期（跨規則共享的最小觸發間隔）
+//! - token_estimator: Token 估算器（估算 AI prompt token 數量與自動裁剪）
 
 pub mod ai_evaluator;
 pub mod ai_scheduler;
@@ -21,6 +22,7 @@ pub mod evaluator;
 pub mod global_cooldown;
 pub mod models;
 pub mod telegram;
+pub mod token_estimator;
 pub mod webhook;
 
 #[cfg(test)]

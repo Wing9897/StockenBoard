@@ -19,6 +19,7 @@ use serde::Deserialize;
 
 use crate::api::{ApiError, ApiResponse};
 use crate::core_state::CoreState;
+use crate::db::BatchAddResult;
 use crate::providers::normalize_symbol;
 
 // ─── Query / Request Types ──────────────────────────────────────────────────────
@@ -41,13 +42,7 @@ pub struct AddSubscriptionRequest {
     pub token_to: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct BatchAddItem {
-    pub symbol: String,
-    pub display_name: Option<String>,
-    pub provider_id: String,
-    pub asset_type: String,
-}
+use crate::db::BatchAddItem;
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateSubscriptionRequest {
@@ -60,15 +55,6 @@ pub struct UpdateSubscriptionRequest {
 #[derive(Debug, Deserialize)]
 pub struct BatchRemoveRequest {
     pub ids: Vec<i64>,
-}
-
-// ─── Response Types ─────────────────────────────────────────────────────────────
-
-#[derive(Debug, serde::Serialize)]
-pub struct BatchAddResult {
-    pub succeeded: Vec<String>,
-    pub failed: Vec<String>,
-    pub duplicates: Vec<String>,
 }
 
 // ─── Router ─────────────────────────────────────────────────────────────────────

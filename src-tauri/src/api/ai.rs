@@ -27,6 +27,7 @@ pub struct SaveConfigRequest {
     pub model: String,
     pub api_key: Option<String>,
     pub disable_thinking: Option<bool>,
+    pub max_context_tokens: Option<u32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -61,7 +62,7 @@ async fn save_config(
 ) -> axum::response::Response {
     match state
         .db
-        .save_ai_provider_config(&body.base_url, &body.model, body.api_key.as_deref(), body.disable_thinking.unwrap_or(true))
+        .save_ai_provider_config(&body.base_url, &body.model, body.api_key.as_deref(), body.disable_thinking.unwrap_or(true), body.max_context_tokens)
     {
         Ok(()) => ApiResponse::ok(serde_json::json!({ "success": true })).into_response(),
         Err(e) => ApiError::bad_request(e).into_response(),
@@ -78,6 +79,7 @@ async fn get_config(State(state): State<Arc<CoreState>>) -> axum::response::Resp
                 "model": config.model,
                 "has_api_key": config.api_key.is_some(),
                 "disable_thinking": config.disable_thinking,
+                "max_context_tokens": config.max_context_tokens,
             });
             ApiResponse::ok(response).into_response()
         }
@@ -119,6 +121,7 @@ async fn test_connection(
                 model,
                 api_key: body.api_key.clone(),
                 disable_thinking: true,
+                max_context_tokens: None,
             }
         }
         Err(e) => return ApiError::internal(e).into_response(),

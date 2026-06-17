@@ -153,9 +153,11 @@ pub fn run() {
             list_ai_models,
         ])
         .setup(|app| {
-            // Portable data directory: use SB_DATA_DIR env var if set,
-            // otherwise fall back to `./data` relative to current working directory.
-            // This ensures the same path in dev mode, release build, and server mode.
+            // Data directory — unified across desktop/server, dev/release:
+            // Use SB_DATA_DIR env var if set, otherwise `./data` from CWD.
+            // NOTE: Tauri dev runs from src-tauri/ so this resolves to src-tauri/data/.
+            // To avoid Tauri watcher triggering on DB file changes, the tauri CLI
+            // is configured to ignore the data/ subdirectory via the `watchIgnore` Cargo config.
             let data_dir = std::env::var("SB_DATA_DIR")
                 .map(std::path::PathBuf::from)
                 .unwrap_or_else(|_| std::path::PathBuf::from("./data"));

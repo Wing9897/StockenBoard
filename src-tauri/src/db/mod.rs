@@ -166,6 +166,9 @@ impl DbPool {
         // ── Migrations（為既有資料庫新增欄位）──────────────────────
         // ALTER TABLE 無 IF NOT EXISTS，忽略 "duplicate column" 錯誤即可
         let _ = conn.execute_batch("ALTER TABLE notification_rules ADD COLUMN ai_config TEXT;");
+        let _ = conn.execute_batch(
+            "ALTER TABLE notification_rules ADD COLUMN subscription_ids TEXT;",
+        );
 
         Ok(Self {
             conn: Mutex::new(conn),
@@ -287,6 +290,7 @@ mod tests {
                 50000.0,
                 &channel_id.to_string(),
                 300,
+                None,
                 None,
             )
             .unwrap();

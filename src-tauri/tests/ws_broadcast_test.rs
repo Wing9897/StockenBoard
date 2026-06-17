@@ -103,22 +103,18 @@ proptest! {
                             "Client {} got wrong event type", i
                         );
 
-                        // Verify data content matches what was sent
+                        // Verify data content matches what was sent.
+                        // The WS serialization produces a HashMap: { "provider:symbol": "error msg" }
                         let data = &json["data"];
-                        assert_eq!(
-                            data["provider_id"].as_str().unwrap(),
-                            provider_id.as_str(),
-                            "Client {} got wrong provider_id", i
+                        let expected_key = format!("{}:{}", provider_id, symbol);
+                        assert!(
+                            data.get(&expected_key).is_some(),
+                            "Client {} data missing key '{}': {:?}", i, expected_key, data
                         );
                         assert_eq!(
-                            data["error"].as_str().unwrap(),
+                            data[&expected_key].as_str().unwrap(),
                             error_msg.as_str(),
-                            "Client {} got wrong error message", i
-                        );
-                        assert_eq!(
-                            data["symbols"][0].as_str().unwrap(),
-                            symbol.as_str(),
-                            "Client {} got wrong symbol", i
+                            "Client {} got wrong error message for key '{}'", i, expected_key
                         );
                     }
                     other => {

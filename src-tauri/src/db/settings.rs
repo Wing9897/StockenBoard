@@ -37,6 +37,7 @@ impl DbPool {
         model: &str,
         api_key: Option<&str>,
         disable_thinking: bool,
+        max_context_tokens: Option<u32>,
     ) -> Result<(), String> {
         // 驗證必要欄位
         if base_url.trim().is_empty() {
@@ -76,6 +77,17 @@ impl DbPool {
             params![if disable_thinking { "1" } else { "0" }],
         )
         .map_err(|e| format!("Failed to save ai_disable_thinking: {}", e))?;
+
+        // Persist max_context_tokens (empty string means unconfigured)
+        let max_ctx_str = match max_context_tokens {
+            Some(v) => v.to_string(),
+            None => String::new(),
+        };
+        conn.execute(
+            "INSERT INTO app_settings (key, value) VALUES ('ai_max_context_tokens', ?1) ON CONFLICT(key) DO UPDATE SET value = ?1",
+            params![max_ctx_str],
+        )
+        .map_err(|e| format!("Failed to save ai_max_context_tokens: {}", e))?;
 
         Ok(())
     }
@@ -144,7 +156,65 @@ impl DbPool {
                 // Default to true (disabled) if not set
                 val.map(|v| v != "0").unwrap_or(true)
             },
+            max_context_tokens: {
+                let val: Option<String> = conn
+                    .query_row(
+                        "SELECT value FROM app_settings WHERE key = 'ai_max_context_tokens'",
+                        [],
+                        |row| row.get(0),
+                    )
+                    .ok();
+                match val {
+                    Some(ref v) if !v.is_empty() => v.parse::<u32>().ok(),
+                    _ => None,
+                }
+            },
         }))
+    }
+
+    // ── Max Context Tokens ─────────────────────────────────────
+
+    /// Minimum allowed value for max_context_tokens.
+    pub const MIN_CONTEXT_TOKENS: u32 = 500;
+
+    /// Validate a max_context_tokens value.
+    ///
+    /// - `None` is valid (unconfigured, disables Auto_Trim).
+    /// - `Some(v)` where `v >= 500` is valid.
+    /// - `Some(v)` where `v < 500` returns an error.
+    pub fn validate_max_context_tokens(value: Option<u32>) -> Result<(), String> {
+        if let Some(v) = value {
+            if v < Self::MIN_CONTEXT_TOKENS {
+                return Err(format!(
+                    "max_context_tokens must be at least {}, got {}",
+                    Self::MIN_CONTEXT_TOKENS,
+                    v
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// Save the AI max context tokens setting.
+    /// `None` clears the value (stored as empty string).
+    pub fn save_max_context_tokens(&self, value: Option<u32>) -> Result<(), String> {
+        Self::validate_max_context_tokens(value)?;
+        match value {
+            Some(v) => self.set_setting("ai_max_context_tokens", &v.to_string()),
+            None => self.set_setting("ai_max_context_tokens", ""),
+        }
+    }
+
+    /// Load the AI max context tokens setting.
+    /// Returns `None` if the key is missing or the value is empty (unconfigured).
+    pub fn load_max_context_tokens(&self) -> Result<Option<u32>, String> {
+        match self.get_setting("ai_max_context_tokens")? {
+            Some(v) if !v.is_empty() => v
+                .parse::<u32>()
+                .map(Some)
+                .map_err(|e| format!("Invalid max_context_tokens: {}", e)),
+            _ => Ok(None),
+        }
     }
 
     pub fn reset_all_data(&self) -> Result<(), String> {
@@ -304,5 +374,137 @@ impl DbPool {
         }
 
         Ok((imported, skipped))
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    /// Helper: open an in-memory DB with full schema initialized.
+    fn open_test_db() -> DbPool {
+        DbPool::open(&PathBuf::from(":memory:")).unwrap()
+    }
+
+    /// Property 4: save_max_context_tokens(Some(500)) round-trips correctly.
+    ///
+    /// **Validates: Requirements 4.2**
+    #[test]
+    fn max_context_tokens_roundtrip_500() {
+        let db = open_test_db();
+        db.save_max_context_tokens(Some(500)).unwrap();
+        let loaded = db.load_max_context_tokens().unwrap();
+        assert_eq!(loaded, Some(500));
+    }
+
+    /// Property 4: save_max_context_tokens(Some(4096)) round-trips correctly.
+    ///
+    /// **Validates: Requirements 4.2**
+    #[test]
+    fn max_context_tokens_roundtrip_4096() {
+        let db = open_test_db();
+        db.save_max_context_tokens(Some(4096)).unwrap();
+        let loaded = db.load_max_context_tokens().unwrap();
+        assert_eq!(loaded, Some(4096));
+    }
+
+    /// Property 4: save_max_context_tokens(Some(128000)) round-trips correctly.
+    ///
+    /// **Validates: Requirements 4.2**
+    #[test]
+    fn max_context_tokens_roundtrip_128000() {
+        let db = open_test_db();
+        db.save_max_context_tokens(Some(128000)).unwrap();
+        let loaded = db.load_max_context_tokens().unwrap();
+        assert_eq!(loaded, Some(128000));
+    }
+
+    /// Property 4: save_max_context_tokens(None) round-trips as Ok(None).
+    ///
+    /// **Validates: Requirements 4.2**
+    #[test]
+    fn max_context_tokens_roundtrip_none() {
+        let db = open_test_db();
+        db.save_max_context_tokens(None).unwrap();
+        let loaded = db.load_max_context_tokens().unwrap();
+        assert_eq!(loaded, None);
+    }
+
+    // ── Property 5: max_context_tokens validation rejects values below minimum ──
+
+    /// Property 5: validate_max_context_tokens(Some(0)) returns an error.
+    ///
+    /// **Validates: Requirements 4.4**
+    #[test]
+    fn validate_max_context_tokens_rejects_zero() {
+        let result = DbPool::validate_max_context_tokens(Some(0));
+        assert!(result.is_err(), "expected error for value 0");
+        assert!(result.unwrap_err().contains("at least 500"));
+    }
+
+    /// Property 5: validate_max_context_tokens(Some(1)) returns an error.
+    ///
+    /// **Validates: Requirements 4.4**
+    #[test]
+    fn validate_max_context_tokens_rejects_one() {
+        let result = DbPool::validate_max_context_tokens(Some(1));
+        assert!(result.is_err(), "expected error for value 1");
+        assert!(result.unwrap_err().contains("at least 500"));
+    }
+
+    /// Property 5: validate_max_context_tokens(Some(499)) returns an error.
+    ///
+    /// **Validates: Requirements 4.4**
+    #[test]
+    fn validate_max_context_tokens_rejects_499() {
+        let result = DbPool::validate_max_context_tokens(Some(499));
+        assert!(result.is_err(), "expected error for value 499");
+        assert!(result.unwrap_err().contains("at least 500"));
+    }
+
+    /// Property 5: validate_max_context_tokens(Some(500)) returns Ok.
+    ///
+    /// **Validates: Requirements 4.4**
+    #[test]
+    fn validate_max_context_tokens_accepts_500() {
+        let result = DbPool::validate_max_context_tokens(Some(500));
+        assert!(result.is_ok(), "expected Ok for value 500, got {:?}", result);
+    }
+
+    /// Property 5: validate_max_context_tokens(Some(501)) returns Ok.
+    ///
+    /// **Validates: Requirements 4.4**
+    #[test]
+    fn validate_max_context_tokens_accepts_501() {
+        let result = DbPool::validate_max_context_tokens(Some(501));
+        assert!(result.is_ok(), "expected Ok for value 501, got {:?}", result);
+    }
+
+    /// Property 5: validate_max_context_tokens(None) returns Ok (unconfigured is valid).
+    ///
+    /// **Validates: Requirements 4.4**
+    #[test]
+    fn validate_max_context_tokens_accepts_none() {
+        let result = DbPool::validate_max_context_tokens(None);
+        assert!(result.is_ok(), "expected Ok for None, got {:?}", result);
+    }
+
+    /// Property 5: save_max_context_tokens rejects values below 500 and prevents persistence.
+    ///
+    /// **Validates: Requirements 4.4**
+    #[test]
+    fn save_max_context_tokens_rejects_below_minimum() {
+        let db = open_test_db();
+
+        // Attempt to save invalid values — should fail
+        assert!(db.save_max_context_tokens(Some(0)).is_err());
+        assert!(db.save_max_context_tokens(Some(1)).is_err());
+        assert!(db.save_max_context_tokens(Some(499)).is_err());
+
+        // Verify nothing was persisted
+        let loaded = db.load_max_context_tokens().unwrap();
+        assert_eq!(loaded, None, "invalid value should not be persisted");
     }
 }

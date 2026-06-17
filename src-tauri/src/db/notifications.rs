@@ -84,13 +84,14 @@ impl DbPool {
         channel_ids: &str,
         cooldown_secs: i64,
         ai_config: Option<&str>,
+        subscription_ids: Option<&str>,
     ) -> Result<i64, String> {
         let conn = self.conn.lock().unwrap();
         let now = chrono::Utc::now().timestamp();
         conn.execute(
-            "INSERT INTO notification_rules (name, subscription_id, condition_type, threshold, channel_ids, cooldown_secs, enabled, ai_config, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, ?8, ?8)",
-            params![name, subscription_id, condition_type, threshold, channel_ids, cooldown_secs, ai_config, now],
+            "INSERT INTO notification_rules (name, subscription_id, condition_type, threshold, channel_ids, cooldown_secs, enabled, ai_config, subscription_ids, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, ?8, ?9, ?9)",
+            params![name, subscription_id, condition_type, threshold, channel_ids, cooldown_secs, ai_config, subscription_ids, now],
         )
         .map_err(|e| format!("Failed to create notification rule: {}", e))?;
         Ok(conn.last_insert_rowid())
@@ -100,7 +101,7 @@ impl DbPool {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn
             .prepare(
-                "SELECT id, name, subscription_id, condition_type, threshold, channel_ids, cooldown_secs, enabled, ai_config, created_at, updated_at
+                "SELECT id, name, subscription_id, subscription_ids, condition_type, threshold, channel_ids, cooldown_secs, enabled, ai_config, created_at, updated_at
                  FROM notification_rules ORDER BY id",
             )
             .map_err(|e| e.to_string())?;
@@ -110,14 +111,15 @@ impl DbPool {
                     id: row.get(0)?,
                     name: row.get(1)?,
                     subscription_id: row.get(2)?,
-                    condition_type: row.get(3)?,
-                    threshold: row.get(4)?,
-                    channel_ids: row.get(5)?,
-                    cooldown_secs: row.get(6)?,
-                    enabled: row.get::<_, i64>(7)? != 0,
-                    ai_config: row.get(8)?,
-                    created_at: row.get(9)?,
-                    updated_at: row.get(10)?,
+                    subscription_ids: row.get(3)?,
+                    condition_type: row.get(4)?,
+                    threshold: row.get(5)?,
+                    channel_ids: row.get(6)?,
+                    cooldown_secs: row.get(7)?,
+                    enabled: row.get::<_, i64>(8)? != 0,
+                    ai_config: row.get(9)?,
+                    created_at: row.get(10)?,
+                    updated_at: row.get(11)?,
                 })
             })
             .map_err(|e| e.to_string())?;
@@ -128,7 +130,7 @@ impl DbPool {
     pub fn get_notification_rule(&self, id: i64) -> Result<Option<NotificationRuleRow>, String> {
         let conn = self.conn.lock().unwrap();
         let result = conn.query_row(
-            "SELECT id, name, subscription_id, condition_type, threshold, channel_ids, cooldown_secs, enabled, ai_config, created_at, updated_at
+            "SELECT id, name, subscription_id, subscription_ids, condition_type, threshold, channel_ids, cooldown_secs, enabled, ai_config, created_at, updated_at
              FROM notification_rules WHERE id = ?1",
             [id],
             |row| {
@@ -136,14 +138,15 @@ impl DbPool {
                     id: row.get(0)?,
                     name: row.get(1)?,
                     subscription_id: row.get(2)?,
-                    condition_type: row.get(3)?,
-                    threshold: row.get(4)?,
-                    channel_ids: row.get(5)?,
-                    cooldown_secs: row.get(6)?,
-                    enabled: row.get::<_, i64>(7)? != 0,
-                    ai_config: row.get(8)?,
-                    created_at: row.get(9)?,
-                    updated_at: row.get(10)?,
+                    subscription_ids: row.get(3)?,
+                    condition_type: row.get(4)?,
+                    threshold: row.get(5)?,
+                    channel_ids: row.get(6)?,
+                    cooldown_secs: row.get(7)?,
+                    enabled: row.get::<_, i64>(8)? != 0,
+                    ai_config: row.get(9)?,
+                    created_at: row.get(10)?,
+                    updated_at: row.get(11)?,
                 })
             },
         );
@@ -165,6 +168,8 @@ impl DbPool {
         channel_ids: Option<&str>,
         cooldown_secs: Option<i64>,
         ai_config: Option<Option<&str>>,
+        subscription_ids: Option<Option<&str>>,
+        subscription_id: Option<i64>,
     ) -> Result<(), String> {
         let conn = self.conn.lock().unwrap();
         let now = chrono::Utc::now().timestamp();
@@ -194,6 +199,14 @@ impl DbPool {
         }
         if ai_config.is_some() {
             sets.push(format!("ai_config = ?{}", idx));
+            idx += 1;
+        }
+        if subscription_ids.is_some() {
+            sets.push(format!("subscription_ids = ?{}", idx));
+            idx += 1;
+        }
+        if subscription_id.is_some() {
+            sets.push(format!("subscription_id = ?{}", idx));
             idx += 1;
         }
 
@@ -248,6 +261,25 @@ impl DbPool {
                         .map_err(|e| e.to_string())?;
                 }
             }
+            param_idx += 1;
+        }
+        if let Some(v) = subscription_ids {
+            // v is Option<&str>: Some("[1,2,3]") sets the value, None sets it to NULL
+            match v {
+                Some(json_str) => {
+                    stmt.raw_bind_parameter(param_idx as usize, json_str)
+                        .map_err(|e| e.to_string())?;
+                }
+                None => {
+                    stmt.raw_bind_parameter(param_idx as usize, Null)
+                        .map_err(|e| e.to_string())?;
+                }
+            }
+            param_idx += 1;
+        }
+        if let Some(v) = subscription_id {
+            stmt.raw_bind_parameter(param_idx as usize, v)
+                .map_err(|e| e.to_string())?;
             param_idx += 1;
         }
 

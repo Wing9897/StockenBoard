@@ -58,14 +58,39 @@ pub async fn create_notification_rule(
         .map(serde_json::to_string)
         .transpose()
         .map_err(|e| format!("Failed to serialize ai_config: {}", e))?;
+
+    // For AI rules: use subscription_ids to set both subscription_ids column and subscription_id
+    // For threshold rules: ignore subscription_ids, use subscription_id directly
+    let (effective_subscription_id, subscription_ids_json) = if rule.condition_type == "ai" {
+        if let Some(ref ids) = rule.subscription_ids {
+            if !ids.is_empty() {
+                // Set subscription_id to first element for backward compatibility
+                let first_id = ids[0];
+                let json = serde_json::to_string(ids)
+                    .map_err(|e| format!("Failed to serialize subscription_ids: {}", e))?;
+                (first_id, Some(json))
+            } else {
+                // Empty array: use the provided subscription_id as fallback
+                (rule.subscription_id, None)
+            }
+        } else {
+            // No subscription_ids provided: use subscription_id as-is (backward compat)
+            (rule.subscription_id, None)
+        }
+    } else {
+        // Threshold rules: ignore subscription_ids, use subscription_id directly
+        (rule.subscription_id, None)
+    };
+
     let id = state.db.create_notification_rule(
         &rule.name,
-        rule.subscription_id,
+        effective_subscription_id,
         &rule.condition_type,
         threshold,
         &channel_ids_json,
         cooldown,
         ai_config_json.as_deref(),
+        subscription_ids_json.as_deref(),
     )?;
     state.notification_engine.reload_rules().await;
     // Notify AI scheduler to pick up the new rule if it's an AI rule
@@ -131,6 +156,33 @@ pub async fn update_notification_rule(
         rule.threshold
     };
 
+    // Handle subscription_ids for AI rules:
+    // If subscription_ids is provided and non-empty, serialize to JSON and set subscription_id to first element
+    // For threshold rules: ignore subscription_ids
+    let is_ai_rule = rule.condition_type.as_deref() == Some("ai")
+        || (rule.condition_type.is_none() && rule.ai_config.is_some() && rule.ai_config != Some(None));
+
+    let (subscription_ids_param, subscription_id_param): (Option<Option<String>>, Option<i64>) =
+        if is_ai_rule {
+            if let Some(ref ids) = rule.subscription_ids {
+                if !ids.is_empty() {
+                    let json = serde_json::to_string(ids)
+                        .map_err(|e| format!("Failed to serialize subscription_ids: {}", e))?;
+                    // Backward compatibility: subscription_id = first element
+                    (Some(Some(json)), Some(ids[0]))
+                } else {
+                    // Empty array provided: clear subscription_ids (set to NULL)
+                    (Some(None), None)
+                }
+            } else {
+                // subscription_ids not provided in update: don't change it
+                (None, None)
+            }
+        } else {
+            // Threshold rules: ignore subscription_ids
+            (None, None)
+        };
+
     state.db.update_notification_rule(
         id,
         rule.name.as_deref(),
@@ -139,6 +191,8 @@ pub async fn update_notification_rule(
         channel_ids_json.as_deref(),
         rule.cooldown_secs.map(|s| s as i64),
         ai_config_json.as_ref().map(|opt| opt.as_deref()),
+        subscription_ids_param.as_ref().map(|opt| opt.as_deref()),
+        subscription_id_param,
     )?;
     state.notification_engine.reload_rules().await;
 
@@ -369,10 +423,11 @@ pub async fn save_ai_provider_config(
     model: String,
     api_key: Option<String>,
     disable_thinking: Option<bool>,
+    max_context_tokens: Option<u32>,
 ) -> Result<(), String> {
     state
         .db
-        .save_ai_provider_config(&base_url, &model, api_key.as_deref(), disable_thinking.unwrap_or(true))?;
+        .save_ai_provider_config(&base_url, &model, api_key.as_deref(), disable_thinking.unwrap_or(true), max_context_tokens)?;
     state.ai_scheduler.reload().await;
     Ok(())
 }
@@ -388,6 +443,7 @@ pub async fn get_ai_provider_config(
             model: c.model,
             has_api_key: c.api_key.is_some(),
             disable_thinking: c.disable_thinking,
+            max_context_tokens: c.max_context_tokens,
         }),
     )
 }

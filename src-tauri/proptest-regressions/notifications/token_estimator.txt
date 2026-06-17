@@ -4,4 +4,4 @@
 #
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
-cc fa739c339f3b221ff0fc3d5b48e6f21cc41f8fbc4ca7761b3f0cd8d7e4c44104 # shrinks to n_clients = 1, provider_id = "aaa", error_msg = "AA A0", symbol = "AA"
+cc b4bbad031bf7f5e6e90e7360f32b6cf257296fd8c3e7ee7f2b2ef54b60a41a1c # shrinks to n = 34, h = 1, max_tokens = 500

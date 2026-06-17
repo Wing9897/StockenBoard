@@ -18,6 +18,7 @@ use crate::notifications::global_cooldown::GlobalCooldown;
 use crate::notifications::models::{
     AiConfig, AiProviderConfig, ConditionType, NotificationData, NotificationRule,
 };
+use crate::notifications::ai_evaluator::resolve_subscription_ids;
 
 /// 判斷是否應該抑制觸發（處於冷卻期）
 ///
@@ -136,6 +137,7 @@ impl AiScheduler {
             let abort_handle = Self::spawn_rule_task(
                 rule.id,
                 rule.subscription_id,
+                rule.subscription_ids.clone(),
                 ai_config,
                 provider_config.clone(),
                 self.db.clone(),
@@ -236,6 +238,7 @@ impl AiScheduler {
         let abort_handle = Self::spawn_rule_task(
             rule.id,
             rule.subscription_id,
+            rule.subscription_ids.clone(),
             ai_config,
             provider_config,
             self.db.clone(),
@@ -295,6 +298,7 @@ impl AiScheduler {
     fn spawn_rule_task(
         rule_id: i64,
         subscription_id: i64,
+        subscription_ids_json: Option<String>,
         ai_config: AiConfig,
         provider_config: AiProviderConfig,
         db: Arc<DbPool>,
@@ -308,23 +312,39 @@ impl AiScheduler {
             let interval = std::time::Duration::from_secs(ai_config.analysis_interval_secs);
             let mut last_trigger_time: Option<Instant> = None;
 
+            // Resolve subscription IDs (with NULL fallback for pre-migration rules)
+            let resolved_ids = resolve_subscription_ids(&subscription_ids_json, subscription_id);
+
             eprintln!(
-                "[AiScheduler] rule_id={} task started, interval {}s, cooldown {}s",
-                rule_id, ai_config.analysis_interval_secs, cooldown_secs
+                "[AiScheduler] rule_id={} task started, interval {}s, cooldown {}s, subscriptions={:?}",
+                rule_id, ai_config.analysis_interval_secs, cooldown_secs, resolved_ids
             );
 
             loop {
                 // Step 1: Sleep for analysis_interval_secs
                 tokio::time::sleep(interval).await;
 
-                // Step 2: Call evaluate_ai_rule (waits for completion before next interval)
-                let eval_result = ai_evaluator::evaluate_ai_rule(
+                // Step 2: Load max_context_tokens from settings at each evaluation cycle
+                let max_context_tokens = match db.load_max_context_tokens() {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!(
+                            "[AiScheduler] rule_id={} failed to load max_context_tokens: {}, using None",
+                            rule_id, e
+                        );
+                        None
+                    }
+                };
+
+                // Step 3: Call evaluate_ai_rule_multi with resolved subscription IDs
+                let eval_result = ai_evaluator::evaluate_ai_rule_multi(
                     &db,
                     &http_client,
                     rule_id,
-                    subscription_id,
+                    &resolved_ids,
                     &ai_config,
                     &provider_config,
+                    max_context_tokens,
                 )
                 .await;
 
@@ -355,13 +375,14 @@ impl AiScheduler {
                             }
 
                             // Step 3c: Not in cooldown — dispatch notification
-                            // Get symbol from subscription
-                            let symbol = match get_symbol_for_subscription(&db, subscription_id) {
+                            // Get symbol from first subscription (for notification display)
+                            let primary_subscription_id = resolved_ids[0];
+                            let symbol = match get_symbol_for_subscription(&db, primary_subscription_id) {
                                 Some(s) => s,
                                 None => {
                                     eprintln!(
                                         "[AiScheduler] rule_id={} cannot get symbol for subscription_id={}",
-                                        rule_id, subscription_id
+                                        rule_id, primary_subscription_id
                                     );
                                     continue;
                                 }
@@ -371,7 +392,7 @@ impl AiScheduler {
                             let rule = NotificationRule {
                                 id: rule_id,
                                 name: format!("AI Rule #{}", rule_id),
-                                subscription_id,
+                                subscription_id: primary_subscription_id,
                                 provider_id: String::new(),
                                 symbol: symbol.clone(),
                                 condition_type: ConditionType::Ai,

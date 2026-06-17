@@ -1,5 +1,5 @@
 use crate::core_state::CoreState;
-use crate::db::Subscription;
+use crate::db::{BatchAddItem, BatchAddResult, Subscription};
 use std::sync::Arc;
 
 #[tauri::command]
@@ -49,21 +49,6 @@ pub async fn add_subscription(
     )?;
     state.polling.reload();
     Ok(id)
-}
-
-#[derive(serde::Deserialize)]
-pub struct BatchAddItem {
-    pub symbol: String,
-    pub display_name: Option<String>,
-    pub provider_id: String,
-    pub asset_type: String,
-}
-
-#[derive(serde::Serialize)]
-pub struct BatchAddResult {
-    pub succeeded: Vec<String>,
-    pub failed: Vec<String>,
-    pub duplicates: Vec<String>,
 }
 
 #[tauri::command]
