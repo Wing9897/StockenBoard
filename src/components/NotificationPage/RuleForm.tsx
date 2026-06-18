@@ -6,6 +6,14 @@ import { loadAllSubscriptions } from '../../lib/subscriptionApi';
 import { estimateTokens } from '../../lib/tokenEstimator';
 import type { Subscription, ChannelRow, EditRuleData } from '../../types';
 
+/** Convert seconds to human-readable time span */
+function formatTimeSpan(secs: number): string {
+  if (secs < 60) return `${secs} ${t.notifications.unitSeconds}`;
+  if (secs < 3600) return `${Math.round(secs / 60)} ${t.notifications.unitMinutes}`;
+  if (secs < 86400) return `${Math.round(secs / 3600 * 10) / 10} ${t.notifications.unitHours}`;
+  return `${Math.round(secs / 86400 * 10) / 10} ${t.notifications.unitDays}`;
+}
+
 interface RuleFormProps {
   onClose: () => void;
   onSaved: () => void;
@@ -64,6 +72,7 @@ export function RuleForm({ onClose, onSaved, editRule }: RuleFormProps) {
   const [prompt, setPrompt] = useState(aiConfig?.prompt || '');
   const [historyWindow, setHistoryWindow] = useState(aiConfig?.history_window || 20);
   const [analysisInterval, setAnalysisInterval] = useState(aiConfig?.analysis_interval_secs || 300);
+  const [sampleStep, setSampleStep] = useState(aiConfig?.sample_step || 1);
 
   // AI provider config check
   const [aiProviderConfigured, setAiProviderConfigured] = useState<boolean | null>(null);
@@ -122,6 +131,7 @@ export function RuleForm({ onClose, onSaved, editRule }: RuleFormProps) {
               prompt,
               history_window: historyWindow,
               analysis_interval_secs: analysisInterval,
+              sample_step: sampleStep,
             } : null,
           }
         });
@@ -139,6 +149,7 @@ export function RuleForm({ onClose, onSaved, editRule }: RuleFormProps) {
               prompt,
               history_window: historyWindow,
               analysis_interval_secs: analysisInterval,
+              sample_step: sampleStep,
             },
           }
         });
@@ -295,6 +306,22 @@ export function RuleForm({ onClose, onSaved, editRule }: RuleFormProps) {
                   />
                   <span className="ai-slider-value">{historyWindow}</span>
                 </div>
+              </div>
+
+              <div className="form-field">
+                <span>{t.notifications.sampleStep}</span>
+                <div className="ai-slider-row">
+                  <input
+                    type="range"
+                    className="ai-slider"
+                    min={1}
+                    max={100}
+                    value={sampleStep}
+                    onChange={e => setSampleStep(Number(e.target.value))}
+                  />
+                  <span className="ai-slider-value">{sampleStep}</span>
+                </div>
+                <span className="form-hint">{t.notifications.aiTimeSpan(formatTimeSpan(sampleStep * 15), formatTimeSpan(historyWindow * sampleStep * 15))}</span>
               </div>
 
               <label className="form-field">
